@@ -1,10 +1,10 @@
-# Forge — B2B Lead Generation Dashboard
+# Landline — B2B Lead Generation Dashboard
 
 A React-based frontend for manufacturing B2B lead generation, targeting companies in the USA and Canada.
 
 ## Overview
 
-Forge helps sales teams identify, score, and nurture manufacturing leads through an intuitive pipeline interface. It provides company research, contact management, automated outreach sequences, and lead scoring to streamline the B2B sales process for manufacturing companies.
+Landline helps sales teams identify, score, and nurture manufacturing leads through an intuitive pipeline interface. It provides company research, contact management, automated outreach sequences, and lead scoring to streamline the B2B sales process for manufacturing companies.
 
 ## Tech Stack
 
@@ -40,7 +40,7 @@ The dev server starts on [http://localhost:3000](http://localhost:3000) and prox
 ## Project Structure
 
 ```
-forge-frontend/
+landline-frontend/
 ├── index.html
 ├── package.json
 ├── vite.config.js

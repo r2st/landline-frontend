@@ -488,7 +488,7 @@ export default function CompanyDetail() {
                       <Plus className="h-3.5 w-3.5" />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-700">Company added to Forge</p>
+                      <p className="text-sm text-gray-700">Company added to Landline</p>
                       <p className="mt-0.5 text-xs text-gray-400">{timeAgo(company.created_at)}</p>
                     </div>
                   </div>

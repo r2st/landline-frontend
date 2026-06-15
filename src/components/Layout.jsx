@@ -7,7 +7,7 @@ import {
   Upload,
   Mail,
   Settings,
-  Hammer,
+  Phone,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -28,8 +28,8 @@ export default function Layout({ children }) {
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 w-64 bg-navy-900 text-white">
         <div className="flex items-center gap-2 px-6 py-5 border-b border-white/10">
-          <Hammer className="h-7 w-7 text-blue-400" />
-          <span className="text-xl font-bold tracking-tight">Forge</span>
+          <Phone className="h-7 w-7 text-blue-400" />
+          <span className="text-xl font-bold tracking-tight">Landline</span>
         </div>
         <nav className="mt-4 px-3 space-y-1">
           {navigation.map((item) => {
@@ -54,7 +54,7 @@ export default function Layout({ children }) {
         </nav>
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
           <div className="text-xs text-gray-500">
-            Forge v1.0.0
+            Landline v1.0.0
           </div>
           <div className="text-xs text-gray-600 mt-1">
             B2B Lead Generation

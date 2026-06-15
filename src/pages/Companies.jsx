@@ -201,7 +201,7 @@ export default function Companies() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'forge-companies.csv';
+    a.download = 'landline-companies.csv';
     a.click();
     URL.revokeObjectURL(url);
   };

@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Flame,
+  Phone,
   LayoutDashboard,
   Kanban,
   Building2,
@@ -31,9 +31,9 @@ export default function Sidebar() {
     <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-slate-800">
       {/* Logo */}
       <div className="flex h-16 items-center gap-2 px-6">
-        <Flame className="h-7 w-7 text-blue-400" />
+        <Phone className="h-7 w-7 text-blue-400" />
         <div>
-          <span className="text-xl font-bold tracking-tight text-white">FORGE</span>
+          <span className="text-xl font-bold tracking-tight text-white">LANDLINE</span>
           <span className="ml-1.5 text-xs text-gray-400">by Apprend</span>
         </div>
       </div>
@@ -67,7 +67,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-slate-700 px-6 py-4">
-        <p className="text-xs text-gray-500">Forge v1.0</p>
+        <p className="text-xs text-gray-500">Landline v1.0</p>
       </div>
     </aside>
   );
