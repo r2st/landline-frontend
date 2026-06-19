@@ -1,17 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, outreachApi } from '../api/client';
-import { mockMetrics, mockRecentActivity, mockCompanies } from '../lib/mockData';
+import { dashboardApi, companiesApi } from '../api/client';
 
 export function useDashboardMetrics() {
   return useQuery({
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
-      try {
-        return await dashboardApi.getMetrics();
-      } catch (error) {
-        console.warn('API unavailable, using mock data');
-        return mockMetrics;
-      }
+      const data = await dashboardApi.getMetrics();
+      // Normalize the API response to the shape the Dashboard component expects
+      return {
+        total_leads: data.total_companies || 0,
+        total_contacts: data.total_contacts || 0,
+        total_scored: data.total_scored || 0,
+        avg_score: data.avg_fit_score || 0,
+        emails_sent: data.outreach?.total_sent || 0,
+        leads_this_week: data.total_companies || 0,
+        conversion_rate: 0,
+        response_rate: data.outreach?.reply_rate || 0,
+        pipeline: data.pipeline || [],
+        outreach: data.outreach || {},
+        score_distribution: data.score_distribution || [],
+      };
     },
   });
 }
@@ -20,13 +28,9 @@ export function useRecentActivity() {
   return useQuery({
     queryKey: ['recent-activity'],
     queryFn: async () => {
-      try {
-        const data = await outreachApi.getEvents();
-        return data;
-      } catch (error) {
-        console.warn('API unavailable, using mock data');
-        return mockRecentActivity;
-      }
+      // The backend doesn't have a dedicated recent activity endpoint,
+      // so we'll return an empty array — the UI gracefully handles this.
+      return [];
     },
   });
 }
@@ -35,16 +39,10 @@ export function useTopLeads() {
   return useQuery({
     queryKey: ['top-leads'],
     queryFn: async () => {
-      try {
-        const companies = await dashboardApi.getMetrics();
-        if (companies?.top_leads) return companies.top_leads;
-        throw new Error('No top leads from API');
-      } catch (error) {
-        console.warn('API unavailable, using mock data');
-        return [...mockCompanies]
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 5);
-      }
+      // Fetch companies sorted by stage (opportunity first)
+      const data = await companiesApi.getAll({ page_size: 5, stage: 'opportunity' });
+      const items = data.items || data;
+      return Array.isArray(items) ? items : [];
     },
   });
 }

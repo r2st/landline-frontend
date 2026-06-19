@@ -24,7 +24,7 @@ export const STAGE_COLORS = {
   opportunity: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', hex: '#10b981' },
 };
 
-export const COUNTRIES = ['USA', 'Canada'];
+export const COUNTRIES = ['US', 'CA'];
 export const SOURCES = ['csv_import', 'manual', 'web_scrape', 'referral', 'linkedin'];
 export const SOURCE_LABELS = {
   csv_import: 'CSV Import',
