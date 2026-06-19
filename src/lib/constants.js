@@ -1,4 +1,6 @@
-export const API_BASE_URL = 'http://localhost:8000/api/v1';
+export const API_BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : 'http://localhost:8000/api/v1';
 
 export const STAGES = ['new', 'researched', 'scored', 'contacted', 'engaged', 'qualified', 'opportunity'];
 
