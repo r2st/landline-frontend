@@ -3,7 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 
 const baseURL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
-  : 'http://localhost:8000/api/v1';
+  : '/api/v1';
 
 export const api = axios.create({
   baseURL,
