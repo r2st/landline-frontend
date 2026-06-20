@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
+  BarChart3,
   Building2,
   GitBranch,
   Upload,
@@ -26,6 +27,7 @@ const navSections = [
     label: 'Overview',
     items: [
       { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+      { name: 'Analytics', href: '/analytics', icon: BarChart3 },
       { name: 'Pipeline', href: '/pipeline', icon: GitBranch },
     ],
   },

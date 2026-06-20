@@ -7,11 +7,18 @@ import {
   Target,
   X,
   Filter,
+  Trash2,
+  FolderPlus,
+  ArrowRightLeft,
+  XCircle,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import DataTable from '../components/DataTable';
 import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
-import { useCompanies, useCreateCompany, useScoreCompany } from '../hooks/useCompanies';
+import { useCompanies, useCreateCompany, useScoreCompany, useDeleteCompany } from '../hooks/useCompanies';
+import { useGroups, useAddGroupMembers } from '../hooks/useGroups';
+import { pipelineApi, queryClient } from '../api/client';
 import { STAGES, STAGE_LABELS, STAGE_COLORS, COUNTRIES, SOURCES, SOURCE_LABELS } from '../lib/constants';
 import { formatNumber, formatDate, cn } from '../lib/utils';
 
@@ -160,12 +167,155 @@ function AddCompanyModal({ open, onClose, onCreate }) {
   );
 }
 
+function ConfirmModal({ open, onClose, onConfirm, title, message, confirmLabel = 'Confirm', confirmColor = 'red' }) {
+  if (!open) return null;
+  const btnColors = {
+    red: 'bg-red-600 hover:bg-red-700 text-white',
+    blue: 'bg-blue-500 hover:bg-blue-600 text-white',
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <p className="mt-2 text-sm text-gray-600">{message}</p>
+        <div className="mt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => { onConfirm(); onClose(); }}
+            className={cn('rounded-lg px-4 py-2 text-sm font-medium shadow-sm', btnColors[confirmColor] || btnColors.red)}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, onScoreAll, onDelete, groups }) {
+  const [stageDropdown, setStageDropdown] = useState(false);
+  const [groupDropdown, setGroupDropdown] = useState(false);
+
+  if (selectedIds.length === 0) return null;
+
+  return (
+    <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 lg:left-[calc(50%+7.5rem)]">
+      <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white/95 px-5 py-3 shadow-lg backdrop-blur-sm">
+        <span className="text-sm font-semibold text-gray-700">
+          {selectedIds.length} selected
+        </span>
+
+        <div className="h-5 w-px bg-gray-200" />
+
+        {/* Change Stage Dropdown */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => { setStageDropdown(!stageDropdown); setGroupDropdown(false); }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" />
+            Change Stage
+          </button>
+          {stageDropdown && (
+            <div className="absolute bottom-full left-0 mb-2 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              {STAGES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { onStageChange(s); setStageDropdown(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <span className={cn('h-2 w-2 rounded-full', STAGE_COLORS[s]?.bg)} />
+                  {STAGE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Add to Group Dropdown */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => { setGroupDropdown(!groupDropdown); setStageDropdown(false); }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+            Add to Group
+          </button>
+          {groupDropdown && (
+            <div className="absolute bottom-full left-0 mb-2 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              {(groups || []).length === 0 ? (
+                <p className="px-3 py-2 text-sm text-gray-400">No groups yet</p>
+              ) : (
+                (groups || []).map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => { onAddToGroup(g.id); setGroupDropdown(false); }}
+                    className="flex w-full items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    {g.name}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Score All */}
+        <button
+          type="button"
+          onClick={onScoreAll}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm font-medium text-yellow-700 hover:bg-yellow-100"
+        >
+          <Target className="h-3.5 w-3.5" />
+          Score All
+        </button>
+
+        {/* Delete */}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </button>
+
+        <div className="h-5 w-px bg-gray-200" />
+
+        {/* Deselect All */}
+        <button
+          type="button"
+          onClick={onDeselect}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700"
+        >
+          <XCircle className="h-3.5 w-3.5" />
+          Deselect
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Companies() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [bulkOperating, setBulkOperating] = useState(false);
   const [filters, setFilters] = useState({
     stage: '',
     country: '',
@@ -183,6 +333,9 @@ export default function Companies() {
   const { data: allCompanies, isLoading, isError } = useCompanies(serverFilters);
   const createCompany = useCreateCompany();
   const scoreCompany = useScoreCompany();
+  const deleteCompany = useDeleteCompany();
+  const { data: groups } = useGroups();
+  const addGroupMembers = useAddGroupMembers();
 
   // Source + score range are filtered client-side (not supported server-side).
   const companies = useMemo(() => {
@@ -218,10 +371,60 @@ export default function Companies() {
 
   const handleScoreAll = async () => {
     if (selectedIds.length === 0) return;
+    setBulkOperating(true);
     for (const id of selectedIds) {
       scoreCompany.mutate(id);
     }
+    toast.success(`Scoring ${selectedIds.length} companies...`);
     setSelectedIds([]);
+    setBulkOperating(false);
+  };
+
+  const handleBulkStageChange = async (stage) => {
+    if (selectedIds.length === 0) return;
+    setBulkOperating(true);
+    try {
+      const promises = selectedIds.map((id) =>
+        pipelineApi.transitionStage(id, stage)
+      );
+      await Promise.allSettled(promises);
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      toast.success(`Updated ${selectedIds.length} companies to ${STAGE_LABELS[stage]}`);
+      setSelectedIds([]);
+    } catch (err) {
+      toast.error('Some stage updates failed');
+    } finally {
+      setBulkOperating(false);
+    }
+  };
+
+  const handleBulkAddToGroup = async (groupId) => {
+    if (selectedIds.length === 0) return;
+    setBulkOperating(true);
+    try {
+      await addGroupMembers.mutateAsync({ groupId, companyIds: selectedIds });
+      setSelectedIds([]);
+    } catch {
+      // error handled by mutation
+    } finally {
+      setBulkOperating(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkOperating(true);
+    try {
+      const promises = selectedIds.map((id) => deleteCompany.mutateAsync(id));
+      await Promise.allSettled(promises);
+      toast.success(`Deleted ${selectedIds.length} companies`);
+      setSelectedIds([]);
+    } catch {
+      toast.error('Some deletions failed');
+    } finally {
+      setBulkOperating(false);
+    }
   };
 
   const columns = [
@@ -301,16 +504,6 @@ export default function Companies() {
         </button>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {selectedIds.length > 0 && (
-            <button
-              type="button"
-              onClick={handleScoreAll}
-              className="inline-flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-700 hover:bg-yellow-100"
-            >
-              <Target className="h-4 w-4" />
-              Score ({selectedIds.length})
-            </button>
-          )}
           <button
             type="button"
             onClick={handleExportCSV}
@@ -441,6 +634,28 @@ export default function Companies() {
         open={showModal}
         onClose={() => setShowModal(false)}
         onCreate={(data) => createCompany.mutate(data)}
+      />
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedIds={selectedIds}
+        onDeselect={() => setSelectedIds([])}
+        onStageChange={handleBulkStageChange}
+        onAddToGroup={handleBulkAddToGroup}
+        onScoreAll={handleScoreAll}
+        onDelete={() => setShowDeleteConfirm(true)}
+        groups={groups}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete Companies"
+        message={`Are you sure you want to delete ${selectedIds.length} selected ${selectedIds.length === 1 ? 'company' : 'companies'}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        confirmColor="red"
       />
     </div>
   );
