@@ -1,14 +1,27 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { companiesApi, queryClient } from '../api/client';
+import { normalizeCompanies, normalizeCompany, companyFormToApi } from '../lib/normalize';
+
+// Translate UI filter keys to the backend's company list query params.
+// Score/source filtering happens client-side (the list endpoint doesn't support them).
+function toServerParams(filters = {}) {
+  const params = {};
+  if (filters.search) params.q = filters.search;
+  if (filters.stage) params.stage = filters.stage;
+  if (filters.country) params.country = filters.country;
+  if (filters.industry_segment) params.industry_segment = filters.industry_segment;
+  params.page_size = filters.page_size || 200;
+  return params;
+}
 
 export function useCompanies(filters = {}) {
   return useQuery({
     queryKey: ['companies', filters],
     queryFn: async () => {
-      const data = await companiesApi.getAll(filters);
-      // API returns { items, total, page, page_size } — unwrap to flat array
-      return data.items || data;
+      const data = await companiesApi.getAll(toServerParams(filters));
+      const items = data.items || data;
+      return normalizeCompanies(items);
     },
   });
 }
@@ -16,8 +29,17 @@ export function useCompanies(filters = {}) {
 export function useCompany(id) {
   return useQuery({
     queryKey: ['company', id],
+    queryFn: async () => normalizeCompany(await companiesApi.getById(id)),
+    enabled: !!id,
+  });
+}
+
+export function useCompanyScores(id) {
+  return useQuery({
+    queryKey: ['company-scores', id],
     queryFn: async () => {
-      return await companiesApi.getById(id);
+      const data = await companiesApi.getScores(id);
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!id,
   });
@@ -26,7 +48,7 @@ export function useCompany(id) {
 export function useCreateCompany() {
   return useMutation({
     mutationFn: async (data) => {
-      return await companiesApi.create(data);
+      return await companiesApi.create(companyFormToApi(data));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
@@ -76,8 +98,11 @@ export function useImportCSV() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+      const companies = result.imported_companies ?? 0;
+      const contacts = result.imported_contacts ?? 0;
       toast.success(
-        `Import complete: ${result.imported || 0} imported, ${result.skipped || 0} skipped`
+        `Import complete: ${companies} compan${companies === 1 ? 'y' : 'ies'}, ${contacts} contact${contacts === 1 ? '' : 's'}, ${result.skipped ?? 0} skipped`
       );
     },
     onError: (error) => {
@@ -94,7 +119,9 @@ export function useScoreCompany() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['company'] });
-      toast.success(`Company scored: ${result.fit_score || result.score}`);
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['top-leads'] });
+      toast.success(`Company scored: ${result.fit_score ?? result.score}`);
     },
     onError: (error) => {
       toast.error(error?.response?.data?.detail || error?.message || 'Failed to score company');

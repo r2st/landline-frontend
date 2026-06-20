@@ -24,8 +24,15 @@ export function cn(...classes) {
   return classes.filter(Boolean).join(' ');
 }
 
-export function getInitials(name) {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+export function getInitials(first, last) {
+  // Accepts either (first, last) or a single full-name string.
+  if (last === undefined && typeof first === 'string' && first.includes(' ')) {
+    return first.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+  }
+  const a = (first || '').trim();
+  const b = (last || '').trim();
+  const initials = ((a[0] || '') + (b[0] || '')).toUpperCase();
+  return initials || '?';
 }
 
 export function timeAgo(dateStr) {

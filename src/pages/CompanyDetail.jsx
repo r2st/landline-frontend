@@ -23,23 +23,24 @@ import ScoreBadge from '../components/ScoreBadge';
 import StageSelector from '../components/StageSelector';
 import ContactList from '../components/ContactList';
 import EmptyState from '../components/EmptyState';
-import { useCompany, useUpdateCompany, useScoreCompany } from '../hooks/useCompanies';
+import { useCompany, useUpdateCompany, useScoreCompany, useCompanyScores } from '../hooks/useCompanies';
+import { useCompanyContacts, useCreateContact } from '../hooks/useContacts';
 import { useTransitionStage } from '../hooks/usePipeline';
 import { useOutreachEvents, useSequences, useEnrollCompany } from '../hooks/useOutreach';
-import { mockContacts } from '../lib/mockData';
 import { STAGE_LABELS, STAGE_COLORS, SOURCE_LABELS } from '../lib/constants';
 import { formatDate, formatNumber, getScoreColor, getScoreLabel, timeAgo, cn } from '../lib/utils';
 
-const scoringFactors = [
-  { label: 'Company Size', value: '+15', description: 'Based on employee count' },
-  { label: 'Industry Match', value: '+20', description: 'Target industry alignment' },
-  { label: 'Contact Quality', value: '+10', description: 'Decision-maker contacts found' },
-  { label: 'Engagement Level', value: '+18', description: 'Email opens and replies' },
-  { label: 'Website Activity', value: '+12', description: 'Recent site visits detected' },
-  { label: 'Geographic Fit', value: '+8', description: 'Within target geography' },
-  { label: 'Technology Stack', value: '+5', description: 'Compatible tech detected' },
-  { label: 'Funding Stage', value: '+4', description: 'Recent funding round' },
-];
+// Map a LeadScore record's sub-scores into displayable factor rows.
+function scoreToFactors(score) {
+  if (!score) return [];
+  const rows = [
+    { label: 'Industry Match', value: score.industry_score, description: 'Target industry alignment' },
+    { label: 'Company Size', value: score.size_score, description: 'Based on employee count' },
+    { label: 'Location Fit', value: score.location_score, description: 'Within target geography' },
+    { label: 'Engagement', value: score.engagement_score, description: 'Outreach activity signals' },
+  ];
+  return rows.filter((r) => r.value != null);
+}
 
 const eventIcons = {
   email_sent: Send,
@@ -141,8 +142,12 @@ export default function CompanyDetail() {
   const { data: outreachEvents } = useOutreachEvents(id);
   const { data: sequences } = useSequences();
   const enrollCompany = useEnrollCompany();
+  const { data: companyContacts = [] } = useCompanyContacts(id);
+  const { data: companyScores = [] } = useCompanyScores(id);
+  const createContact = useCreateContact();
 
-  const companyContacts = mockContacts.filter((c) => String(c.company_id) === String(id));
+  const latestScore = companyScores[0] || null;
+  const realFactors = scoreToFactors(latestScore);
 
   const handleStageChange = (newStage) => {
     transitionStage.mutate({ id: company.id, stage: newStage });
@@ -200,7 +205,13 @@ export default function CompanyDetail() {
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <StageSelector value={company.stage} onChange={handleStageChange} />
-            <ScoreBadge score={company.score} size="lg" />
+            {company.score != null ? (
+              <ScoreBadge score={company.score} size="lg" />
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-500">
+                Not scored
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -292,7 +303,7 @@ export default function CompanyDetail() {
               />
               <AddContactForm
                 onAdd={(data) => {
-                  updateCompany.mutate({ id: company.id, data: { ...company, contact: data } });
+                  createContact.mutate({ company_id: company.id, ...data });
                 }}
               />
             </div>
@@ -304,10 +315,12 @@ export default function CompanyDetail() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="text-center">
-                    <div className="text-5xl font-bold text-gray-900">{company.score}</div>
-                    <div className={cn('mt-1 text-sm font-semibold', getScoreColor(company.score).split(' ')[0])}>
-                      {getScoreLabel(company.score)}
-                    </div>
+                    <div className="text-5xl font-bold text-gray-900">{company.score ?? '—'}</div>
+                    {company.score != null && (
+                      <div className={cn('mt-1 text-sm font-semibold', getScoreColor(company.score).split(' ')[0])}>
+                        {getScoreLabel(company.score)}
+                      </div>
+                    )}
                   </div>
                   <div className="h-16 w-px bg-gray-200" />
                   <div className="flex-1">
@@ -317,10 +330,12 @@ export default function CompanyDetail() {
                         className="absolute left-0 top-0 h-4 rounded-full bg-gradient-to-r from-red-400 via-yellow-400 to-green-400"
                         style={{ width: '100%' }}
                       />
-                      <div
-                        className="absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-gray-900 shadow-md"
-                        style={{ left: `${company.score}%` }}
-                      />
+                      {company.score != null && (
+                        <div
+                          className="absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-gray-900 shadow-md"
+                          style={{ left: `${company.score}%` }}
+                        />
+                      )}
                     </div>
                     <div className="mt-1 flex justify-between text-xs text-gray-400">
                       <span>0</span>
@@ -336,23 +351,29 @@ export default function CompanyDetail() {
                   className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-yellow-600 disabled:opacity-50"
                 >
                   <RefreshCw className={cn('h-4 w-4', scoreCompany.isPending && 'animate-spin')} />
-                  Re-score
+                  {company.score != null ? 'Re-score' : 'Score now'}
                 </button>
               </div>
 
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Scoring Factors</h3>
-                <div className="space-y-2">
-                  {scoringFactors.map((factor) => (
-                    <div key={factor.label} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{factor.label}</p>
-                        <p className="text-xs text-gray-500">{factor.description}</p>
+                {realFactors.length > 0 ? (
+                  <div className="space-y-2">
+                    {realFactors.map((factor) => (
+                      <div key={factor.label} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{factor.label}</p>
+                          <p className="text-xs text-gray-500">{factor.description}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-green-600">+{factor.value}</span>
                       </div>
-                      <span className="text-sm font-semibold text-green-600">{factor.value}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                    This company hasn't been scored yet. Run scoring to see the breakdown.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -433,67 +454,45 @@ export default function CompanyDetail() {
           {activeTab === 'activity' && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Activity Timeline</h3>
-              {outreachEvents && outreachEvents.length > 0 ? (
-                <div className="space-y-3">
-                  {/* Combine mock stage changes with outreach events */}
-                  {[
-                    { id: 'stage-1', type: 'stage_changed', description: `Stage changed to ${STAGE_LABELS[company.stage] || company.stage}`, created_at: company.updated_at },
-                    { id: 'score-1', type: 'lead_scored', description: `Company scored ${company.score} — ${getScoreLabel(company.score)}`, created_at: company.updated_at },
-                    ...outreachEvents.map((e) => ({
-                      id: `event-${e.id}`,
-                      type: e.type,
-                      description: `${e.type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}${e.subject ? `: ${e.subject}` : ''}`,
-                      created_at: e.created_at,
-                    })),
-                  ]
-                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                    .map((item) => {
-                      const IconComp = eventIcons[item.type] || Clock;
-                      const colorClass = eventColors[item.type] || 'text-gray-500 bg-gray-50';
-                      return (
-                        <div key={item.id} className="flex items-start gap-3">
-                          <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${colorClass}`}>
-                            <IconComp className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm text-gray-700">{item.description}</p>
-                            <p className="mt-0.5 text-xs text-gray-400">{timeAgo(item.created_at)}</p>
-                          </div>
+              <div className="space-y-3">
+                {[
+                  {
+                    id: 'added',
+                    type: 'company_added',
+                    description: 'Company added to Landline',
+                    created_at: company.created_at,
+                  },
+                  ...(latestScore ? [{
+                    id: 'scored',
+                    type: 'lead_scored',
+                    description: `Lead scored ${latestScore.fit_score} — ${getScoreLabel(latestScore.fit_score)}`,
+                    created_at: latestScore.scored_at,
+                  }] : []),
+                  ...(outreachEvents || []).map((e) => ({
+                    id: `event-${e.id}`,
+                    type: e.event_type || e.type,
+                    description: `${String(e.event_type || e.type).replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}`,
+                    created_at: e.occurred_at || e.created_at,
+                  })),
+                ]
+                  .filter((i) => i.created_at)
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                  .map((item) => {
+                    const IconComp = eventIcons[item.type] || Clock;
+                    const colorClass = eventColors[item.type] || 'text-gray-500 bg-gray-50';
+                    return (
+                      <div key={item.id} className="flex items-start gap-3">
+                        <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${colorClass}`}>
+                          <IconComp className="h-3.5 w-3.5" />
                         </div>
-                      );
-                    })}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-500">
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-700">Stage changed to {STAGE_LABELS[company.stage]}</p>
-                      <p className="mt-0.5 text-xs text-gray-400">{timeAgo(company.updated_at)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-yellow-50 text-yellow-500">
-                      <Target className="h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-700">Company scored {company.score}</p>
-                      <p className="mt-0.5 text-xs text-gray-400">{timeAgo(company.updated_at)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-50 text-green-500">
-                      <Plus className="h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-700">Company added to Landline</p>
-                      <p className="mt-0.5 text-xs text-gray-400">{timeAgo(company.created_at)}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-gray-700">{item.description}</p>
+                          <p className="mt-0.5 text-xs text-gray-400">{timeAgo(item.created_at)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
         </div>

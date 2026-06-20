@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { contactsApi, companiesApi } from '../api/client';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { contactsApi, companiesApi, queryClient } from '../api/client';
 
 // Normalize a list response (backend returns {items,total} for contacts, an array for companies).
 function normalize(data) {
@@ -33,5 +34,56 @@ export function useContacts() {
         };
       });
     },
+  });
+}
+
+/** Fetch the contacts that belong to a single company. */
+export function useCompanyContacts(companyId) {
+  return useQuery({
+    queryKey: ['contacts', 'company', companyId],
+    queryFn: async () => normalize(await contactsApi.getByCompany(companyId)),
+    enabled: !!companyId,
+  });
+}
+
+function invalidateContacts(companyId) {
+  queryClient.invalidateQueries({ queryKey: ['contacts'] });
+  if (companyId) {
+    queryClient.invalidateQueries({ queryKey: ['contacts', 'company', companyId] });
+    queryClient.invalidateQueries({ queryKey: ['company', companyId] });
+  }
+  queryClient.invalidateQueries({ queryKey: ['companies'] });
+}
+
+export function useCreateContact() {
+  return useMutation({
+    mutationFn: async (data) => await contactsApi.create({ source: 'manual', ...data }),
+    onSuccess: (result) => {
+      invalidateContacts(result?.company_id);
+      toast.success('Contact added');
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to add contact'),
+  });
+}
+
+export function useUpdateContact() {
+  return useMutation({
+    mutationFn: async ({ id, data }) => await contactsApi.update(id, data),
+    onSuccess: (result) => {
+      invalidateContacts(result?.company_id);
+      toast.success('Contact updated');
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to update contact'),
+  });
+}
+
+export function useDeleteContact() {
+  return useMutation({
+    mutationFn: async ({ id }) => await contactsApi.remove(id),
+    onSuccess: (_result, variables) => {
+      invalidateContacts(variables?.companyId);
+      toast.success('Contact removed');
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to remove contact'),
   });
 }

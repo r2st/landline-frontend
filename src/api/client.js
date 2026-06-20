@@ -26,7 +26,8 @@ export const companiesApi = {
   create: (data) => api.post('/companies/', data).then(r => r.data),
   update: (id, data) => api.patch(`/companies/${id}`, data).then(r => r.data),
   delete: (id) => api.delete(`/companies/${id}`).then(r => r.data),
-  importCSV: (formData) => api.post('/import/csv', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
+  getScores: (id) => api.get(`/companies/${id}/scores`).then(r => r.data),
+  importCSV: (formData) => api.post('/import-export/import/csv', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
   score: (id) => api.post('/leads/score', { company_id: id }).then(r => r.data),
 };
 
@@ -37,6 +38,18 @@ export const pipelineApi = {
 
 export const dashboardApi = {
   getMetrics: () => api.get('/dashboard/overview').then(r => r.data),
+  getRecentActivity: (params) => api.get('/dashboard/recent-activity', { params }).then(r => r.data),
+  getTopLeads: (params) => api.get('/dashboard/top-leads', { params }).then(r => r.data),
+  getIndustry: (params) => api.get('/dashboard/industry', { params }).then(r => r.data),
+  getEmailTrends: (params) => api.get('/dashboard/email-trends', { params }).then(r => r.data),
+};
+
+export const followUpsApi = {
+  list: (params) => api.get('/follow-ups', { params }).then(r => r.data),
+  create: (data) => api.post('/follow-ups', data).then(r => r.data),
+  update: (id, data) => api.patch(`/follow-ups/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/follow-ups/${id}`).then(r => r.data),
+  staleContacts: (params) => api.get('/follow-ups/stale-contacts', { params }).then(r => r.data),
 };
 
 export const outreachApi = {
@@ -49,6 +62,10 @@ export const outreachApi = {
 export const contactsApi = {
   getAll: (params) => api.get('/contacts/', { params }).then(r => r.data),
   getById: (id) => api.get(`/contacts/${id}`).then(r => r.data),
+  getByCompany: (companyId) => api.get(`/contacts/company/${companyId}`).then(r => r.data),
+  create: (data) => api.post('/contacts/', data).then(r => r.data),
+  update: (id, data) => api.patch(`/contacts/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/contacts/${id}`).then(r => r.data),
 };
 
 export const emailApi = {

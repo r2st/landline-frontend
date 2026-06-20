@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -21,7 +21,7 @@ function AddCompanyModal({ open, onClose, onCreate }) {
     domain: '',
     city: '',
     state: '',
-    country: 'USA',
+    country: 'US',
     employees: '',
     industry: '',
     source: 'manual',
@@ -36,7 +36,7 @@ function AddCompanyModal({ open, onClose, onCreate }) {
       ...form,
       employees: form.employees ? Number(form.employees) : null,
     });
-    setForm({ name: '', domain: '', city: '', state: '', country: 'USA', employees: '', industry: '', source: 'manual' });
+    setForm({ name: '', domain: '', city: '', state: '', country: 'US', employees: '', industry: '', source: 'manual' });
     onClose();
   };
 
@@ -174,17 +174,27 @@ export default function Companies() {
     scoreMax: '',
   });
 
-  const activeFilters = {};
-  if (search) activeFilters.search = search;
-  if (filters.stage) activeFilters.stage = filters.stage;
-  if (filters.country) activeFilters.country = filters.country;
-  if (filters.source) activeFilters.source = filters.source;
-  if (filters.scoreMin) activeFilters.scoreMin = filters.scoreMin;
-  if (filters.scoreMax) activeFilters.scoreMax = filters.scoreMax;
+  // Server-side filters (supported by the company list endpoint).
+  const serverFilters = {};
+  if (search) serverFilters.search = search;
+  if (filters.stage) serverFilters.stage = filters.stage;
+  if (filters.country) serverFilters.country = filters.country;
 
-  const { data: companies, isLoading, isError } = useCompanies(activeFilters);
+  const { data: allCompanies, isLoading, isError } = useCompanies(serverFilters);
   const createCompany = useCreateCompany();
   const scoreCompany = useScoreCompany();
+
+  // Source + score range are filtered client-side (not supported server-side).
+  const companies = useMemo(() => {
+    const min = filters.scoreMin !== '' ? Number(filters.scoreMin) : null;
+    const max = filters.scoreMax !== '' ? Number(filters.scoreMax) : null;
+    return (allCompanies || []).filter((c) => {
+      if (filters.source && c.source !== filters.source) return false;
+      if (min != null && (c.score ?? -1) < min) return false;
+      if (max != null && (c.score ?? 101) > max) return false;
+      return true;
+    });
+  }, [allCompanies, filters.source, filters.scoreMin, filters.scoreMax]);
 
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));

@@ -9,9 +9,10 @@ const colorMap = {
   red: { bg: 'bg-red-100', text: 'text-red-600' },
   yellow: { bg: 'bg-yellow-100', text: 'text-yellow-600' },
   indigo: { bg: 'bg-indigo-100', text: 'text-indigo-600' },
+  teal: { bg: 'bg-teal-100', text: 'text-teal-600' },
 };
 
-export default function MetricCard({ title, value, change, icon: Icon, color = 'blue' }) {
+export default function MetricCard({ title, value, change, subtitle, icon: Icon, color = 'blue' }) {
   const isPositive = change >= 0;
   const palette = colorMap[color] || colorMap.blue;
 
@@ -38,6 +39,7 @@ export default function MetricCard({ title, value, change, icon: Icon, color = '
             </span>
           </div>
         )}
+        {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
       </div>
 
       {Icon && (

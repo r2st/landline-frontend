@@ -9,6 +9,7 @@ const CompanyDetail = lazy(() => import('./pages/CompanyDetail'));
 const Import = lazy(() => import('./pages/Import'));
 const Sequences = lazy(() => import('./pages/Sequences'));
 const Outreach = lazy(() => import('./pages/Outreach'));
+const FollowUps = lazy(() => import('./pages/FollowUps'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 function LoadingSpinner() {
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/import" element={<Import />} />
           <Route path="/sequences" element={<Sequences />} />
           <Route path="/outreach" element={<Outreach />} />
+          <Route path="/follow-ups" element={<FollowUps />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Suspense>

@@ -38,7 +38,9 @@ export default function CompanyCard({ company, onClick, onTransition, compact = 
             </div>
           )}
         </div>
-        <ScoreBadge score={company.score} size={compact ? 'sm' : 'md'} />
+        {company.score != null && (
+          <ScoreBadge score={company.score} size={compact ? 'sm' : 'md'} />
+        )}
       </div>
 
       {/* Details */}
