@@ -98,6 +98,7 @@ export const emailApi = {
   preview: (data) => api.post('/email-templates/preview', data).then(r => r.data),
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
+  sendTest: (data) => api.post('/email-templates/send-test', data).then(r => r.data),
 };
 
 // Gmail OAuth — connect a Google account so outreach sends from the user's own
