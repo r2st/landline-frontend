@@ -13,6 +13,8 @@ import {
   Users,
   FileText,
   ExternalLink,
+  Copy,
+  UserPlus,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import {
@@ -25,7 +27,7 @@ import {
   useComposeEmail,
   useEmailSends,
 } from '../hooks/useEmailTemplates';
-import { useContacts } from '../hooks/useContacts';
+import { useContacts, useQuickAddContact } from '../hooks/useContacts';
 import { useGmailStatus } from '../hooks/useGmail';
 import { MERGE_FIELDS, DEMO_LINK } from '../lib/mockData';
 import { cn, timeAgo } from '../lib/utils';
@@ -98,7 +100,7 @@ function PreviewModal({ open, onClose, loading, subject, body, contextLabel }) {
 // ─── Template editor ─────────────────────────────────────────────────────────────
 
 function TemplateEditor({ template, onClose }) {
-  const isEdit = Boolean(template);
+  const isEdit = Boolean(template) && Boolean(template.id);
   const [name, setName] = useState(template?.name || '');
   const [subject, setSubject] = useState(template?.subject || '');
   const [body, setBody] = useState(template?.body || '');
@@ -256,7 +258,7 @@ function TemplateEditor({ template, onClose }) {
 
 // ─── Template card ───────────────────────────────────────────────────────────────
 
-function TemplateCard({ template, onEdit, onPreview }) {
+function TemplateCard({ template, onEdit, onPreview, onDuplicate }) {
   const setDefault = useSetDefaultTemplate();
   const deleteTemplate = useDeleteTemplate();
 
@@ -309,6 +311,14 @@ function TemplateCard({ template, onEdit, onPreview }) {
         </button>
         <button
           type="button"
+          onClick={() => onDuplicate(template)}
+          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+        >
+          <Copy className="h-3.5 w-3.5" />
+          Duplicate
+        </button>
+        <button
+          type="button"
           disabled={template.is_default}
           onClick={() => {
             if (template.is_default) return;
@@ -336,6 +346,16 @@ function TemplatesTab() {
   const handlePreview = (template) => {
     setPreviewOpen(true);
     preview.mutate({ template_id: template.id });
+  };
+
+  const handleDuplicate = (template) => {
+    // Open editor pre-filled with the template's content, but without an id so it creates a new one.
+    setEditing({
+      name: `${template.name} (Copy)`,
+      subject: template.subject,
+      body: template.body,
+      _duplicate: true, // flag so TemplateEditor treats it as new
+    });
   };
 
   if (isLoading) {
@@ -371,7 +391,7 @@ function TemplatesTab() {
       {!editing && (templates?.length ? (
         <div className="grid gap-4 sm:grid-cols-2">
           {templates.map((t) => (
-            <TemplateCard key={t.id} template={t} onEdit={setEditing} onPreview={handlePreview} />
+            <TemplateCard key={t.id} template={t} onEdit={setEditing} onPreview={handlePreview} onDuplicate={handleDuplicate} />
           ))}
         </div>
       ) : (
@@ -395,6 +415,137 @@ function TemplatesTab() {
   );
 }
 
+// ─── Quick-add contact modal ────────────────────────────────────────────────────
+
+function QuickAddModal({ open, onClose }) {
+  const [companyName, setCompanyName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [title, setTitle] = useState('');
+  const quickAdd = useQuickAddContact();
+
+  const reset = () => {
+    setCompanyName('');
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setTitle('');
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!companyName.trim() || !email.trim()) return;
+    quickAdd.mutate(
+      {
+        company_name: companyName.trim(),
+        first_name: firstName.trim() || undefined,
+        last_name: lastName.trim() || undefined,
+        email: email.trim(),
+        title: title.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          reset();
+          onClose();
+        },
+      }
+    );
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+          <div className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-blue-500" />
+            <h3 className="text-sm font-semibold text-gray-900">Quick Add Contact</h3>
+          </div>
+          <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3 p-5">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Company Name *</label>
+            <input
+              type="text"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Acme Corp"
+              required
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <p className="mt-0.5 text-xs text-gray-400">If the company already exists, the contact will be added to it.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">First Name</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Jane"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Last Name</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Doe"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Email *</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="jane@acme.com"
+              required
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="VP of Marketing"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex justify-end gap-3 border-t border-gray-100 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!companyName.trim() || !email.trim() || quickAdd.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
+            >
+              <UserPlus className="h-4 w-4" />
+              {quickAdd.isPending ? 'Adding…' : 'Add Contact'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Compose tab ─────────────────────────────────────────────────────────────────
 
 function ComposeTab() {
@@ -410,6 +561,7 @@ function ComposeTab() {
   const [selected, setSelected] = useState({}); // id -> true
   const [search, setSearch] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   // Default-select the default template once templates load.
   useEffect(() => {
@@ -586,6 +738,14 @@ function ComposeTab() {
             <span className="text-xs font-normal text-gray-400">
               ({selectedIds.length} selected · {withEmail.length} with email)
             </span>
+            <button
+              type="button"
+              onClick={() => setQuickAddOpen(true)}
+              className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Quick Add
+            </button>
           </div>
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
@@ -681,6 +841,8 @@ function ComposeTab() {
             : 'sample contact'
         }
       />
+
+      <QuickAddModal open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
     </div>
   );
 }

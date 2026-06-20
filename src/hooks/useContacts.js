@@ -87,3 +87,15 @@ export function useDeleteContact() {
     onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to remove contact'),
   });
 }
+
+export function useQuickAddContact() {
+  return useMutation({
+    mutationFn: async (data) => await contactsApi.quickAdd(data),
+    onSuccess: (result) => {
+      invalidateContacts(result?.contact?.company_id);
+      const name = [result?.contact?.first_name, result?.contact?.last_name].filter(Boolean).join(' ') || result?.contact?.email;
+      toast.success(`Contact "${name}" added${result?.company_created ? ` (new company: ${result.company_name})` : ''}`);
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to add contact'),
+  });
+}

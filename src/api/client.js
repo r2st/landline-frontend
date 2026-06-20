@@ -66,6 +66,7 @@ export const contactsApi = {
   create: (data) => api.post('/contacts/', data).then(r => r.data),
   update: (id, data) => api.patch(`/contacts/${id}`, data).then(r => r.data),
   remove: (id) => api.delete(`/contacts/${id}`).then(r => r.data),
+  quickAdd: (data) => api.post('/contacts/quick-add', data).then(r => r.data),
 };
 
 export const emailApi = {
