@@ -103,3 +103,13 @@ export function useEmailSends() {
     queryFn: async () => await emailApi.getSends({}),
   });
 }
+
+// ─── Send Test ─────────────────────────────────────────────────────────────────
+
+export function useSendTestEmail() {
+  return useMutation({
+    mutationFn: async (data) => await emailApi.sendTest(data),
+    onSuccess: (res) => toast.success(`Test email sent: ${res.subject || 'check inbox'}`),
+    onError: (e) => toast.error(errMsg(e, 'Failed to send test email')),
+  });
+}
