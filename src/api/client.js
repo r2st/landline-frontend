@@ -10,26 +10,6 @@ export const api = axios.create({
   timeout: 10000,
 });
 
-// Add API key to all requests
-api.interceptors.request.use((config) => {
-  const apiKey = import.meta.env.VITE_API_KEY;
-  if (apiKey) {
-    config.headers['X-API-Key'] = apiKey;
-  }
-  return config;
-});
-
-// Handle auth errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.error('API authentication failed. Check your API key.');
-    }
-    return Promise.reject(error);
-  }
-);
-
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -98,7 +78,6 @@ export const emailApi = {
   preview: (data) => api.post('/email-templates/preview', data).then(r => r.data),
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
-  sendTest: (data) => api.post('/email-templates/send-test', data).then(r => r.data),
 };
 
 // Gmail OAuth — connect a Google account so outreach sends from the user's own

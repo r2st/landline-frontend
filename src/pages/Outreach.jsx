@@ -1,5 +1,4 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import DOMPurify from 'dompurify';
 import {
   Mail,
   Plus,
@@ -16,10 +15,6 @@ import {
   ExternalLink,
   Copy,
   UserPlus,
-  Filter,
-  TestTube,
-  History,
-  Clock,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import {
@@ -31,12 +26,11 @@ import {
   usePreviewTemplate,
   useComposeEmail,
   useEmailSends,
-  useSendTestEmail,
 } from '../hooks/useEmailTemplates';
 import { useContacts, useQuickAddContact } from '../hooks/useContacts';
 import { useGmailStatus } from '../hooks/useGmail';
 import { MERGE_FIELDS, DEMO_LINK } from '../lib/mockData';
-import { cn, timeAgo, formatDate } from '../lib/utils';
+import { cn, timeAgo } from '../lib/utils';
 import { Link } from 'react-router-dom';
 
 // ─── Merge field insert bar ─────────────────────────────────────────────────────
@@ -93,7 +87,7 @@ function PreviewModal({ open, onClose, loading, subject, body, contextLabel }) {
               </div>
               <div
                 className="prose prose-sm max-w-none text-sm text-gray-700 [&_a]:text-blue-600 [&_p]:my-2"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body || '') }}
+                dangerouslySetInnerHTML={{ __html: body || '' }}
               />
             </>
           )}
@@ -346,7 +340,6 @@ function TemplateCard({ template, onEdit, onPreview, onDuplicate }) {
 function TemplatesTab() {
   const { data: templates, isLoading } = useEmailTemplates();
   const [editing, setEditing] = useState(null); // template object or 'new'
-  const [templateSearch, setTemplateSearch] = useState('');
   const preview = usePreviewTemplate();
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -365,14 +358,6 @@ function TemplatesTab() {
     });
   };
 
-  const filteredTemplates = useMemo(() => {
-    const q = templateSearch.trim().toLowerCase();
-    if (!q || !templates?.length) return templates || [];
-    return templates.filter((t) =>
-      [t.name, t.subject].filter(Boolean).some((v) => v.toLowerCase().includes(q))
-    );
-  }, [templates, templateSearch]);
-
   if (isLoading) {
     return (
       <div className="flex justify-center py-16">
@@ -384,17 +369,7 @@ function TemplatesTab() {
   return (
     <div className="space-y-5">
       {!editing && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              value={templateSearch}
-              onChange={(e) => setTemplateSearch(e.target.value)}
-              placeholder="Search templates by name or subject..."
-              className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={() => setEditing('new')}
@@ -413,18 +388,12 @@ function TemplatesTab() {
         />
       )}
 
-      {!editing && (filteredTemplates.length ? (
+      {!editing && (templates?.length ? (
         <div className="grid gap-4 sm:grid-cols-2">
-          {filteredTemplates.map((t) => (
+          {templates.map((t) => (
             <TemplateCard key={t.id} template={t} onEdit={setEditing} onPreview={handlePreview} onDuplicate={handleDuplicate} />
           ))}
         </div>
-      ) : templates?.length ? (
-        <EmptyState
-          title="No matching templates"
-          description="Try a different search term."
-          icon={Search}
-        />
       ) : (
         <EmptyState
           title="No templates yet"
@@ -577,76 +546,6 @@ function QuickAddModal({ open, onClose }) {
   );
 }
 
-// ─── Send Test modal ────────────────────────────────────────────────────────────
-
-function SendTestModal({ open, onClose, templateId, senderAccountId, defaultEmail }) {
-  const [testEmail, setTestEmail] = useState(defaultEmail || '');
-  const sendTest = useSendTestEmail();
-
-  useEffect(() => {
-    if (open && defaultEmail) setTestEmail(defaultEmail);
-  }, [open, defaultEmail]);
-
-  const handleSend = () => {
-    if (!testEmail.trim() || !templateId) return;
-    sendTest.mutate(
-      { template_id: templateId, test_email: testEmail.trim(), sender_account_id: senderAccountId || undefined },
-      { onSuccess: () => onClose() }
-    );
-  };
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-          <div className="flex items-center gap-2">
-            <TestTube className="h-4 w-4 text-blue-500" />
-            <h3 className="text-sm font-semibold text-gray-900">Send Test Email</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="space-y-3 p-5">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Recipient Email</label>
-            <input
-              type="email"
-              value={testEmail}
-              onChange={(e) => setTestEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              A test email will be sent using sample merge fields.
-            </p>
-          </div>
-          <div className="flex justify-end gap-3 border-t border-gray-100 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!testEmail.trim() || sendTest.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
-            >
-              <Send className="h-4 w-4" />
-              {sendTest.isPending ? 'Sending...' : 'Send Test'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Compose tab ─────────────────────────────────────────────────────────────────
 
 function ComposeTab() {
@@ -661,11 +560,8 @@ function ComposeTab() {
   const [senderId, setSenderId] = useState(''); // '' = active / fallback
   const [selected, setSelected] = useState({}); // id -> true
   const [search, setSearch] = useState('');
-  const [industryFilter, setIndustryFilter] = useState('');
-  const [companyFilter, setCompanyFilter] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [sendTestOpen, setSendTestOpen] = useState(false);
 
   // Default-select the default template once templates load.
   useEffect(() => {
@@ -704,34 +600,15 @@ function ComposeTab() {
     [contacts]
   );
 
-  const uniqueIndustries = useMemo(
-    () => [...new Set(withEmail.map((c) => c.industry_segment).filter(Boolean))].sort(),
-    [withEmail]
-  );
-
-  const uniqueCompanies = useMemo(
-    () => [...new Set(withEmail.map((c) => c.company).filter(Boolean))].sort(),
-    [withEmail]
-  );
-
   const filtered = useMemo(() => {
-    let result = withEmail;
-    if (industryFilter) {
-      result = result.filter((c) => c.industry_segment === industryFilter);
-    }
-    if (companyFilter) {
-      result = result.filter((c) => c.company === companyFilter);
-    }
     const q = search.trim().toLowerCase();
-    if (q) {
-      result = result.filter((c) =>
-        [c.first_name, c.last_name, c.email, c.company, c.title]
-          .filter(Boolean)
-          .some((v) => v.toLowerCase().includes(q))
-      );
-    }
-    return result;
-  }, [withEmail, search, industryFilter, companyFilter]);
+    if (!q) return withEmail;
+    return withEmail.filter((c) =>
+      [c.first_name, c.last_name, c.email, c.company, c.title]
+        .filter(Boolean)
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [withEmail, search]);
 
   const selectedIds = useMemo(
     () => Object.keys(selected).filter((id) => selected[id]),
@@ -841,15 +718,6 @@ function ComposeTab() {
             </button>
             <button
               type="button"
-              onClick={() => setSendTestOpen(true)}
-              disabled={!templateId}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              <TestTube className="h-4 w-4" />
-              Send Test
-            </button>
-            <button
-              type="button"
               onClick={handleSend}
               disabled={!selectedIds.length || !templateId || compose.isPending}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
@@ -890,47 +758,6 @@ function ComposeTab() {
             />
           </div>
         </div>
-
-        {/* Industry & Company filters */}
-        {(uniqueIndustries.length > 0 || uniqueCompanies.length > 0) && (
-          <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3">
-            <Filter className="h-4 w-4 text-gray-400" />
-            {uniqueIndustries.length > 0 && (
-              <select
-                value={industryFilter}
-                onChange={(e) => setIndustryFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">All Industries</option>
-                {uniqueIndustries.map((ind) => (
-                  <option key={ind} value={ind}>{ind}</option>
-                ))}
-              </select>
-            )}
-            {uniqueCompanies.length > 0 && (
-              <select
-                value={companyFilter}
-                onChange={(e) => setCompanyFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">All Companies</option>
-                {uniqueCompanies.map((co) => (
-                  <option key={co} value={co}>{co}</option>
-                ))}
-              </select>
-            )}
-            {(industryFilter || companyFilter) && (
-              <button
-                type="button"
-                onClick={() => { setIndustryFilter(''); setCompanyFilter(''); }}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
-              >
-                <X className="h-3 w-3" />
-                Clear filters
-              </button>
-            )}
-          </div>
-        )}
 
         {contactsLoading ? (
           <div className="flex justify-center py-12">
@@ -1016,113 +843,6 @@ function ComposeTab() {
       />
 
       <QuickAddModal open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
-
-      <SendTestModal
-        open={sendTestOpen}
-        onClose={() => setSendTestOpen(false)}
-        templateId={templateId}
-        senderAccountId={senderId}
-        defaultEmail={fromEmail || ''}
-      />
-    </div>
-  );
-}
-
-// ─── History tab ────────────────────────────────────────────────────────────────
-
-function HistoryTab() {
-  const { data: sends, isLoading } = useEmailSends();
-  const [historySearch, setHistorySearch] = useState('');
-
-  const sorted = useMemo(() => {
-    const items = [...(sends || [])];
-    items.sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at));
-    return items;
-  }, [sends]);
-
-  const filtered = useMemo(() => {
-    const q = historySearch.trim().toLowerCase();
-    if (!q) return sorted;
-    return sorted.filter((s) =>
-      [s.to_email, s.subject].filter(Boolean).some((v) => v.toLowerCase().includes(q))
-    );
-  }, [sorted, historySearch]);
-
-  const statusBadge = (status) => {
-    const styles = {
-      sent: 'bg-green-50 text-green-700',
-      failed: 'bg-red-50 text-red-700',
-      bounced: 'bg-orange-50 text-orange-700',
-    };
-    return (
-      <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', styles[status] || 'bg-gray-100 text-gray-600')}>
-        {status}
-      </span>
-    );
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-16">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="relative w-full sm:w-72">
-        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          value={historySearch}
-          onChange={(e) => setHistorySearch(e.target.value)}
-          placeholder="Search by recipient or subject..."
-          className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
-
-      {filtered.length === 0 ? (
-        <EmptyState
-          title={sends?.length ? 'No matching sends' : 'No emails sent yet'}
-          description={sends?.length ? 'Try a different search term.' : 'Compose and send your first email campaign to see history here.'}
-          icon={History}
-        />
-      ) : (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="max-h-[36rem] overflow-auto">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="sticky top-0 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-4 py-2">Recipient</th>
-                  <th className="px-4 py-2">Subject</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Sent At</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-gray-900">{s.to_email || '—'}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{s.subject || '—'}</td>
-                    <td className="px-4 py-2.5">{statusBadge(s.status)}</td>
-                    <td className="px-4 py-2.5">
-                      {s.sent_at ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                          <Clock className="h-3 w-3" />
-                          {formatDate(s.sent_at)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1148,7 +868,6 @@ export default function Outreach() {
         {[
           { id: 'templates', label: 'Templates' },
           { id: 'compose', label: 'Compose & Send' },
-          { id: 'history', label: 'History' },
         ].map((t) => (
           <button
             key={t.id}
@@ -1166,9 +885,7 @@ export default function Outreach() {
         ))}
       </div>
 
-      {tab === 'templates' && <TemplatesTab />}
-      {tab === 'compose' && <ComposeTab />}
-      {tab === 'history' && <HistoryTab />}
+      {tab === 'templates' ? <TemplatesTab /> : <ComposeTab />}
     </div>
   );
 }
