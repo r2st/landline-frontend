@@ -211,11 +211,11 @@ function TemplateEditor({ template, onClose }) {
           </p>
         </div>
 
-        <div className="flex justify-between gap-3 border-t border-gray-200 pt-4">
+        <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:justify-between">
           <button
             type="button"
             onClick={handlePreview}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <Eye className="h-4 w-4" />
             Preview
@@ -523,15 +523,15 @@ function ComposeTab() {
 
       {/* Contact selector */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+        <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-900">
             <Users className="h-4 w-4 text-gray-400" />
             Select Contacts
             <span className="text-xs font-normal text-gray-400">
               ({selectedIds.length} selected · {withEmail.length} with email)
             </span>
           </div>
-          <div className="relative w-64">
+          <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
             <input
               type="text"
@@ -550,8 +550,8 @@ function ComposeTab() {
         ) : filtered.length === 0 ? (
           <EmptyState title="No contacts found" description="Try a different search." icon={Users} />
         ) : (
-          <div className="max-h-[28rem] overflow-y-auto">
-            <table className="w-full text-sm">
+          <div className="max-h-[28rem] overflow-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="sticky top-0 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="w-10 px-4 py-2">

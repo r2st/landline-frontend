@@ -5,3 +5,17 @@
 body {
   font-family: 'Inter', sans-serif;
 }
+
+/*
+ * On mobile, iOS Safari zooms the viewport when focusing a form control whose
+ * font-size is below 16px. Many inputs here use Tailwind's text-sm (14px), so
+ * force a 16px minimum on touch-sized screens to keep the page readable and
+ * prevent the disorienting auto-zoom.
+ */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

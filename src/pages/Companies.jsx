@@ -41,9 +41,9 @@ function AddCompanyModal({ open, onClose, onCreate }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+      <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:max-h-[90vh] sm:rounded-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">Add Company</h3>
           <button type="button" onClick={onClose} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
@@ -51,8 +51,8 @@ function AddCompanyModal({ open, onClose, onCreate }) {
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">Company Name *</label>
               <input
                 type="text"
@@ -126,7 +126,7 @@ function AddCompanyModal({ open, onClose, onCreate }) {
                 placeholder="100"
               />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">Source</label>
               <select
                 value={form.source}
@@ -139,17 +139,17 @@ function AddCompanyModal({ open, onClose, onCreate }) {
               </select>
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+              className="rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
             >
               Add Company
             </button>
@@ -265,14 +265,14 @@ export default function Companies() {
     <div className="space-y-4">
       {/* Search & Actions Bar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1" style={{ minWidth: '240px', maxWidth: '400px' }}>
+        <div className="relative w-full sm:flex-1" style={{ minWidth: '200px', maxWidth: '400px' }}>
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search companies..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
@@ -290,7 +290,7 @@ export default function Companies() {
           Filters
         </button>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {selectedIds.length > 0 && (
             <button
               type="button"

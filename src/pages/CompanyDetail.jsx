@@ -65,7 +65,7 @@ function TabButton({ label, active, onClick }) {
       type="button"
       onClick={onClick}
       className={cn(
-        'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+        'flex-shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
         active
           ? 'border-blue-500 text-blue-600'
           : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -110,7 +110,7 @@ function AddContactForm({ onAdd }) {
       </button>
       {open && (
         <form onSubmit={handleSubmit} className="space-y-3 px-4 pb-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input type="text" required placeholder="First name *" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             <input type="text" required placeholder="Last name *" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             <input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
@@ -275,7 +275,7 @@ export default function CompanyDetail() {
 
       {/* Tabs */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex border-b border-gray-200 px-2">
+        <div className="flex overflow-x-auto border-b border-gray-200 px-2">
           <TabButton label="Contacts" active={activeTab === 'contacts'} onClick={() => setActiveTab('contacts')} />
           <TabButton label="Score" active={activeTab === 'score'} onClick={() => setActiveTab('score')} />
           <TabButton label="Outreach" active={activeTab === 'outreach'} onClick={() => setActiveTab('outreach')} />
@@ -301,7 +301,7 @@ export default function CompanyDetail() {
           {/* Score Tab */}
           {activeTab === 'score' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="text-center">
                     <div className="text-5xl font-bold text-gray-900">{company.score}</div>
@@ -312,7 +312,7 @@ export default function CompanyDetail() {
                   <div className="h-16 w-px bg-gray-200" />
                   <div className="flex-1">
                     <div className="mb-1 text-sm text-gray-500">Score Range</div>
-                    <div className="relative h-4 w-64 rounded-full bg-gray-200">
+                    <div className="relative h-4 w-full max-w-xs rounded-full bg-gray-200 sm:w-64">
                       <div
                         className="absolute left-0 top-0 h-4 rounded-full bg-gradient-to-r from-red-400 via-yellow-400 to-green-400"
                         style={{ width: '100%' }}
@@ -373,7 +373,7 @@ export default function CompanyDetail() {
                     <ChevronDown className="h-3.5 w-3.5" />
                   </button>
                   {enrollDropdownOpen && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-64 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                    <div className="absolute right-0 top-full z-10 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
                       {(sequences || []).map((seq) => (
                         <button
                           key={seq.id}
