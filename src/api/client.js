@@ -78,3 +78,12 @@ export const emailApi = {
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
 };
+
+// Gmail OAuth — connect a Google account so outreach sends from the user's own
+// address (with Gmail's SPF/DKIM/DMARC, so it stays out of spam).
+export const gmailApi = {
+  status: () => api.get('/gmail/status').then(r => r.data),
+  authorize: () => api.get('/gmail/oauth/authorize').then(r => r.data),
+  setActive: (id) => api.post(`/gmail/accounts/${id}/set-active`).then(r => r.data),
+  disconnect: (id) => api.delete(`/gmail/accounts/${id}`).then(r => r.data),
+};

@@ -26,8 +26,10 @@ import {
   useEmailSends,
 } from '../hooks/useEmailTemplates';
 import { useContacts } from '../hooks/useContacts';
+import { useGmailStatus } from '../hooks/useGmail';
 import { MERGE_FIELDS, DEMO_LINK } from '../lib/mockData';
 import { cn, timeAgo } from '../lib/utils';
+import { Link } from 'react-router-dom';
 
 // ─── Merge field insert bar ─────────────────────────────────────────────────────
 
@@ -399,10 +401,12 @@ function ComposeTab() {
   const { data: templates } = useEmailTemplates();
   const { data: contacts, isLoading: contactsLoading } = useContacts();
   const { data: sends } = useEmailSends();
+  const { data: gmail } = useGmailStatus();
   const preview = usePreviewTemplate();
   const compose = useComposeEmail();
 
   const [templateId, setTemplateId] = useState('');
+  const [senderId, setSenderId] = useState(''); // '' = active / fallback
   const [selected, setSelected] = useState({}); // id -> true
   const [search, setSearch] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -414,6 +418,19 @@ function ComposeTab() {
       setTemplateId(def.id);
     }
   }, [templates, templateId]);
+
+  // Default the sender to the active connected Gmail account.
+  useEffect(() => {
+    if (!senderId && gmail?.active_account_id) {
+      setSenderId(gmail.active_account_id);
+    }
+  }, [gmail, senderId]);
+
+  const gmailAccounts = gmail?.accounts?.filter((a) => a.status === 'connected') || [];
+  const fromEmail = senderId
+    ? gmailAccounts.find((a) => a.id === senderId)?.email
+    : gmail?.active_email;
+  const sendingVia = fromEmail || gmail?.fallback_sender;
 
   // Map contact_id -> most recent send time.
   const lastSentByContact = useMemo(() => {
@@ -472,7 +489,12 @@ function ComposeTab() {
   const handleSend = () => {
     if (!selectedIds.length || !templateId) return;
     compose.mutate(
-      { contact_ids: selectedIds, template_id: templateId, contacts: withEmail },
+      {
+        contact_ids: selectedIds,
+        template_id: templateId,
+        sender_account_id: senderId || undefined,
+        contacts: withEmail,
+      },
       { onSuccess: () => setSelected({}) }
     );
   };
@@ -483,6 +505,40 @@ function ComposeTab() {
     <div className="space-y-5">
       {/* Controls */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        {/* From / sender */}
+        <div className="mb-4">
+          <label className="mb-1 block text-sm font-medium text-gray-700">From</label>
+          {gmailAccounts.length > 0 ? (
+            <select
+              value={senderId}
+              onChange={(e) => setSenderId(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {gmailAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.email}{a.is_active ? ' (active)' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              <Mail className="h-4 w-4 flex-shrink-0" />
+              <span>
+                Sending from <span className="font-medium">{sendingVia}</span> (shared).
+              </span>
+              <Link to="/settings" className="font-medium text-blue-600 hover:underline">
+                Connect your Gmail →
+              </Link>
+            </div>
+          )}
+          {gmailAccounts.length > 0 && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Recipients will see this as the sender — authenticated, inbox-safe.
+            </p>
+          )}
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Template</label>

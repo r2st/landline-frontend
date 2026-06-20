@@ -11,6 +11,7 @@ import {
   Flame,
 } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
+import GmailConnect from '../components/GmailConnect';
 import { API_BASE_URL } from '../lib/constants';
 import toast from 'react-hot-toast';
 
@@ -74,6 +75,9 @@ export default function Settings() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {/* Email Sending — Gmail OAuth connection */}
+      <GmailConnect />
+
       {/* API Configuration */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-3">

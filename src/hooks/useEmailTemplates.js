@@ -79,15 +79,19 @@ export function usePreviewTemplate() {
 
 export function useComposeEmail() {
   return useMutation({
-    mutationFn: async ({ contact_ids, template_id }) =>
-      await emailApi.compose({ contact_ids, template_id }),
+    mutationFn: async ({ contact_ids, template_id, sender_account_id }) => {
+      const payload = { contact_ids, template_id };
+      if (sender_account_id) payload.sender_account_id = sender_account_id;
+      return await emailApi.compose(payload);
+    },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['email-sends'] });
       const parts = [];
       if (res.sent) parts.push(`${res.sent} sent`);
       if (res.skipped) parts.push(`${res.skipped} skipped`);
       if (res.errors) parts.push(`${res.errors} failed`);
-      toast.success(`Compose complete: ${parts.join(', ') || 'no contacts'}`);
+      const via = res.sender ? ` via ${res.sender}` : '';
+      toast.success(`Compose complete${via}: ${parts.join(', ') || 'no contacts'}`);
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to send')),
   });
