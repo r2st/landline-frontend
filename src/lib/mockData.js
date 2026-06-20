@@ -615,6 +615,19 @@ export const mockOutreachEvents = [
   { id: 'evt_026', company_id: 'comp_020', contact_id: 'cont_040', sequence_id: 'seq_001', type: 'email_replied', subject: 'Streamline Your Manufacturing Quoting Process', created_at: '2026-06-05T09:10:00Z' },
 ];
 
+// ─── Email Campaign constants ──────────────────────────────────────────────────
+
+export const DEMO_LINK = 'https://true-molding-demo.pages.dev';
+
+export const MERGE_FIELDS = [
+  { label: 'First Name', value: '{{first_name}}' },
+  { label: 'Company', value: '{{company}}' },
+  { label: 'Industry', value: '{{industry_segment}}' },
+  { label: 'City', value: '{{city}}' },
+  { label: 'Contact Title', value: '{{contact_title}}' },
+  { label: 'Demo Link', value: '{{demo_link}}' },
+];
+
 // ─── Mock Recent Activity ──────────────────────────────────────────────────────
 
 export const mockRecentActivity = [

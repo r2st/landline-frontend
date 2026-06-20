@@ -45,3 +45,19 @@ export const outreachApi = {
   enrollCompany: (data) => api.post('/outreach/enrollments', data).then(r => r.data),
   getEvents: (params) => api.get('/outreach/events', { params }).then(r => r.data),
 };
+
+export const contactsApi = {
+  getAll: (params) => api.get('/contacts/', { params }).then(r => r.data),
+  getById: (id) => api.get(`/contacts/${id}`).then(r => r.data),
+};
+
+export const emailApi = {
+  getTemplates: () => api.get('/email-templates').then(r => r.data),
+  createTemplate: (data) => api.post('/email-templates', data).then(r => r.data),
+  updateTemplate: (id, data) => api.put(`/email-templates/${id}`, data).then(r => r.data),
+  deleteTemplate: (id) => api.delete(`/email-templates/${id}`).then(r => r.data),
+  setDefault: (id) => api.post(`/email-templates/${id}/set-default`).then(r => r.data),
+  preview: (data) => api.post('/email-templates/preview', data).then(r => r.data),
+  compose: (data) => api.post('/email-compose', data).then(r => r.data),
+  getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
+};

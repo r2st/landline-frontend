@@ -6,6 +6,7 @@ import {
   GitBranch,
   Upload,
   Mail,
+  Send,
   Settings,
   Phone,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'Companies', href: '/companies', icon: Building2 },
   { name: 'Import', href: '/import', icon: Upload },
   { name: 'Sequences', href: '/sequences', icon: Mail },
+  { name: 'Email Campaigns', href: '/outreach', icon: Send },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
