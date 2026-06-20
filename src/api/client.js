@@ -10,6 +10,26 @@ export const api = axios.create({
   timeout: 10000,
 });
 
+// Add API key to all requests
+api.interceptors.request.use((config) => {
+  const apiKey = import.meta.env.VITE_API_KEY;
+  if (apiKey) {
+    config.headers['X-API-Key'] = apiKey;
+  }
+  return config;
+});
+
+// Handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.error('API authentication failed. Check your API key.');
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -78,6 +98,50 @@ export const emailApi = {
   preview: (data) => api.post('/email-templates/preview', data).then(r => r.data),
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
+  sendTest: (data) => api.post('/email-templates/send-test', data).then(r => r.data),
+};
+
+export const discoveryApi = {
+  searchCompanies: (data) => api.post('/discovery/search-companies', data).then(r => r.data),
+  enrichCompany: (id, data) => api.post(`/discovery/enrich/${id}`, data).then(r => r.data),
+};
+
+export const aiApi = {
+  generateEmail: (data) => api.post('/ai/generate-email', data).then(r => r.data),
+  improveEmail: (data) => api.post('/ai/improve-email', data).then(r => r.data),
+  scoreLead: (data) => api.post('/ai/score-lead', data).then(r => r.data),
+  analyzeCompany: (id) => api.post(`/ai/analyze-company/${id}`).then(r => r.data),
+  generateFollowup: (data) => api.post('/ai/generate-followup', data).then(r => r.data),
+  scanCard: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/ai/scan-card', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
+    }).then(r => r.data);
+  },
+};
+
+export const groupsApi = {
+  getAll: () => api.get('/groups').then(r => r.data),
+  create: (data) => api.post('/groups', data).then(r => r.data),
+  update: (id, data) => api.patch(`/groups/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/groups/${id}`).then(r => r.data),
+  addMembers: (id, companyIds) => api.post(`/groups/${id}/members`, { company_ids: companyIds }).then(r => r.data),
+  removeMembers: (id, companyIds) => api.delete(`/groups/${id}/members`, { data: { company_ids: companyIds } }).then(r => r.data),
+  autoGroupByIndustry: () => api.post('/groups/auto-group-by-industry').then(r => r.data),
+  autoGroupByCountry: () => api.post('/groups/auto-group-by-country').then(r => r.data),
+};
+
+export const sendLimiterApi = {
+  getStats: () => api.get('/discovery/send-stats').then(r => r.data),
+};
+
+export const newsApi = {
+  getAll: (params) => api.get('/news', { params }).then(r => r.data),
+  checkCompany: (id) => api.post(`/news/check/${id}`).then(r => r.data),
+  checkAll: (limit) => api.post(`/news/check-all?limit=${limit || 5}`).then(r => r.data),
+  markActioned: (id) => api.patch(`/news/${id}/action`).then(r => r.data),
 };
 
 // Gmail OAuth — connect a Google account so outreach sends from the user's own
