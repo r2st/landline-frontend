@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import {
   Mail,
   Plus,
@@ -87,7 +88,7 @@ function PreviewModal({ open, onClose, loading, subject, body, contextLabel }) {
               </div>
               <div
                 className="prose prose-sm max-w-none text-sm text-gray-700 [&_a]:text-blue-600 [&_p]:my-2"
-                dangerouslySetInnerHTML={{ __html: body || '' }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body || '') }}
               />
             </>
           )}

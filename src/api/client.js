@@ -10,6 +10,26 @@ export const api = axios.create({
   timeout: 10000,
 });
 
+// Add API key to all requests
+api.interceptors.request.use((config) => {
+  const apiKey = import.meta.env.VITE_API_KEY;
+  if (apiKey) {
+    config.headers['X-API-Key'] = apiKey;
+  }
+  return config;
+});
+
+// Handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.error('API authentication failed. Check your API key.');
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
