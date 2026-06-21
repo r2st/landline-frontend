@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Camera,
   Upload,
@@ -13,10 +14,19 @@ import {
   Globe,
   MapPin,
   Users,
+  Linkedin,
+  Search,
+  ScanLine,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useScanCard } from '../hooks/useAI';
+import { useContacts } from '../hooks/useContacts';
 import { contactsApi, queryClient } from '../api/client';
+import { getInitials, timeAgo, formatDate } from '../lib/utils';
+
+const isScanned = (c) => /card|scan/.test((c?.source || '').toLowerCase());
+const fullName = (c) =>
+  [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.email || 'Unknown';
 
 const INITIAL_FORM = {
   first_name: '',
@@ -34,6 +44,84 @@ const INITIAL_FORM = {
   notes: '',
 };
 
+/** Compact read-only card showing all details extracted from one scanned business card. */
+function ScannedContactCard({ contact }) {
+  const name = fullName(contact);
+  const location = [contact.city, contact.state, contact.country].filter(Boolean).join(', ');
+
+  return (
+    <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md">
+      {/* Identity */}
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-600">
+          {getInitials(contact.first_name, contact.last_name)}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-gray-900">{name}</p>
+          {contact.title && <p className="truncate text-xs text-gray-500">{contact.title}</p>}
+        </div>
+      </div>
+
+      {/* Company */}
+      {contact.company && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+          <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+          {contact.company_id ? (
+            <Link to={`/companies/${contact.company_id}`} className="truncate font-medium text-blue-600 hover:text-blue-700">
+              {contact.company}
+            </Link>
+          ) : (
+            <span className="truncate">{contact.company}</span>
+          )}
+        </div>
+      )}
+
+      {location && (
+        <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+          <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+          <span className="truncate">{location}</span>
+        </div>
+      )}
+
+      {/* Contact details */}
+      <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-3">
+        {contact.email && (
+          <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
+            <Mail className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+            <span className="truncate">{contact.email}</span>
+          </a>
+        )}
+        {contact.phone && (
+          <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
+            <Phone className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+            <span className="truncate">{contact.phone}</span>
+          </a>
+        )}
+        {contact.website && (
+          <a href={contact.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
+            <Globe className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+            <span className="truncate">{contact.website.replace(/^https?:\/\//, '')}</span>
+          </a>
+        )}
+        {contact.linkedin_url && (
+          <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
+            <Linkedin className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+            <span className="truncate">LinkedIn profile</span>
+          </a>
+        )}
+      </div>
+
+      {contact.created_at && (
+        <div className="mt-3 border-t border-gray-100 pt-2.5">
+          <span className="text-[11px] text-gray-400" title={formatDate(contact.created_at)}>
+            Scanned {timeAgo(contact.created_at)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CardScanner() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -43,9 +131,27 @@ export default function CardScanner() {
   const [savedContact, setSavedContact] = useState(null);
   const [dragOver, setDragOver] = useState(false);
 
+  const [search, setSearch] = useState('');
+
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const scanCard = useScanCard();
+
+  // All previously scanned business cards, newest first, filtered by search.
+  const { data: contacts, isLoading: contactsLoading } = useContacts();
+  const scannedCards = useMemo(() => {
+    const list = (contacts || []).filter(isScanned);
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? list.filter((c) =>
+          [c.first_name, c.last_name, c.email, c.phone, c.title, c.company]
+            .filter(Boolean)
+            .some((v) => String(v).toLowerCase().includes(q))
+        )
+      : list;
+    return [...filtered].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  }, [contacts, search]);
+  const totalScanned = useMemo(() => (contacts || []).filter(isScanned).length, [contacts]);
 
   const handleFile = useCallback((file) => {
     if (!file) return;
@@ -399,6 +505,63 @@ export default function CardScanner() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Bottom section: all previously scanned business cards */}
+      <div className="border-t border-gray-200 pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Scanned Business Cards</h2>
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                {totalScanned}
+              </span>
+            </div>
+            <p className="ml-7 text-sm text-gray-500">
+              Every contact captured from a scanned card, with full details.
+            </p>
+          </div>
+
+          {totalScanned > 0 && (
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search scanned contacts…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          )}
+        </div>
+
+        {contactsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+          </div>
+        ) : scannedCards.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center">
+            <div className="mx-auto mb-3 w-fit rounded-full bg-gray-100 p-3">
+              <ScanLine className="h-7 w-7 text-gray-400" />
+            </div>
+            <h3 className="font-medium text-gray-700">
+              {totalScanned === 0 ? 'No scanned cards yet' : 'No matches'}
+            </h3>
+            <p className="mx-auto mt-1 max-w-xs text-sm text-gray-400">
+              {totalScanned === 0
+                ? 'Scan your first business card above and it will appear here.'
+                : 'Try a different search term.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {scannedCards.map((c) => (
+              <ScannedContactCard key={c.id} contact={c} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

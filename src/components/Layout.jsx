@@ -43,7 +43,7 @@ const navSections = [
       { name: 'Groups', href: '/groups', icon: Folder },
       { name: 'News', href: '/news', icon: Newspaper },
       { name: 'Import', href: '/import', icon: Upload },
-      { name: 'Scan Card', href: '/scan', icon: CreditCard },
+      { name: 'Business Card', href: '/scan', icon: CreditCard },
     ],
   },
   {
