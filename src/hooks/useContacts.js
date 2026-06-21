@@ -31,6 +31,9 @@ export function useContacts() {
           company: co.name || '',
           industry_segment: co.industry_segment || co.industry || '',
           city: co.city || '',
+          state: co.state_province || co.state || '',
+          country: co.country || '',
+          website: ct.website || co.website || '',
         };
       });
     },
