@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   BarChart3,
@@ -21,6 +22,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { emailApi } from '../api/client';
 
 const navSections = [
   {
@@ -63,6 +65,33 @@ export default function Layout({ children }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Check for recent replies (last 24 hours) to show notification dot
+  const { data: recentSends } = useQuery({
+    queryKey: ['layout-reply-check'],
+    queryFn: async () => {
+      try {
+        const data = await emailApi.getSends({ page_size: 50 });
+        const items = data?.items || data;
+        return Array.isArray(items) ? items : [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60000, // check every 60 seconds
+    refetchInterval: 60000,
+    retry: false,
+  });
+
+  const hasNewReplies = useMemo(() => {
+    if (!recentSends?.length) return false;
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return recentSends.some((s) => {
+      if (s.status !== 'replied') return false;
+      const d = new Date(s.replied_at || s.updated_at || s.sent_at);
+      return !isNaN(d) && d > cutoff;
+    });
+  }, [recentSends]);
+
   const currentPage = allNavItems.find(
     item => item.href === location.pathname ||
     (item.href !== '/' && location.pathname.startsWith(item.href))
@@ -81,7 +110,7 @@ export default function Layout({ children }) {
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  const NavLink = ({ item }) => {
+  const NavLink = ({ item, showBadge }) => {
     const isActive = location.pathname === item.href ||
       (item.href !== '/' && location.pathname.startsWith(item.href));
     return (
@@ -96,6 +125,9 @@ export default function Layout({ children }) {
       >
         <item.icon className="h-5 w-5 flex-shrink-0" />
         {item.name}
+        {showBadge && (
+          <span className="ml-auto h-2 w-2 rounded-full bg-red-500 flex-shrink-0" />
+        )}
       </Link>
     );
   };
@@ -125,7 +157,11 @@ export default function Layout({ children }) {
             </p>
             <div className="space-y-0.5">
               {section.items.map((item) => (
-                <NavLink key={item.name} item={item} />
+                <NavLink
+                  key={item.name}
+                  item={item}
+                  showBadge={item.name === 'Campaigns' && hasNewReplies}
+                />
               ))}
             </div>
           </div>

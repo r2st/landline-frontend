@@ -124,23 +124,35 @@ function RateCard({ title, value, icon: Icon, color, subtitle, colorCode }) {
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = ['6a', '8a', '10a', '12p', '2p', '4p', '6p', '8p'];
 
-function SendTimingHeatmap() {
-  // Generate a synthetic heatmap from typical B2B patterns.
-  // In production this would come from actual send/open data.
-  const heatData = useMemo(() => {
-    const weights = [
-      [3, 7, 8, 6, 5, 3, 2, 1],
-      [4, 8, 9, 7, 6, 4, 2, 1],
-      [3, 7, 8, 5, 5, 3, 2, 1],
-      [4, 8, 9, 7, 6, 4, 2, 1],
-      [3, 6, 7, 5, 4, 2, 1, 1],
-      [1, 2, 3, 2, 2, 1, 1, 0],
-      [0, 1, 2, 1, 1, 1, 0, 0],
-    ];
-    return weights;
-  }, []);
+function SendTimingHeatmap({ emailSends }) {
+  // Compute heatmap from real email send timestamps.
+  // Groups sends by day-of-week (Mon=0) and hour bucket.
+  const { heatData, maxVal } = useMemo(() => {
+    const hourBuckets = [6, 8, 10, 12, 14, 16, 18, 20]; // start of each 2-hour window
+    // 7 days x 8 hour-buckets, initialised to 0
+    const grid = Array.from({ length: 7 }, () => Array(hourBuckets.length).fill(0));
 
-  const maxVal = 9;
+    const items = Array.isArray(emailSends) ? emailSends : [];
+    items.forEach((send) => {
+      const ts = send.sent_at || send.created_at;
+      if (!ts) return;
+      const dt = new Date(ts);
+      if (isNaN(dt)) return;
+      const dow = (dt.getDay() + 6) % 7; // Mon=0 ... Sun=6
+      const hour = dt.getHours();
+      // Find which bucket this hour falls into
+      let bucketIdx = -1;
+      for (let i = hourBuckets.length - 1; i >= 0; i--) {
+        if (hour >= hourBuckets[i]) { bucketIdx = i; break; }
+      }
+      if (bucketIdx >= 0) grid[dow][bucketIdx]++;
+    });
+
+    let peak = 0;
+    grid.forEach((row) => row.forEach((v) => { if (v > peak) peak = v; }));
+
+    return { heatData: grid, maxVal: peak || 1 };
+  }, [emailSends]);
 
   function cellColor(val) {
     if (val === 0) return 'bg-gray-50';
@@ -247,6 +259,7 @@ export default function Analytics() {
   const { data: topLeads, isLoading: leadsLoading } = useTopEngagedLeads(10);
   const { data: recentEmails, isLoading: emailsLoading } = useRecentEmailActivity(20);
   const { data: emailSends, isLoading: sendsLoading } = useEmailSends(20);
+  const { data: allEmailSends } = useEmailSends(500); // larger set for heatmap
 
   // --- Derived data ---
 
@@ -492,7 +505,7 @@ export default function Analytics() {
 
         {/* Send Timing Heatmap */}
         <ChartCard title="Best Send Times (Engagement Score)">
-          <SendTimingHeatmap />
+          <SendTimingHeatmap emailSends={allEmailSends || emailSends} />
         </ChartCard>
       </div>
 

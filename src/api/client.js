@@ -7,7 +7,7 @@ const baseURL = import.meta.env.VITE_API_URL
 
 export const api = axios.create({
   baseURL,
-  timeout: 10000,
+  timeout: 30000,
 });
 
 // Add API key to all requests
@@ -131,6 +131,11 @@ export const groupsApi = {
   removeMembers: (id, companyIds) => api.delete(`/groups/${id}/members`, { data: { company_ids: companyIds } }).then(r => r.data),
   autoGroupByIndustry: () => api.post('/groups/auto-group-by-industry').then(r => r.data),
   autoGroupByCountry: () => api.post('/groups/auto-group-by-country').then(r => r.data),
+};
+
+export const settingsApi = {
+  getAutomation: () => api.get('/settings/automation').then(r => r.data),
+  updateAutomation: (data) => api.patch('/settings/automation', data).then(r => r.data),
 };
 
 export const sendLimiterApi = {

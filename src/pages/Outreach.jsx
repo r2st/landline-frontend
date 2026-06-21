@@ -22,6 +22,7 @@ import {
   Clock,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
+import ConfirmDialog from '../components/ConfirmDialog';
 import {
   useEmailTemplates,
   useCreateTemplate,
@@ -666,6 +667,7 @@ function ComposeTab() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [sendTestOpen, setSendTestOpen] = useState(false);
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
 
   // Default-select the default template once templates load.
   useEffect(() => {
@@ -763,6 +765,11 @@ function ComposeTab() {
 
   const handleSend = () => {
     if (!selectedIds.length || !templateId) return;
+    setSendConfirmOpen(true);
+  };
+
+  const handleSendConfirmed = () => {
+    setSendConfirmOpen(false);
     compose.mutate(
       {
         contact_ids: selectedIds,
@@ -773,6 +780,8 @@ function ComposeTab() {
       { onSuccess: () => setSelected({}) }
     );
   };
+
+  const selectedTemplateName = (templates || []).find((t) => t.id === templateId)?.name || 'Selected template';
 
   const previewContact = selectedContacts[0] || withEmail[0];
 
@@ -1024,6 +1033,16 @@ function ComposeTab() {
         senderAccountId={senderId}
         defaultEmail={fromEmail || ''}
       />
+
+      <ConfirmDialog
+        open={sendConfirmOpen}
+        title="Confirm Email Send"
+        message={`You're about to send emails to ${selectedIds.length} contact${selectedIds.length === 1 ? '' : 's'} using the '${selectedTemplateName}' template. This cannot be undone. Continue?`}
+        confirmLabel="Send Emails"
+        variant="warning"
+        onConfirm={handleSendConfirmed}
+        onCancel={() => setSendConfirmOpen(false)}
+      />
     </div>
   );
 }
@@ -1050,13 +1069,18 @@ function HistoryTab() {
 
   const statusBadge = (status) => {
     const styles = {
-      sent: 'bg-green-50 text-green-700',
+      sent: 'bg-gray-100 text-gray-700',
+      delivered: 'bg-gray-100 text-gray-700',
+      opened: 'bg-blue-50 text-blue-700',
+      clicked: 'bg-yellow-50 text-yellow-700',
+      replied: 'bg-green-50 text-green-700',
+      bounced: 'bg-red-50 text-red-700',
       failed: 'bg-red-50 text-red-700',
-      bounced: 'bg-orange-50 text-orange-700',
     };
+    const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
     return (
       <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', styles[status] || 'bg-gray-100 text-gray-600')}>
-        {status}
+        {label}
       </span>
     );
   };
@@ -1097,6 +1121,7 @@ function HistoryTab() {
                   <th className="px-4 py-2">Recipient</th>
                   <th className="px-4 py-2">Subject</th>
                   <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Opened At</th>
                   <th className="px-4 py-2">Sent At</th>
                 </tr>
               </thead>
@@ -1106,6 +1131,16 @@ function HistoryTab() {
                     <td className="px-4 py-2.5 text-gray-900">{s.to_email || '—'}</td>
                     <td className="px-4 py-2.5 text-gray-600">{s.subject || '—'}</td>
                     <td className="px-4 py-2.5">{statusBadge(s.status)}</td>
+                    <td className="px-4 py-2.5">
+                      {s.opened_at ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-blue-600">
+                          <Eye className="h-3 w-3" />
+                          {formatDate(s.opened_at)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5">
                       {s.sent_at ? (
                         <span className="inline-flex items-center gap-1 text-xs text-gray-500">

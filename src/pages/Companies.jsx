@@ -359,7 +359,12 @@ export default function Companies() {
     const rows = companies.map((c) => [
       c.name, c.domain, c.city, c.state, c.country, c.employees, c.industry, c.score, c.stage, c.source, c.created_at,
     ]);
-    const csv = [headers, ...rows].map((r) => r.map((v) => `"${v || ''}"`).join(',')).join('\n');
+    const escapeCsvValue = (val) => {
+      const str = val == null ? '' : String(val);
+      // Escape internal double quotes by doubling them, then wrap in quotes
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+    const csv = [headers, ...rows].map((r) => r.map(escapeCsvValue).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

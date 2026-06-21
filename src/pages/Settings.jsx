@@ -9,10 +9,15 @@ import {
   X,
   AlertCircle,
   Flame,
+  Bot,
+  Zap,
+  BarChart3,
+  Calendar,
 } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import GmailConnect from '../components/GmailConnect';
 import { API_BASE_URL } from '../lib/constants';
+import { settingsApi } from '../api/client';
 import toast from 'react-hot-toast';
 
 function ConnectionStatus({ connected }) {
@@ -42,10 +47,62 @@ function WeightSlider({ label, value, description }) {
   );
 }
 
+function AutomationStatusRow({ icon: Icon, label, enabled, description }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+      <div className="flex items-center gap-3">
+        <Icon className="h-4 w-4 text-gray-500" />
+        <div>
+          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <p className="text-xs text-gray-400">{description}</p>
+        </div>
+      </div>
+      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+        {enabled ? 'ON' : 'OFF'}
+      </span>
+    </div>
+  );
+}
+
 export default function Settings() {
   const [apiConnected, setApiConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [showClearDialog, setShowClearDialog] = useState(false);
+  const [automation, setAutomation] = useState({
+    auto_reply: true,
+    auto_followups: false,
+    auto_scoring: false,
+    scheduling_link: '',
+  });
+  const [automationLoaded, setAutomationLoaded] = useState(false);
+
+  useEffect(() => {
+    const loadAutomation = async () => {
+      try {
+        const data = await settingsApi.getAutomation();
+        setAutomation({
+          auto_reply: data.auto_reply ?? true,
+          auto_followups: data.auto_followups ?? false,
+          auto_scoring: data.auto_scoring ?? false,
+          scheduling_link: data.scheduling_link || '',
+        });
+      } catch {
+        // Backend endpoint may not exist yet — keep defaults
+      }
+      setAutomationLoaded(true);
+    };
+    loadAutomation();
+  }, []);
+
+  const handleSchedulingLinkSave = async () => {
+    try {
+      await settingsApi.updateAutomation({ scheduling_link: automation.scheduling_link });
+      toast.success('Scheduling link saved');
+    } catch {
+      toast.error('Could not save — backend endpoint not available yet');
+    }
+  };
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -77,6 +134,70 @@ export default function Settings() {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Email Sending — Gmail OAuth connection */}
       <GmailConnect />
+
+      {/* Automation */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100">
+            <Bot className="h-5 w-5 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Automation</h2>
+            <p className="text-sm text-gray-500">Autonomous outreach and follow-up features</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <AutomationStatusRow
+            icon={Zap}
+            label="Auto-Reply"
+            enabled={automation.auto_reply}
+            description="Automatically respond to incoming replies using AI-generated messages"
+          />
+          <AutomationStatusRow
+            icon={Bot}
+            label="Auto Follow-ups"
+            enabled={automation.auto_followups}
+            description="Send follow-up emails automatically when leads do not reply within a set window"
+          />
+          <AutomationStatusRow
+            icon={BarChart3}
+            label="Auto Scoring"
+            enabled={automation.auto_scoring}
+            description="Automatically score new companies when they are imported or discovered"
+          />
+
+          <div className="rounded-lg bg-gray-50 px-4 py-3">
+            <div className="flex items-center gap-3 mb-2">
+              <Calendar className="h-4 w-4 text-gray-500" />
+              <label className="text-sm font-medium text-gray-700">Scheduling Link</label>
+            </div>
+            <p className="mb-2 text-xs text-gray-400">
+              Calendly or scheduling URL included in outreach emails when a lead is qualified
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={automation.scheduling_link}
+                onChange={(e) => setAutomation((prev) => ({ ...prev, scheduling_link: e.target.value }))}
+                placeholder="https://calendly.com/your-link"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                onClick={handleSchedulingLinkSave}
+                className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-600">
+          These features are controlled by backend environment variables. Contact your administrator to change automation settings.
+        </div>
+      </div>
 
       {/* API Configuration */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
