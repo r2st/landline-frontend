@@ -12,6 +12,7 @@ import {
   Phone,
   Globe,
   MapPin,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useScanCard } from '../hooks/useAI';
@@ -158,6 +159,10 @@ export default function CardScanner() {
     </div>
   );
 
+  // quick-add response shape varies ({contact:{...}} or flat) — handle both.
+  const savedContactId = savedContact?.contact?.id || savedContact?.id || null;
+  const savedCompanyId = savedContact?.contact?.company_id || savedContact?.company_id || null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -293,17 +298,26 @@ export default function CardScanner() {
               <p className="text-gray-600 text-sm mb-4">
                 {formData.first_name} {formData.last_name}
                 {formData.company_name ? ` at ${formData.company_name}` : ''}
-                {' '}has been saved.
+                {' '}has been saved to your contacts.
               </p>
-              {savedContact.company_id && (
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <a
-                  href={`/companies/${savedContact.company_id}`}
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  href={savedContactId ? `/contacts?highlight=${savedContactId}` : '/contacts'}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
-                  <Building2 className="h-4 w-4" />
-                  View Company
+                  <Users className="h-4 w-4" />
+                  View in Contacts
                 </a>
-              )}
+                {savedCompanyId && (
+                  <a
+                    href={`/companies/${savedCompanyId}`}
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Building2 className="h-4 w-4" />
+                    View Company
+                  </a>
+                )}
+              </div>
             </div>
           ) : scanned ? (
             /* Editable form */
@@ -314,30 +328,34 @@ export default function CardScanner() {
                 <span className="text-xs text-gray-400 ml-auto">Edit before saving</span>
               </div>
 
+              {/* Person */}
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Person</p>
               <div className="grid grid-cols-2 gap-3">
                 <FormField label="First Name" field="first_name" icon={UserPlus} />
                 <FormField label="Last Name" field="last_name" icon={UserPlus} />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <FormField label="Title" field="title" />
-                <FormField label="Company" field="company_name" icon={Building2} />
-              </div>
+              <FormField label="Title" field="title" />
 
               <div className="grid grid-cols-2 gap-3">
                 <FormField label="Email" field="email" icon={Mail} type="email" />
                 <FormField label="Phone" field="phone" icon={Phone} type="tel" />
               </div>
+              <FormField label="LinkedIn" field="linkedin_url" icon={Globe} placeholder="https://linkedin.com/in/..." />
 
-              <FormField label="Website" field="website" icon={Globe} />
+              {/* Company */}
+              <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Company</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Company" field="company_name" icon={Building2} />
+                <FormField label="Website" field="website" icon={Globe} />
+              </div>
 
+              {/* Location */}
+              <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Location</p>
               <div className="grid grid-cols-3 gap-3">
                 <FormField label="City" field="city" icon={MapPin} />
                 <FormField label="State" field="state" />
                 <FormField label="Country" field="country" />
               </div>
-
-              <FormField label="LinkedIn" field="linkedin_url" placeholder="https://linkedin.com/in/..." />
 
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>

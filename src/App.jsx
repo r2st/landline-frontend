@@ -17,6 +17,7 @@ const NewsFeed = lazy(() => import('./pages/NewsFeed'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Demos = lazy(() => import('./pages/Demos'));
 const CardScanner = lazy(() => import('./pages/CardScanner'));
+const Contacts = lazy(() => import('./pages/Contacts'));
 
 function NotFound() {
   return (
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/demos" element={<Demos />} />
           <Route path="/scan" element={<CardScanner />} />
+          <Route path="/contacts" element={<Contacts />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

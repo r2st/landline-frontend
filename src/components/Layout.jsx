@@ -20,6 +20,7 @@ import {
   Newspaper,
   Rocket,
   CreditCard,
+  Users,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -37,6 +38,7 @@ const navSections = [
     label: 'Leads',
     items: [
       { name: 'Companies', href: '/companies', icon: Building2 },
+      { name: 'Contacts', href: '/contacts', icon: Users },
       { name: 'Discovery', href: '/discovery', icon: Sparkles },
       { name: 'Groups', href: '/groups', icon: Folder },
       { name: 'News', href: '/news', icon: Newspaper },
