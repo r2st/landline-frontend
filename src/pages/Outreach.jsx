@@ -848,12 +848,12 @@ function ComposeTab() {
               ))}
             </select>
           </div>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <button
               type="button"
               onClick={handlePreview}
               disabled={!templateId || !previewContact}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 sm:px-4"
             >
               <Eye className="h-4 w-4" />
               Preview
@@ -862,19 +862,19 @@ function ComposeTab() {
               type="button"
               onClick={() => setSendTestOpen(true)}
               disabled={!templateId}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 sm:px-4"
             >
               <TestTube className="h-4 w-4" />
-              Send Test
+              Test
             </button>
             <button
               type="button"
               onClick={handleSend}
               disabled={!selectedIds.length || !templateId || compose.isPending}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50 sm:w-auto sm:flex-1"
             >
               <Send className="h-4 w-4" />
-              {compose.isPending ? 'Sending…' : `Send to ${selectedIds.length} contact${selectedIds.length === 1 ? '' : 's'}`}
+              {compose.isPending ? 'Sending…' : `Send to ${selectedIds.length}`}
             </button>
           </div>
         </div>

@@ -207,20 +207,20 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
   if (selectedIds.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 lg:left-[calc(50%+7.5rem)]">
-      <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white/95 px-5 py-3 shadow-lg backdrop-blur-sm">
-        <span className="text-sm font-semibold text-gray-700">
+    <div className="fixed bottom-6 left-1/2 z-40 w-[calc(100%-2rem)] max-w-fit -translate-x-1/2 sm:w-auto lg:left-[calc(50%+7.5rem)]">
+      <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm sm:gap-3 sm:px-5">
+        <span className="flex-shrink-0 text-sm font-semibold text-gray-700">
           {selectedIds.length} selected
         </span>
 
-        <div className="h-5 w-px bg-gray-200" />
+        <div className="h-5 w-px flex-shrink-0 bg-gray-200" />
 
         {/* Change Stage Dropdown */}
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <button
             type="button"
             onClick={() => { setStageDropdown(!stageDropdown); setGroupDropdown(false); }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <ArrowRightLeft className="h-3.5 w-3.5" />
             Change Stage
@@ -243,11 +243,11 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
         </div>
 
         {/* Add to Group Dropdown */}
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <button
             type="button"
             onClick={() => { setGroupDropdown(!groupDropdown); setStageDropdown(false); }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <FolderPlus className="h-3.5 w-3.5" />
             Add to Group
@@ -276,32 +276,30 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
         <button
           type="button"
           onClick={onScoreAll}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm font-medium text-yellow-700 hover:bg-yellow-100"
+          className="inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm font-medium text-yellow-700 hover:bg-yellow-100"
         >
           <Target className="h-3.5 w-3.5" />
-          Score All
+          Score
         </button>
 
         {/* Delete */}
         <button
           type="button"
           onClick={onDelete}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+          className="inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Delete
         </button>
 
-        <div className="h-5 w-px bg-gray-200" />
+        <div className="h-5 w-px flex-shrink-0 bg-gray-200" />
 
         {/* Deselect All */}
         <button
           type="button"
           onClick={onDeselect}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700"
+          className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700"
         >
           <XCircle className="h-3.5 w-3.5" />
-          Deselect
         </button>
       </div>
     </div>

@@ -7,7 +7,7 @@ export default function PipelineColumn({ stage, companies = [], onCardClick, onT
   const label = STAGE_LABELS[stage] || stage;
 
   return (
-    <div className="flex min-w-[280px] max-w-[320px] flex-shrink-0 flex-col rounded-lg border border-gray-200 bg-gray-50">
+    <div className="flex min-w-[260px] max-w-[320px] flex-shrink-0 flex-col rounded-lg border border-gray-200 bg-gray-50 sm:min-w-[280px]">
       {/* Column Header */}
       <div
         className="rounded-t-lg border-b border-gray-200 bg-white px-4 py-3"
@@ -22,7 +22,7 @@ export default function PipelineColumn({ stage, companies = [], onCardClick, onT
       </div>
 
       {/* Column Body */}
-      <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ minHeight: '200px', maxHeight: 'calc(100vh - 240px)' }}>
+      <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ minHeight: '160px', maxHeight: 'calc(100vh - 200px)' }}>
         {companies.length > 0 ? (
           companies.map((company) => (
             <CompanyCard

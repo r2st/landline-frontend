@@ -162,9 +162,9 @@ export default function Dashboard() {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={pipelineChartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                  <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
-                  <YAxis type="category" dataKey="stage" tick={{ fontSize: 12 }} width={90} />
+                <BarChart data={pipelineChartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+                  <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="stage" tick={{ fontSize: 10 }} width={80} />
                   <Tooltip
                     contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
@@ -234,9 +234,9 @@ export default function Dashboard() {
             <EmptyState icon={Factory} title="No industry data" description="Add companies with an industry segment to see this breakdown." />
           ) : (
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={industryData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
+              <BarChart data={industryData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
                 <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
                 <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={18} />
               </BarChart>
