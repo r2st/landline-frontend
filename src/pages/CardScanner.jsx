@@ -28,6 +28,59 @@ const isScanned = (c) => /card|scan/.test((c?.source || '').toLowerCase());
 const fullName = (c) =>
   [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.email || 'Unknown';
 
+// Marks a contact as captured from a scanned business card. Must match the
+// /card|scan/ test used by isScanned (and by the Contacts "Scanned" tab/counter).
+const SCAN_SOURCE = 'card_scan';
+
+/**
+ * The card-OCR endpoint isn't guaranteed to return our exact field names — map
+ * the common variants (email_address, phone_number, job_title, organization, a
+ * single `name`, an optional { data }/{ contact } wrapper, …) onto the form
+ * fields so every detail it extracted actually populates and gets saved.
+ */
+function normalizeScanResult(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const d =
+    raw.data && typeof raw.data === 'object' ? { ...raw, ...raw.data }
+    : raw.contact && typeof raw.contact === 'object' ? { ...raw, ...raw.contact }
+    : raw;
+
+  const pick = (...keys) => {
+    for (const k of keys) {
+      const v = d[k];
+      if (v != null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  };
+
+  let first = pick('first_name', 'firstName', 'given_name', 'givenName');
+  let last = pick('last_name', 'lastName', 'family_name', 'familyName', 'surname');
+  const whole = pick('name', 'full_name', 'fullName', 'contact_name');
+  if (!first && !last && whole) {
+    const parts = whole.split(/\s+/);
+    first = parts.shift() || '';
+    last = parts.join(' ');
+  }
+
+  const out = {
+    first_name: first,
+    last_name: last,
+    title: pick('title', 'job_title', 'jobTitle', 'position', 'role', 'designation'),
+    company_name: pick('company_name', 'companyName', 'company', 'organization', 'organisation', 'employer', 'org'),
+    email: pick('email', 'email_address', 'emailAddress', 'mail', 'e_mail'),
+    phone: pick('phone', 'phone_number', 'phoneNumber', 'mobile', 'mobile_phone', 'tel', 'telephone', 'cell'),
+    website: pick('website', 'url', 'web', 'company_website', 'web_url'),
+    address: pick('address', 'street', 'street_address', 'address_line', 'address1'),
+    city: pick('city', 'town', 'locality'),
+    state: pick('state', 'province', 'region'),
+    country: pick('country', 'nation'),
+    linkedin_url: pick('linkedin_url', 'linkedinUrl', 'linkedin', 'linked_in'),
+    notes: pick('notes', 'note', 'additional_info'),
+  };
+  // Only return fields we actually found, so re-scanning never wipes edited values.
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== ''));
+}
+
 const INITIAL_FORM = {
   first_name: '',
   last_name: '',
@@ -193,7 +246,7 @@ export default function CardScanner() {
     if (!imageFile) return;
     scanCard.mutate(imageFile, {
       onSuccess: (data) => {
-        setFormData((prev) => ({ ...prev, ...data }));
+        setFormData((prev) => ({ ...prev, ...normalizeScanResult(data) }));
         setScanned(true);
         toast.success('Card scanned successfully');
       },
@@ -219,12 +272,41 @@ export default function CardScanner() {
         email: formData.email,
         phone: formData.phone,
         website: formData.website,
+        address: formData.address,
         city: formData.city,
         state: formData.state,
         country: formData.country,
         linkedin_url: formData.linkedin_url,
         notes: formData.notes,
+        // Tag the contact so it surfaces under the "Scanned" tab and counter.
+        source: SCAN_SOURCE,
       });
+
+      // quick-add creates the contact + company, but may apply its own default
+      // source or skip some detail fields. Patch the created contact directly to
+      // guarantee the scanned tag and the full extracted details all persist.
+      const newId = result?.contact?.id || result?.id || null;
+      if (newId) {
+        try {
+          const patched = await contactsApi.update(newId, {
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            title: formData.title,
+            email: formData.email,
+            phone: formData.phone,
+            linkedin_url: formData.linkedin_url,
+            source: SCAN_SOURCE,
+          });
+          if (patched && (result?.contact || result)) {
+            // Reflect the persisted values in the saved-state UI.
+            if (result?.contact) result.contact = { ...result.contact, ...patched };
+            else Object.assign(result, patched);
+          }
+        } catch {
+          // Non-fatal: the contact already exists; the tag/detail refresh just didn't apply.
+        }
+      }
+
       setSavedContact(result);
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['companies'] });
