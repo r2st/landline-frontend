@@ -16,34 +16,34 @@ import EmptyState from '../components/EmptyState';
 import { useSequences, useCreateSequence } from '../hooks/useOutreach';
 import { formatNumber, cn } from '../lib/utils';
 
-function SequenceStats({ stats }) {
+function SequenceStats({ stats = {} }) {
   return (
     <div className="grid grid-cols-4 gap-3">
       <div className="rounded-lg bg-blue-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-blue-600">
           <Users className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.enrolled)}</span>
+          <span className="text-lg font-bold">{formatNumber(stats.enrolled || 0)}</span>
         </div>
         <p className="text-xs text-blue-600/70">Enrolled</p>
       </div>
       <div className="rounded-lg bg-purple-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-purple-600">
           <Send className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.sent)}</span>
+          <span className="text-lg font-bold">{formatNumber(stats.sent || 0)}</span>
         </div>
         <p className="text-xs text-purple-600/70">Sent</p>
       </div>
       <div className="rounded-lg bg-indigo-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-indigo-600">
           <Eye className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.opened)}</span>
+          <span className="text-lg font-bold">{formatNumber(stats.opened || 0)}</span>
         </div>
         <p className="text-xs text-indigo-600/70">Opened</p>
       </div>
       <div className="rounded-lg bg-green-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-green-600">
           <Mail className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.replied)}</span>
+          <span className="text-lg font-bold">{formatNumber(stats.replied || 0)}</span>
         </div>
         <p className="text-xs text-green-600/70">Replied</p>
       </div>
@@ -54,11 +54,14 @@ function SequenceStats({ stats }) {
 function SequenceCard({ sequence }) {
   const [expanded, setExpanded] = useState(false);
 
-  const openRate = sequence.stats.sent > 0
-    ? ((sequence.stats.opened / sequence.stats.sent) * 100).toFixed(1)
+  // The API may omit stats for a brand-new sequence — default to zeros so the
+  // card renders instead of crashing on `stats.sent`.
+  const stats = sequence.stats || {};
+  const openRate = stats.sent > 0
+    ? ((stats.opened / stats.sent) * 100).toFixed(1)
     : 0;
-  const replyRate = sequence.stats.sent > 0
-    ? ((sequence.stats.replied / sequence.stats.sent) * 100).toFixed(1)
+  const replyRate = stats.sent > 0
+    ? ((stats.replied / stats.sent) * 100).toFixed(1)
     : 0;
 
   return (
@@ -91,7 +94,7 @@ function SequenceCard({ sequence }) {
           </button>
         </div>
         <div className="mt-4">
-          <SequenceStats stats={sequence.stats} />
+          <SequenceStats stats={stats} />
         </div>
       </div>
 
