@@ -153,7 +153,9 @@ export const newsApi = {
 // address (with Gmail's SPF/DKIM/DMARC, so it stays out of spam).
 export const gmailApi = {
   status: () => api.get('/gmail/status').then(r => r.data),
+  accounts: () => api.get('/gmail/accounts').then(r => r.data),
   authorize: () => api.get('/gmail/oauth/authorize').then(r => r.data),
   setActive: (id) => api.post(`/gmail/accounts/${id}/set-active`).then(r => r.data),
+  toggleSending: (id, enabled) => api.post(`/gmail/accounts/${id}/toggle-sending`, { sending_enabled: enabled }).then(r => r.data),
   disconnect: (id) => api.delete(`/gmail/accounts/${id}`).then(r => r.data),
 };

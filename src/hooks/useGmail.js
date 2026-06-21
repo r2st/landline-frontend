@@ -96,3 +96,18 @@ export function useDisconnectGmail() {
     onError: (e) => toast.error(errMsg(e, 'Failed to disconnect')),
   });
 }
+
+export function useToggleSending() {
+  return useMutation({
+    mutationFn: async ({ id, enabled }) => await gmailApi.toggleSending(id, enabled),
+    onSuccess: (acct) => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-status'] });
+      toast.success(
+        acct.sending_enabled
+          ? `${acct.email} added to sending rotation`
+          : `${acct.email} removed from rotation`
+      );
+    },
+    onError: (e) => toast.error(errMsg(e, 'Failed to toggle sending')),
+  });
+}

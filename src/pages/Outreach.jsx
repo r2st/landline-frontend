@@ -685,9 +685,12 @@ function ComposeTab() {
   }, [gmail, senderId]);
 
   const gmailAccounts = gmail?.accounts?.filter((a) => a.status === 'connected') || [];
-  const fromEmail = senderId
-    ? gmailAccounts.find((a) => a.id === senderId)?.email
-    : gmail?.active_email;
+  const sendingEnabledAccounts = gmailAccounts.filter((a) => a.sending_enabled);
+  const fromEmail = senderId === 'rotate'
+    ? null
+    : senderId
+      ? gmailAccounts.find((a) => a.id === senderId)?.email
+      : gmail?.active_email;
   const sendingVia = fromEmail || gmail?.fallback_sender;
 
   // Map contact_id -> most recent send time.
@@ -774,7 +777,7 @@ function ComposeTab() {
       {
         contact_ids: selectedIds,
         template_id: templateId,
-        sender_account_id: senderId || undefined,
+        sender_account_id: senderId === 'rotate' ? undefined : senderId || undefined,
         contacts: withEmail,
       },
       { onSuccess: () => setSelected({}) }
@@ -798,9 +801,14 @@ function ComposeTab() {
               onChange={(e) => setSenderId(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
+              {sendingEnabledAccounts.length > 1 && (
+                <option value="rotate">
+                  Auto-rotate ({sendingEnabledAccounts.length} accounts)
+                </option>
+              )}
               {gmailAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.email}{a.is_active ? ' (active)' : ''}
+                  {a.email}{a.is_active ? ' (primary)' : ''}{!a.sending_enabled ? ' (disabled)' : ''}
                 </option>
               ))}
             </select>
@@ -818,7 +826,9 @@ function ComposeTab() {
           {gmailAccounts.length > 0 && (
             <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Recipients will see this as the sender — authenticated, inbox-safe.
+              {senderId === 'rotate'
+                ? `Emails will rotate across ${sendingEnabledAccounts.length} accounts for better deliverability.`
+                : 'Recipients will see this as the sender — authenticated, inbox-safe.'}
             </p>
           )}
         </div>
