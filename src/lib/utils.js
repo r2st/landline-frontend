@@ -13,7 +13,10 @@ export function getScoreLabel(score) {
 }
 
 export function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export function formatNumber(num) {
@@ -36,7 +39,10 @@ export function getInitials(first, last) {
 }
 
 export function timeAgo(dateStr) {
-  const seconds = Math.floor((new Date() - new Date(dateStr)) / 1000);
+  if (!dateStr) return '';
+  const then = new Date(dateStr);
+  if (isNaN(then)) return '';
+  const seconds = Math.floor((new Date() - then) / 1000);
   if (seconds < 60) return 'just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;

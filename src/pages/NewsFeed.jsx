@@ -166,12 +166,12 @@ function NewsCard({ article, onMarkDone }) {
 
 export default function NewsFeed() {
   const [actionableOnly, setActionableOnly] = useState(false);
-  const params = actionableOnly ? { actionable: true } : {};
+  const params = actionableOnly ? { actionable_only: true } : {};
   const { data, isLoading } = useNews(params);
   const checkAll = useCheckAllNews();
   const markActioned = useMarkActioned();
 
-  const articles = data?.items || data || [];
+  const articles = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
 
   return (
     <div className="space-y-6">

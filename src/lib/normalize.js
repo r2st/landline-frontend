@@ -47,7 +47,7 @@ export function normalizeCountry(value) {
   const v = String(value).trim().toUpperCase();
   if (v === 'USA' || v === 'US' || v === 'UNITED STATES') return 'US';
   if (v === 'CA' || v === 'CAN' || v === 'CANADA') return 'CA';
-  return v === 'CA' ? 'CA' : 'US';
+  return 'US';
 }
 
 // Map an Add-Company form (UI field names) to the backend CompanyCreate body.

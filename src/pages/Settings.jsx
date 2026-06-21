@@ -17,8 +17,11 @@ import {
 import ConfirmDialog from '../components/ConfirmDialog';
 import GmailConnect from '../components/GmailConnect';
 import { API_BASE_URL } from '../lib/constants';
-import { settingsApi } from '../api/client';
 import toast from 'react-hot-toast';
+
+// Automation flags are controlled by backend environment variables and shown
+// read-only. The scheduling link is a UI-side preference persisted locally.
+const SCHEDULING_LINK_KEY = 'landline.scheduling_link';
 
 function ConnectionStatus({ connected }) {
   return (
@@ -75,32 +78,24 @@ export default function Settings() {
     auto_scoring: false,
     scheduling_link: '',
   });
-  const [automationLoaded, setAutomationLoaded] = useState(false);
 
   useEffect(() => {
-    const loadAutomation = async () => {
-      try {
-        const data = await settingsApi.getAutomation();
-        setAutomation({
-          auto_reply: data.auto_reply ?? true,
-          auto_followups: data.auto_followups ?? false,
-          auto_scoring: data.auto_scoring ?? false,
-          scheduling_link: data.scheduling_link || '',
-        });
-      } catch {
-        // Backend endpoint may not exist yet — keep defaults
+    try {
+      const saved = localStorage.getItem(SCHEDULING_LINK_KEY);
+      if (saved) {
+        setAutomation((prev) => ({ ...prev, scheduling_link: saved }));
       }
-      setAutomationLoaded(true);
-    };
-    loadAutomation();
+    } catch {
+      // localStorage unavailable — keep defaults
+    }
   }, []);
 
-  const handleSchedulingLinkSave = async () => {
+  const handleSchedulingLinkSave = () => {
     try {
-      await settingsApi.updateAutomation({ scheduling_link: automation.scheduling_link });
+      localStorage.setItem(SCHEDULING_LINK_KEY, automation.scheduling_link.trim());
       toast.success('Scheduling link saved');
     } catch {
-      toast.error('Could not save — backend endpoint not available yet');
+      toast.error('Could not save scheduling link');
     }
   };
 

@@ -134,11 +134,6 @@ export const groupsApi = {
   autoGroupByStage: () => api.post('/groups/auto-group-by-stage').then(r => r.data),
 };
 
-export const settingsApi = {
-  getAutomation: () => api.get('/settings/automation').then(r => r.data),
-  updateAutomation: (data) => api.patch('/settings/automation', data).then(r => r.data),
-};
-
 export const sendLimiterApi = {
   getStats: () => api.get('/discovery/send-stats').then(r => r.data),
 };

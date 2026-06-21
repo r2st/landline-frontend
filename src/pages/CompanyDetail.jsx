@@ -53,6 +53,7 @@ import {
   useEventOutreach,
   useMultiTouchPlan,
 } from '../hooks/useTactics';
+import toast from 'react-hot-toast';
 import { STAGE_LABELS, STAGE_COLORS, SOURCE_LABELS } from '../lib/constants';
 import { formatDate, formatNumber, getScoreColor, getScoreLabel, timeAgo, cn } from '../lib/utils';
 
@@ -173,7 +174,9 @@ export default function CompanyDetail() {
   const createContact = useCreateContact();
   const enrichCompany = useEnrichCompany();
   const checkCompanyNews = useCheckCompanyNews();
-  const { data: companyNewsData } = useNews({ company_id: id });
+  // The /news endpoint doesn't filter by company server-side, so fetch a wide
+  // window and scope to this company below.
+  const { data: companyNewsData } = useNews({ limit: 200 });
   const markActioned = useMarkActioned();
   const analyzeCompany = useAnalyzeCompany();
   const generateEmail = useGenerateEmail();
@@ -566,7 +569,10 @@ export default function CompanyDetail() {
 
           {/* News Tab */}
           {activeTab === 'news' && (() => {
-            const newsArticles = companyNewsData?.items || companyNewsData || [];
+            const allNews = companyNewsData?.items || companyNewsData || [];
+            const newsArticles = (Array.isArray(allNews) ? allNews : []).filter(
+              (a) => String(a.company_id) === String(id)
+            );
             const categoryColors = {
               funding: 'bg-green-100 text-green-700',
               expansion: 'bg-blue-100 text-blue-700',

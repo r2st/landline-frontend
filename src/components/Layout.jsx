@@ -72,7 +72,7 @@ export default function Layout({ children }) {
     queryKey: ['layout-reply-check'],
     queryFn: async () => {
       try {
-        const data = await emailApi.getSends({ page_size: 50 });
+        const data = await emailApi.getSends({ limit: 50 });
         const items = data?.items || data;
         return Array.isArray(items) ? items : [];
       } catch {

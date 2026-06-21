@@ -79,7 +79,7 @@ export function useEmailSends(limit = 20) {
   return useQuery({
     queryKey: ['analytics-email-sends', limit],
     queryFn: async () => {
-      const data = await emailApi.getSends({ page_size: limit });
+      const data = await emailApi.getSends({ limit });
       const items = data?.items || data;
       return Array.isArray(items) ? items : [];
     },
