@@ -150,6 +150,15 @@ export const newsApi = {
   markActioned: (id) => api.patch(`/news/${id}/action`).then(r => r.data),
 };
 
+export const tacticsApi = {
+  discoverExecutives: (companyId) => api.post(`/tactics/discover-executives/${companyId}`).then(r => r.data),
+  linkedinDraft: (data) => api.post('/tactics/linkedin-draft', data).then(r => r.data),
+  phoneScript: (data) => api.post('/tactics/phone-script', data).then(r => r.data),
+  referralDraft: (data) => api.post('/tactics/referral-draft', data).then(r => r.data),
+  eventOutreach: (data) => api.post('/tactics/event-outreach', data).then(r => r.data),
+  multiTouchPlan: (companyId) => api.post(`/tactics/multi-touch-plan/${companyId}`).then(r => r.data),
+};
+
 // Gmail OAuth — connect a Google account so outreach sends from the user's own
 // address (with Gmail's SPF/DKIM/DMARC, so it stays out of spam).
 export const gmailApi = {

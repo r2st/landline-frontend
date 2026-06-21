@@ -26,6 +26,13 @@ import {
   Newspaper,
   Tag,
   CheckCircle2,
+  Search,
+  Linkedin,
+  Phone,
+  UserPlus,
+  CalendarDays,
+  Layers,
+  Crosshair,
 } from 'lucide-react';
 import ScoreBadge from '../components/ScoreBadge';
 import StageSelector from '../components/StageSelector';
@@ -38,6 +45,14 @@ import { useOutreachEvents, useSequences, useEnrollCompany } from '../hooks/useO
 import { useEnrichCompany } from '../hooks/useDiscovery';
 import { useAnalyzeCompany, useGenerateEmail } from '../hooks/useAI';
 import { useNews, useCheckCompanyNews, useMarkActioned } from '../hooks/useNews';
+import {
+  useDiscoverExecutives,
+  useLinkedinDraft,
+  usePhoneScript,
+  useReferralDraft,
+  useEventOutreach,
+  useMultiTouchPlan,
+} from '../hooks/useTactics';
 import { STAGE_LABELS, STAGE_COLORS, SOURCE_LABELS } from '../lib/constants';
 import { formatDate, formatNumber, getScoreColor, getScoreLabel, timeAgo, cn } from '../lib/utils';
 
@@ -164,6 +179,19 @@ export default function CompanyDetail() {
   const generateEmail = useGenerateEmail();
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiEmail, setAiEmail] = useState(null);
+
+  // Tactics hooks
+  const discoverExecutives = useDiscoverExecutives();
+  const linkedinDraft = useLinkedinDraft();
+  const phoneScript = usePhoneScript();
+  const referralDraft = useReferralDraft();
+  const eventOutreach = useEventOutreach();
+  const multiTouchPlan = useMultiTouchPlan();
+  const [tacticsResults, setTacticsResults] = useState({});
+  const [linkedinForm, setLinkedinForm] = useState({ contact_name: '', contact_title: '', topic: '' });
+  const [phoneForm, setPhoneForm] = useState({ contact_name: '', contact_title: '', product: '' });
+  const [referralForm, setReferralForm] = useState({ referrer_name: '', target_name: '', target_title: '' });
+  const [eventForm, setEventForm] = useState({ event_name: '', contact_name: '', event_type: 'conference' });
 
   const latestScore = companyScores[0] || null;
   const realFactors = scoreToFactors(latestScore);
@@ -330,6 +358,7 @@ export default function CompanyDetail() {
           <TabButton label="Activity" active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
           <TabButton label="News" active={activeTab === 'news'} onClick={() => setActiveTab('news')} />
           <TabButton label="AI" active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} />
+          <TabButton label="Tactics" active={activeTab === 'tactics'} onClick={() => setActiveTab('tactics')} />
         </div>
 
         <div className="p-4">
@@ -814,6 +843,595 @@ export default function CompanyDetail() {
                   <Brain className="mx-auto h-8 w-8 text-gray-300" />
                   <p className="mt-2 text-sm text-gray-500">
                     Use AI to analyze this company's fit and generate personalized outreach.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tactics Tab */}
+          {activeTab === 'tactics' && (
+            <div className="space-y-6">
+
+              {/* Action Buttons Row */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    discoverExecutives.mutate(company.id, {
+                      onSuccess: (data) => setTacticsResults((prev) => ({ ...prev, executives: data })),
+                    });
+                  }}
+                  disabled={discoverExecutives.isPending}
+                  className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-blue-300 hover:shadow-md disabled:opacity-50"
+                >
+                  {discoverExecutives.isPending ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                  ) : (
+                    <Search className="h-5 w-5 text-blue-500" />
+                  )}
+                  <span className="text-xs font-medium text-gray-700">
+                    {discoverExecutives.isPending ? 'Searching...' : 'Discover Executives'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    multiTouchPlan.mutate(company.id, {
+                      onSuccess: (data) => setTacticsResults((prev) => ({ ...prev, multiTouch: data })),
+                    });
+                  }}
+                  disabled={multiTouchPlan.isPending}
+                  className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-purple-300 hover:shadow-md disabled:opacity-50"
+                >
+                  {multiTouchPlan.isPending ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-purple-500" />
+                  ) : (
+                    <Layers className="h-5 w-5 text-purple-500" />
+                  )}
+                  <span className="text-xs font-medium text-gray-700">
+                    {multiTouchPlan.isPending ? 'Planning...' : 'Multi-Touch Plan'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTacticsResults((prev) => ({ ...prev, showLinkedin: !prev.showLinkedin }))}
+                  className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-sky-300 hover:shadow-md"
+                >
+                  <Linkedin className="h-5 w-5 text-sky-600" />
+                  <span className="text-xs font-medium text-gray-700">LinkedIn Draft</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTacticsResults((prev) => ({ ...prev, showPhone: !prev.showPhone }))}
+                  className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-green-300 hover:shadow-md"
+                >
+                  <Phone className="h-5 w-5 text-green-500" />
+                  <span className="text-xs font-medium text-gray-700">Phone Script</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTacticsResults((prev) => ({ ...prev, showReferral: !prev.showReferral }))}
+                  className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-amber-300 hover:shadow-md"
+                >
+                  <UserPlus className="h-5 w-5 text-amber-500" />
+                  <span className="text-xs font-medium text-gray-700">Referral Draft</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTacticsResults((prev) => ({ ...prev, showEvent: !prev.showEvent }))}
+                  className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm transition hover:border-rose-300 hover:shadow-md"
+                >
+                  <CalendarDays className="h-5 w-5 text-rose-500" />
+                  <span className="text-xs font-medium text-gray-700">Event Outreach</span>
+                </button>
+              </div>
+
+              {/* Discover Executives Results */}
+              {tacticsResults.executives && (
+                <div className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <Search className="h-4 w-4 text-blue-500" />
+                    Discovered Executives
+                  </h3>
+                  {(tacticsResults.executives.executives || tacticsResults.executives.contacts_created_list || []).length > 0 ? (
+                    <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                      {(tacticsResults.executives.executives || tacticsResults.executives.contacts_created_list || []).map((exec, i) => (
+                        <div key={i} className="flex items-center justify-between px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {exec.first_name} {exec.last_name}
+                            </p>
+                            <p className="text-xs text-gray-500">{exec.title || exec.role}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {exec.email && (
+                              <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                                {exec.email}
+                              </span>
+                            )}
+                            {exec.linkedin_url && (
+                              <a href={exec.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:text-sky-700">
+                                <Linkedin className="h-4 w-4" />
+                              </a>
+                            )}
+                            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                              {exec.seniority || 'Executive'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
+                      <p className="text-sm text-gray-500">
+                        {tacticsResults.executives.message || 'No executives found from public sources.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* LinkedIn Draft Form */}
+              {tacticsResults.showLinkedin && (
+                <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50/50 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <Linkedin className="h-4 w-4 text-sky-600" />
+                    Generate LinkedIn Message
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="Contact name"
+                      value={linkedinForm.contact_name}
+                      onChange={(e) => setLinkedinForm((f) => ({ ...f, contact_name: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Their title (e.g. CTO)"
+                      value={linkedinForm.contact_title}
+                      onChange={(e) => setLinkedinForm((f) => ({ ...f, contact_title: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Topic / angle (optional)"
+                      value={linkedinForm.topic}
+                      onChange={(e) => setLinkedinForm((f) => ({ ...f, topic: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      linkedinDraft.mutate(
+                        {
+                          company_name: company.name,
+                          company_industry: company.industry,
+                          company_domain: company.domain,
+                          ...linkedinForm,
+                        },
+                        { onSuccess: (data) => setTacticsResults((prev) => ({ ...prev, linkedin: data })) }
+                      );
+                    }}
+                    disabled={linkedinDraft.isPending || !linkedinForm.contact_name}
+                    className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
+                  >
+                    {linkedinDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                    {linkedinDraft.isPending ? 'Generating...' : 'Generate'}
+                  </button>
+
+                  {tacticsResults.linkedin && (
+                    <div className="space-y-3 pt-2">
+                      {tacticsResults.linkedin.connection_note && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Connection Note (300 char)</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.linkedin.connection_note)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.linkedin.connection_note}</p>
+                        </div>
+                      )}
+                      {tacticsResults.linkedin.follow_up_message && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Follow-Up Message</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.linkedin.follow_up_message)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.linkedin.follow_up_message}</p>
+                        </div>
+                      )}
+                      {tacticsResults.linkedin.comment_draft && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Post Comment Draft</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.linkedin.comment_draft)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.linkedin.comment_draft}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Phone Script Form */}
+              {tacticsResults.showPhone && (
+                <div className="space-y-3 rounded-lg border border-green-200 bg-green-50/50 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <Phone className="h-4 w-4 text-green-500" />
+                    Generate Phone Script
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="Contact name"
+                      value={phoneForm.contact_name}
+                      onChange={(e) => setPhoneForm((f) => ({ ...f, contact_name: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Their title"
+                      value={phoneForm.contact_title}
+                      onChange={(e) => setPhoneForm((f) => ({ ...f, contact_title: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Product / service to pitch"
+                      value={phoneForm.product}
+                      onChange={(e) => setPhoneForm((f) => ({ ...f, product: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      phoneScript.mutate(
+                        {
+                          company_name: company.name,
+                          company_industry: company.industry,
+                          ...phoneForm,
+                        },
+                        { onSuccess: (data) => setTacticsResults((prev) => ({ ...prev, phone: data })) }
+                      );
+                    }}
+                    disabled={phoneScript.isPending || !phoneForm.contact_name}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {phoneScript.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                    {phoneScript.isPending ? 'Generating...' : 'Generate Script'}
+                  </button>
+
+                  {tacticsResults.phone && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const full = [
+                              `OPENER:\n${tacticsResults.phone.opener || ''}`,
+                              `VALUE PROPOSITION:\n${tacticsResults.phone.value_proposition || ''}`,
+                              `DISCOVERY QUESTIONS:\n${(tacticsResults.phone.discovery_questions || []).join('\n')}`,
+                              `OBJECTION HANDLERS:\n${Object.entries(tacticsResults.phone.objection_responses || {}).map(([k, v]) => `"${k}" → ${v}`).join('\n')}`,
+                              `CLOSE:\n${tacticsResults.phone.close || ''}`,
+                              `VOICEMAIL:\n${tacticsResults.phone.voicemail_script || ''}`,
+                            ].join('\n\n');
+                            navigator.clipboard.writeText(full);
+                            toast.success('Full script copied');
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          <CopyIcon className="h-3.5 w-3.5" /> Copy All
+                        </button>
+                      </div>
+                      {tacticsResults.phone.opener && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Opener</p>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.phone.opener}</p>
+                        </div>
+                      )}
+                      {tacticsResults.phone.value_proposition && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Value Proposition</p>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.phone.value_proposition}</p>
+                        </div>
+                      )}
+                      {tacticsResults.phone.discovery_questions && tacticsResults.phone.discovery_questions.length > 0 && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Discovery Questions</p>
+                          <ul className="space-y-1">
+                            {tacticsResults.phone.discovery_questions.map((q, i) => (
+                              <li key={i} className="flex items-start gap-2 text-sm text-gray-800">
+                                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-400" />
+                                {q}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {tacticsResults.phone.objection_responses && Object.keys(tacticsResults.phone.objection_responses).length > 0 && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Objection Handlers</p>
+                          <div className="space-y-2">
+                            {Object.entries(tacticsResults.phone.objection_responses).map(([objection, response], i) => (
+                              <div key={i} className="rounded-md bg-gray-50 p-2">
+                                <p className="text-xs font-medium text-red-600">"{objection}"</p>
+                                <p className="mt-0.5 text-sm text-gray-800">{response}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {tacticsResults.phone.close && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Close</p>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.phone.close}</p>
+                        </div>
+                      )}
+                      {tacticsResults.phone.voicemail_script && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-600">Voicemail Script</p>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.phone.voicemail_script}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Referral Draft Form */}
+              {tacticsResults.showReferral && (
+                <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <UserPlus className="h-4 w-4 text-amber-500" />
+                    Generate Referral Request
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="Referrer's name (who you know)"
+                      value={referralForm.referrer_name}
+                      onChange={(e) => setReferralForm((f) => ({ ...f, referrer_name: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Target person's name"
+                      value={referralForm.target_name}
+                      onChange={(e) => setReferralForm((f) => ({ ...f, target_name: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Target's title"
+                      value={referralForm.target_title}
+                      onChange={(e) => setReferralForm((f) => ({ ...f, target_title: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      referralDraft.mutate(
+                        {
+                          company_name: company.name,
+                          company_industry: company.industry,
+                          ...referralForm,
+                        },
+                        { onSuccess: (data) => setTacticsResults((prev) => ({ ...prev, referral: data })) }
+                      );
+                    }}
+                    disabled={referralDraft.isPending || !referralForm.referrer_name || !referralForm.target_name}
+                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {referralDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                    {referralDraft.isPending ? 'Generating...' : 'Generate'}
+                  </button>
+
+                  {tacticsResults.referral && (
+                    <div className="space-y-3 pt-2">
+                      {tacticsResults.referral.referral_email && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Referral Email</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.referral.referral_email)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.referral.referral_email}</p>
+                        </div>
+                      )}
+                      {tacticsResults.referral.forwardable_blurb && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Forwardable Blurb</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.referral.forwardable_blurb)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.referral.forwardable_blurb}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Event Outreach Form */}
+              {tacticsResults.showEvent && (
+                <div className="space-y-3 rounded-lg border border-rose-200 bg-rose-50/50 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <CalendarDays className="h-4 w-4 text-rose-500" />
+                    Generate Event Outreach
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="Event name"
+                      value={eventForm.event_name}
+                      onChange={(e) => setEventForm((f) => ({ ...f, event_name: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Contact name"
+                      value={eventForm.contact_name}
+                      onChange={(e) => setEventForm((f) => ({ ...f, contact_name: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    />
+                    <select
+                      value={eventForm.event_type}
+                      onChange={(e) => setEventForm((f) => ({ ...f, event_type: e.target.value }))}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    >
+                      <option value="conference">Conference</option>
+                      <option value="webinar">Webinar</option>
+                      <option value="meetup">Meetup</option>
+                      <option value="trade_show">Trade Show</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      eventOutreach.mutate(
+                        {
+                          company_name: company.name,
+                          company_industry: company.industry,
+                          ...eventForm,
+                        },
+                        { onSuccess: (data) => setTacticsResults((prev) => ({ ...prev, event: data })) }
+                      );
+                    }}
+                    disabled={eventOutreach.isPending || !eventForm.event_name || !eventForm.contact_name}
+                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {eventOutreach.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                    {eventOutreach.isPending ? 'Generating...' : 'Generate Sequence'}
+                  </button>
+
+                  {tacticsResults.event && (
+                    <div className="space-y-3 pt-2">
+                      {tacticsResults.event.pre_event_email && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Pre-Event Email</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.event.pre_event_email)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.event.pre_event_email}</p>
+                        </div>
+                      )}
+                      {tacticsResults.event.at_event_message && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">At-Event Message</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.event.at_event_message)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.event.at_event_message}</p>
+                        </div>
+                      )}
+                      {tacticsResults.event.post_event_followup && (
+                        <div className="rounded-lg border border-gray-200 bg-white p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Post-Event Follow-Up</p>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tacticsResults.event.post_event_followup)} className="text-xs text-blue-600 hover:text-blue-800">
+                              <CopyIcon className="inline h-3.5 w-3.5" /> Copy
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{tacticsResults.event.post_event_followup}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Multi-Touch Plan Results */}
+              {tacticsResults.multiTouch && (
+                <div className="space-y-3">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <Layers className="h-4 w-4 text-purple-500" />
+                    Multi-Touch Campaign Plan
+                  </h3>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const plan = tacticsResults.multiTouch;
+                        const text = [
+                          plan.summary || '',
+                          '',
+                          ...(plan.steps || plan.touches || []).map((s, i) =>
+                            `Step ${i + 1}: [${s.channel || s.type}] ${s.timing || s.day || ''}\n${s.action || s.description || s.content || ''}`
+                          ),
+                        ].join('\n\n');
+                        navigator.clipboard.writeText(text);
+                        toast.success('Plan copied');
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <CopyIcon className="h-3.5 w-3.5" /> Copy Plan
+                    </button>
+                  </div>
+                  {tacticsResults.multiTouch.summary && (
+                    <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                      <p className="text-sm text-purple-800">{tacticsResults.multiTouch.summary}</p>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {(tacticsResults.multiTouch.steps || tacticsResults.multiTouch.touches || []).map((step, i) => {
+                      const channelColors = {
+                        linkedin: 'border-sky-300 bg-sky-50',
+                        email: 'border-blue-300 bg-blue-50',
+                        phone: 'border-green-300 bg-green-50',
+                        referral: 'border-amber-300 bg-amber-50',
+                      };
+                      const channel = (step.channel || step.type || '').toLowerCase();
+                      const colorClass = channelColors[channel] || 'border-gray-200 bg-gray-50';
+                      return (
+                        <div key={i} className={`rounded-lg border p-3 ${colorClass}`}>
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center rounded-full bg-gray-900 px-2 py-0.5 text-xs font-bold text-white">
+                              {i + 1}
+                            </span>
+                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">
+                              {step.channel || step.type || 'Touch'}
+                            </span>
+                            {(step.timing || step.day) && (
+                              <span className="text-xs text-gray-500">{step.timing || step.day}</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-800">{step.action || step.description || step.content || ''}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!tacticsResults.executives && !tacticsResults.multiTouch && !tacticsResults.showLinkedin && !tacticsResults.showPhone && !tacticsResults.showReferral && !tacticsResults.showEvent && (
+                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center">
+                  <Crosshair className="mx-auto h-8 w-8 text-gray-300" />
+                  <p className="mt-2 text-sm text-gray-500">
+                    Use tactics to find executives, generate multi-channel outreach drafts, and build campaign plans.
                   </p>
                 </div>
               )}
