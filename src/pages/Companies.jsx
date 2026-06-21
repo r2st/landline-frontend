@@ -286,6 +286,8 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
         <button
           type="button"
           onClick={onDelete}
+          aria-label="Delete selected companies"
+          title="Delete selected"
           className="inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -297,6 +299,8 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
         <button
           type="button"
           onClick={onDeselect}
+          aria-label="Clear selection"
+          title="Clear selection"
           className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700"
         >
           <XCircle className="h-3.5 w-3.5" />

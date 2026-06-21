@@ -55,6 +55,8 @@ function AccountRow({ account, onSetActive, onDisconnect, onToggleSending, busy 
           <button
             type="button"
             disabled={busy}
+            aria-label={`Disconnect ${account.email}`}
+            title={`Disconnect ${account.email}`}
             onClick={() => {
               if (window.confirm(`Disconnect ${account.email}? Outreach will no longer send from this address.`)) {
                 onDisconnect(account.id);
