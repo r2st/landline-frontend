@@ -97,6 +97,31 @@ const INITIAL_FORM = {
   notes: '',
 };
 
+// Defined at module scope so it keeps a stable component identity across renders.
+// Declaring it inside CardScanner would create a new component type on every
+// keystroke, remounting each input and dropping the user's cursor/focus.
+function FormField({ label, field, value, onChange, icon: Icon, type = 'text', placeholder }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+      <div className="relative">
+        {Icon && (
+          <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        )}
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(field, e.target.value)}
+          placeholder={placeholder || label}
+          className={`w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition ${
+            Icon ? 'pl-9 pr-3' : 'px-3'
+          }`}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** Compact read-only card showing all details extracted from one scanned business card. */
 function ScannedContactCard({ contact }) {
   const name = fullName(contact);
@@ -327,26 +352,6 @@ export default function CardScanner() {
     scanCard.reset();
   }, [scanCard]);
 
-  const FormField = ({ label, field, icon: Icon, type = 'text', placeholder }) => (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <div className="relative">
-        {Icon && (
-          <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        )}
-        <input
-          type={type}
-          value={formData[field]}
-          onChange={(e) => handleFieldChange(field, e.target.value)}
-          placeholder={placeholder || label}
-          className={`w-full rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition ${
-            Icon ? 'pl-9 pr-3' : 'px-3'
-          }`}
-        />
-      </div>
-    </div>
-  );
-
   // quick-add response shape varies ({contact:{...}} or flat) — handle both.
   const savedContactId = savedContact?.contact?.id || savedContact?.id || null;
   const savedCompanyId = savedContact?.contact?.company_id || savedContact?.company_id || null;
@@ -519,30 +524,30 @@ export default function CardScanner() {
               {/* Person */}
               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Person</p>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="First Name" field="first_name" icon={UserPlus} />
-                <FormField label="Last Name" field="last_name" icon={UserPlus} />
+                <FormField label="First Name" field="first_name" value={formData.first_name} onChange={handleFieldChange} icon={UserPlus} />
+                <FormField label="Last Name" field="last_name" value={formData.last_name} onChange={handleFieldChange} icon={UserPlus} />
               </div>
-              <FormField label="Title" field="title" />
+              <FormField label="Title" field="title" value={formData.title} onChange={handleFieldChange} />
 
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Email" field="email" icon={Mail} type="email" />
-                <FormField label="Phone" field="phone" icon={Phone} type="tel" />
+                <FormField label="Email" field="email" value={formData.email} onChange={handleFieldChange} icon={Mail} type="email" />
+                <FormField label="Phone" field="phone" value={formData.phone} onChange={handleFieldChange} icon={Phone} type="tel" />
               </div>
-              <FormField label="LinkedIn" field="linkedin_url" icon={Globe} placeholder="https://linkedin.com/in/..." />
+              <FormField label="LinkedIn" field="linkedin_url" value={formData.linkedin_url} onChange={handleFieldChange} icon={Globe} placeholder="https://linkedin.com/in/..." />
 
               {/* Company */}
               <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Company</p>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Company" field="company_name" icon={Building2} />
-                <FormField label="Website" field="website" icon={Globe} />
+                <FormField label="Company" field="company_name" value={formData.company_name} onChange={handleFieldChange} icon={Building2} />
+                <FormField label="Website" field="website" value={formData.website} onChange={handleFieldChange} icon={Globe} />
               </div>
 
               {/* Location */}
               <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Location</p>
               <div className="grid grid-cols-3 gap-3">
-                <FormField label="City" field="city" icon={MapPin} />
-                <FormField label="State" field="state" />
-                <FormField label="Country" field="country" />
+                <FormField label="City" field="city" value={formData.city} onChange={handleFieldChange} icon={MapPin} />
+                <FormField label="State" field="state" value={formData.state} onChange={handleFieldChange} />
+                <FormField label="Country" field="country" value={formData.country} onChange={handleFieldChange} />
               </div>
 
               <div>
