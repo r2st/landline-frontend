@@ -100,7 +100,13 @@ export function useComposeEmail() {
 export function useEmailSends() {
   return useQuery({
     queryKey: ['email-sends'],
-    queryFn: async () => await emailApi.getSends({}),
+    // The endpoint may return either a bare array or a paginated {items,total}
+    // envelope — always hand the UI an array so callers can safely spread/iterate.
+    queryFn: async () => {
+      const data = await emailApi.getSends({});
+      if (Array.isArray(data)) return data;
+      return Array.isArray(data?.items) ? data.items : [];
+    },
   });
 }
 
