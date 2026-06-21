@@ -28,7 +28,7 @@ const DEMO_SITES = [
   },
   {
     name: 'NestFlow',
-    url: 'https://nestflow-demo.pages.dev',
+    url: 'https://nestflow.pages.dev',
     industry: 'Sheet Nesting & Cutting',
     description: 'AI nesting optimization that maximizes material yield and minimizes scrap on every sheet.',
     color: '#0d9488',
@@ -36,7 +36,7 @@ const DEMO_SITES = [
   },
   {
     name: 'PackForm AI',
-    url: 'https://packform-ai-demo.pages.dev',
+    url: 'https://packform-ai.pages.dev',
     industry: 'Thermoforming & Packaging',
     description: 'AI-driven thermoforming optimization for consistent wall thickness and fewer rejects.',
     color: '#c2410c',
@@ -44,7 +44,7 @@ const DEMO_SITES = [
   },
   {
     name: 'BatchWise',
-    url: 'https://batchwise-demo.pages.dev',
+    url: 'https://batchwise.pages.dev',
     industry: 'Batch & Process Manufacturing',
     description: 'AI batch optimization that improves yield, consistency, and right-first-time production.',
     color: '#9333ea',
@@ -108,7 +108,7 @@ const DEMO_SITES = [
   },
   {
     name: 'EnergyIQ',
-    url: 'https://energy-optimizer-demo.pages.dev',
+    url: 'https://manufacturing-energy-optimizer.pages.dev',
     industry: 'Energy Management',
     description: 'AI energy optimization for plants. Cut energy costs and emissions without slowing production.',
     color: '#ca8a04',
@@ -116,7 +116,7 @@ const DEMO_SITES = [
   },
   {
     name: 'SafetyNet AI',
-    url: 'https://safety-risk-analyzer.pages.dev',
+    url: 'https://workplace-safety-analyzer.pages.dev',
     industry: 'Workplace Safety',
     description: 'AI safety risk analysis that flags hazards and near-misses before incidents happen.',
     color: '#dc2626',
