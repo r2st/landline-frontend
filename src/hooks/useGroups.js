@@ -85,3 +85,14 @@ export function useAutoGroupByCountry() {
     onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to auto-group'),
   });
 }
+
+export function useAutoGroupByStage() {
+  return useMutation({
+    mutationFn: () => groupsApi.autoGroupByStage(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      toast.success(`Created ${data.groups_created} groups from ${data.stages_found} pipeline stages`);
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to auto-group by stage'),
+  });
+}

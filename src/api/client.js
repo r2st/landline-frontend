@@ -131,6 +131,7 @@ export const groupsApi = {
   removeMembers: (id, companyIds) => api.delete(`/groups/${id}/members`, { data: { company_ids: companyIds } }).then(r => r.data),
   autoGroupByIndustry: () => api.post('/groups/auto-group-by-industry').then(r => r.data),
   autoGroupByCountry: () => api.post('/groups/auto-group-by-country').then(r => r.data),
+  autoGroupByStage: () => api.post('/groups/auto-group-by-stage').then(r => r.data),
 };
 
 export const settingsApi = {

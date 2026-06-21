@@ -14,6 +14,7 @@ import {
   Wand2,
   Building2,
   MapPin,
+  GitBranch,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import {
@@ -25,6 +26,7 @@ import {
   useRemoveGroupMembers,
   useAutoGroupByIndustry,
   useAutoGroupByCountry,
+  useAutoGroupByStage,
 } from '../hooks/useGroups';
 import { useCompanies } from '../hooks/useCompanies';
 import { cn } from '../lib/utils';
@@ -371,6 +373,7 @@ export default function Groups() {
   const removeMembers = useRemoveGroupMembers();
   const autoGroup = useAutoGroupByIndustry();
   const autoGroupCountry = useAutoGroupByCountry();
+  const autoGroupStage = useAutoGroupByStage();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
@@ -426,6 +429,15 @@ export default function Groups() {
             >
               <MapPin className="h-4 w-4" />
               {autoGroupCountry.isPending ? 'Grouping...' : 'Group by Country'}
+            </button>
+            <button
+              type="button"
+              onClick={() => autoGroupStage.mutate()}
+              disabled={autoGroupStage.isPending}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              <GitBranch className="h-4 w-4" />
+              {autoGroupStage.isPending ? 'Grouping...' : 'Group by Stage'}
             </button>
             <button
               type="button"
