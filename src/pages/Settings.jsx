@@ -5,8 +5,6 @@ import {
   Target,
   Trash2,
   Download,
-  Check,
-  X,
   AlertCircle,
   Flame,
   Bot,

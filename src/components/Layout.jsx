@@ -7,7 +7,6 @@ import {
   Building2,
   GitBranch,
   Upload,
-  Mail,
   Send,
   Bell,
   Settings,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, Copy, Globe, Rocket, Link, Check } from 'lucide-react';
+import { ExternalLink, Copy, Rocket, Link, Check } from 'lucide-react';
 
 const DEMO_SITES = [
   {
