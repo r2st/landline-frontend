@@ -51,7 +51,7 @@ export default function Settings() {
     const checkConnection = async () => {
       setChecking(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/health`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/health`, {
           method: 'GET',
           signal: AbortSignal.timeout(5000),
         });
