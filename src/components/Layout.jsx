@@ -20,9 +20,11 @@ import {
   Rocket,
   CreditCard,
   Users,
+  Search,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
+import CommandPalette from './CommandPalette';
 
 const navSections = [
   {
@@ -65,6 +67,19 @@ const allNavItems = [
 export default function Layout({ children }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // ⌘K / Ctrl+K opens the command palette from anywhere.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Check for recent replies (last 24 hours) to show notification dot
   const { data: recentSends } = useQuery({
@@ -196,6 +211,14 @@ export default function Layout({ children }) {
             {currentPage ? currentPage.name : 'Landline'}
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          className="ml-auto -mr-1 rounded-md p-2 text-gray-300 hover:bg-white/5 hover:text-white"
+          aria-label="Search"
+        >
+          <Search className="h-5 w-5" />
+        </button>
       </header>
 
       {/* Mobile overlay */}
@@ -219,10 +242,43 @@ export default function Layout({ children }) {
 
       {/* Main content */}
       <main className="pt-14 lg:pt-0 lg:pl-60">
+        {/* Desktop top utility bar */}
+        <header className="sticky top-0 z-20 hidden h-14 items-center gap-4 border-b border-gray-200 bg-white/80 px-8 backdrop-blur lg:flex">
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <span>Landline</span>
+            <span className="text-gray-300">/</span>
+            <span className="font-medium text-gray-700">{currentPage ? currentPage.name : 'Dashboard'}</span>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-3 pr-2 text-sm text-gray-500 transition-colors hover:border-gray-300 hover:bg-gray-100"
+            >
+              <Search className="h-4 w-4" />
+              <span>Search…</span>
+              <kbd className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-gray-400">⌘K</kbd>
+            </button>
+            <Link
+              to="/outreach"
+              className="relative rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Email replies"
+              title={hasNewReplies ? 'New replies in the last 24h' : 'Email campaigns'}
+            >
+              <Bell className="h-5 w-5" />
+              {hasNewReplies && (
+                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+              )}
+            </Link>
+          </div>
+        </header>
+
         <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
           {children}
         </div>
       </main>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }
