@@ -11,6 +11,8 @@ import {
   FolderPlus,
   ArrowRightLeft,
   XCircle,
+  Send,
+  Tag,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '../components/DataTable';
@@ -18,9 +20,10 @@ import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
 import { useCompanies, useCreateCompany, useScoreCompany, useDeleteCompany } from '../hooks/useCompanies';
 import { useGroups, useAddGroupMembers } from '../hooks/useGroups';
-import { pipelineApi, queryClient } from '../api/client';
+import { useSequences } from '../hooks/useOutreach';
+import { pipelineApi, contactsApi, companiesApi, outreachApi, queryClient } from '../api/client';
 import { STAGES, STAGE_LABELS, STAGE_COLORS, COUNTRIES, SOURCES, SOURCE_LABELS } from '../lib/constants';
-import { formatNumber, formatDate, cn } from '../lib/utils';
+import { formatNumber, formatDate, pickPrimaryContact, cn } from '../lib/utils';
 
 function AddCompanyModal({ open, onClose, onCreate }) {
   const [form, setForm] = useState({
@@ -200,9 +203,22 @@ function ConfirmModal({ open, onClose, onConfirm, title, message, confirmLabel =
   );
 }
 
-function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, onScoreAll, onDelete, groups }) {
+function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, onEnroll, onTag, onScoreAll, onExport, onDelete, groups, sequences }) {
   const [stageDropdown, setStageDropdown] = useState(false);
   const [groupDropdown, setGroupDropdown] = useState(false);
+  const [seqDropdown, setSeqDropdown] = useState(false);
+  const [tagOpen, setTagOpen] = useState(false);
+  const [tagValue, setTagValue] = useState('');
+
+  const closeAll = () => { setStageDropdown(false); setGroupDropdown(false); setSeqDropdown(false); setTagOpen(false); };
+
+  const submitTag = () => {
+    const t = tagValue.trim();
+    if (!t) return;
+    onTag(t);
+    setTagValue('');
+    setTagOpen(false);
+  };
 
   if (selectedIds.length === 0) return null;
 
@@ -246,7 +262,7 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
         <div className="relative flex-shrink-0">
           <button
             type="button"
-            onClick={() => { setGroupDropdown(!groupDropdown); setStageDropdown(false); }}
+            onClick={() => { setGroupDropdown(!groupDropdown); setStageDropdown(false); setSeqDropdown(false); setTagOpen(false); }}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <FolderPlus className="h-3.5 w-3.5" />
@@ -272,6 +288,75 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
           )}
         </div>
 
+        {/* Enroll in Sequence Dropdown */}
+        <div className="relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => { setSeqDropdown(!seqDropdown); setStageDropdown(false); setGroupDropdown(false); setTagOpen(false); }}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Enroll
+          </button>
+          {seqDropdown && (
+            <div className="absolute bottom-full left-0 mb-2 w-60 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              <p className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wider text-gray-400">
+                Enrolls each company's primary contact
+              </p>
+              {(sequences || []).length === 0 ? (
+                <p className="px-3 py-2 text-sm text-gray-400">No sequences yet</p>
+              ) : (
+                (sequences || []).map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { onEnroll(s.id); setSeqDropdown(false); }}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <span className="truncate">{s.name}</span>
+                    <span className="text-xs text-gray-400">{s.steps?.length || 0} steps</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Add Tag */}
+        <div className="relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => { setTagOpen(!tagOpen); setStageDropdown(false); setGroupDropdown(false); setSeqDropdown(false); }}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Tag className="h-3.5 w-3.5" />
+            Tag
+          </button>
+          {tagOpen && (
+            <div className="absolute bottom-full left-0 mb-2 w-56 rounded-lg border border-gray-200 bg-white p-2 shadow-lg">
+              <label className="mb-1 block px-1 text-[11px] font-medium uppercase tracking-wider text-gray-400">Add tag to selected</label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  autoFocus
+                  value={tagValue}
+                  onChange={(e) => setTagValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitTag(); } }}
+                  placeholder="e.g. priority"
+                  className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={submitTag}
+                  className="rounded-md bg-blue-500 px-2.5 py-1.5 text-sm font-medium text-white hover:bg-blue-600"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Score All */}
         <button
           type="button"
@@ -280,6 +365,16 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
         >
           <Target className="h-3.5 w-3.5" />
           Score
+        </button>
+
+        {/* Export selected */}
+        <button
+          type="button"
+          onClick={onExport}
+          className="inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export
         </button>
 
         {/* Delete */}
@@ -337,6 +432,7 @@ export default function Companies() {
   const scoreCompany = useScoreCompany();
   const deleteCompany = useDeleteCompany();
   const { data: groups } = useGroups();
+  const { data: sequences } = useSequences();
   const addGroupMembers = useAddGroupMembers();
 
   // Source + score range are filtered client-side (not supported server-side).
@@ -355,25 +451,57 @@ export default function Companies() {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleExportCSV = () => {
-    if (!companies || companies.length === 0) return;
-    const headers = ['Name', 'Domain', 'City', 'State', 'Country', 'Employees', 'Industry', 'Score', 'Stage', 'Source', 'Created'];
-    const rows = companies.map((c) => [
-      c.name, c.domain, c.city, c.state, c.country, c.employees, c.industry, c.score, c.stage, c.source, c.created_at,
-    ]);
-    const escapeCsvValue = (val) => {
-      const str = val == null ? '' : String(val);
-      // Escape internal double quotes by doubling them, then wrap in quotes
+  // Serialize rows to a CSV file and trigger a download. `value(row)` cells may
+  // be arrays (e.g. tags) — those are joined with "; ".
+  const downloadCsv = (filename, headers, rows) => {
+    const escape = (val) => {
+      const str = Array.isArray(val) ? val.join('; ') : val == null ? '' : String(val);
       return `"${str.replace(/"/g, '""')}"`;
     };
-    const csv = [headers, ...rows].map((r) => r.map(escapeCsvValue).join(',')).join('\n');
+    const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'landline-companies.csv';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Full-field export — every column we have, not just the table's summary set.
+  const FULL_EXPORT = [
+    ['Name', (c) => c.name],
+    ['Domain', (c) => c.domain],
+    ['Website', (c) => c.website],
+    ['Phone', (c) => c.phone],
+    ['City', (c) => c.city],
+    ['State', (c) => c.state],
+    ['Country', (c) => c.country],
+    ['Employees', (c) => c.employees],
+    ['Industry', (c) => c.industry],
+    ['NAICS', (c) => c.naics_code],
+    ['Score', (c) => c.score],
+    ['Stage', (c) => c.stage],
+    ['Source', (c) => c.source],
+    ['Tags', (c) => c.tags || []],
+    ['Notes', (c) => c.notes],
+    ['Created', (c) => c.created_at],
+    ['Updated', (c) => c.updated_at],
+  ];
+
+  const exportRows = (list, filename) => {
+    if (!list || list.length === 0) return;
+    downloadCsv(filename, FULL_EXPORT.map(([h]) => h), list.map((c) => FULL_EXPORT.map(([, f]) => f(c))));
+  };
+
+  // Toolbar "Export CSV" — all currently-visible companies, all fields.
+  const handleExportCSV = () => exportRows(companies, 'landline-companies.csv');
+
+  // Bulk "Export" — only the selected companies, all fields.
+  const handleBulkExport = () => {
+    const byId = new Set(selectedIds.map(String));
+    const list = (companies || []).filter((c) => byId.has(String(c.id)));
+    exportRows(list, 'landline-companies-selected.csv');
   };
 
   const handleScoreAll = async () => {
@@ -429,6 +557,68 @@ export default function Companies() {
       setSelectedIds([]);
     } catch {
       toast.error('Some deletions failed');
+    } finally {
+      setBulkOperating(false);
+    }
+  };
+
+  // Enroll each selected company's primary contact in a sequence. Companies
+  // with no contact (nobody to email) are skipped; 409s = already enrolled.
+  const handleBulkEnroll = async (sequenceId) => {
+    if (selectedIds.length === 0) return;
+    setBulkOperating(true);
+    const t = toast.loading(`Enrolling ${selectedIds.length} companies…`);
+    let enrolled = 0;
+    let skipped = 0;
+    let already = 0;
+    try {
+      await Promise.all(
+        selectedIds.map(async (id) => {
+          try {
+            const contacts = await contactsApi.getByCompany(id);
+            const list = Array.isArray(contacts) ? contacts : contacts?.items || [];
+            const primary = pickPrimaryContact(list);
+            if (!primary) { skipped += 1; return; }
+            await outreachApi.enrollContact({ contact_id: primary.id, sequence_id: sequenceId });
+            enrolled += 1;
+          } catch (e) {
+            if (e?.response?.status === 409) already += 1;
+            else skipped += 1;
+          }
+        })
+      );
+      const parts = [`${enrolled} enrolled`];
+      if (already) parts.push(`${already} already in sequence`);
+      if (skipped) parts.push(`${skipped} skipped (no contact)`);
+      toast.success(parts.join(', '), { id: t });
+      queryClient.invalidateQueries({ queryKey: ['outreach-events'] });
+      setSelectedIds([]);
+    } catch {
+      toast.error('Bulk enrollment failed', { id: t });
+    } finally {
+      setBulkOperating(false);
+    }
+  };
+
+  // Append a tag to every selected company, preserving existing tags.
+  const handleBulkTag = async (tag) => {
+    if (selectedIds.length === 0) return;
+    setBulkOperating(true);
+    const byId = new Map((companies || []).map((c) => [String(c.id), c]));
+    try {
+      await Promise.allSettled(
+        selectedIds.map((id) => {
+          const c = byId.get(String(id));
+          const current = Array.isArray(c?.tags) ? c.tags : [];
+          if (current.includes(tag)) return Promise.resolve();
+          return companiesApi.update(id, { tags: [...current, tag] });
+        })
+      );
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      toast.success(`Tagged ${selectedIds.length} companies "${tag}"`);
+      setSelectedIds([]);
+    } catch {
+      toast.error('Some tags failed to apply');
     } finally {
       setBulkOperating(false);
     }
@@ -649,9 +839,13 @@ export default function Companies() {
         onDeselect={() => setSelectedIds([])}
         onStageChange={handleBulkStageChange}
         onAddToGroup={handleBulkAddToGroup}
+        onEnroll={handleBulkEnroll}
+        onTag={handleBulkTag}
         onScoreAll={handleScoreAll}
+        onExport={handleBulkExport}
         onDelete={() => setShowDeleteConfirm(true)}
         groups={groups}
+        sequences={sequences}
       />
 
       {/* Delete Confirmation Modal */}
