@@ -824,12 +824,18 @@ function ComposeTab() {
             </div>
           )}
           {gmailAccounts.length > 0 && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {senderId === 'rotate'
-                ? `Emails will rotate across ${sendingEnabledAccounts.length} accounts for better deliverability.`
-                : 'Recipients will see this as the sender — authenticated, inbox-safe.'}
-            </p>
+            <div className="mt-1 flex items-center justify-between">
+              <p className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {senderId === 'rotate'
+                  ? `Emails will rotate across ${sendingEnabledAccounts.length} accounts for better deliverability.`
+                  : 'Recipients will see this as the sender — authenticated, inbox-safe.'}
+              </p>
+              <Link to="/settings" className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline">
+                <Plus className="h-3 w-3" />
+                Add account
+              </Link>
+            </div>
           )}
         </div>
 
