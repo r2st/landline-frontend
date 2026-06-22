@@ -40,15 +40,43 @@ export function useTransitionStage() {
     mutationFn: async ({ id, stage }) => {
       return await pipelineApi.transitionStage(id, stage);
     },
+    // Optimistically move the card between columns so drag-and-drop feels
+    // instant. Snapshot every cached pipeline view (the key carries filters)
+    // so we can roll back if the request fails.
+    onMutate: async ({ id, stage }) => {
+      await queryClient.cancelQueries({ queryKey: ['pipeline'] });
+      const snapshots = queryClient.getQueriesData({ queryKey: ['pipeline'] });
+      queryClient.setQueriesData({ queryKey: ['pipeline'] }, (grouped) => {
+        if (!grouped) return grouped;
+        let moved = null;
+        const next = {};
+        for (const [s, list] of Object.entries(grouped)) {
+          const keep = [];
+          for (const c of list) {
+            if (String(c.id) === String(id)) moved = c;
+            else keep.push(c);
+          }
+          next[s] = keep;
+        }
+        if (moved && next[stage]) next[stage] = [{ ...moved, stage }, ...next[stage]];
+        return next;
+      });
+      return { snapshots };
+    },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['company', result?.id] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
-      toast.success(`Stage updated to ${result.stage}`);
+      toast.success(`Moved to ${result.stage}`);
     },
-    onError: (error) => {
+    onError: (error, _vars, context) => {
+      for (const [key, data] of context?.snapshots || []) {
+        queryClient.setQueryData(key, data);
+      }
       toast.error(error?.response?.data?.detail || error?.message || 'Failed to transition stage');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
     },
   });
 }
