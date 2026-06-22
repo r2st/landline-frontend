@@ -44,7 +44,7 @@ const DEMO_SITES = [
   },
   {
     name: 'BatchWise',
-    url: 'https://batchwise.pages.dev',
+    url: 'https://batchwise-apprend.pages.dev',
     industry: 'Batch & Process Manufacturing',
     description: 'AI batch optimization that improves yield, consistency, and right-first-time production.',
     color: '#9333ea',
