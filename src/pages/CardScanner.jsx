@@ -11,18 +11,24 @@ import {
   Building2,
   Mail,
   Phone,
+  Smartphone,
+  Printer,
   Globe,
   MapPin,
   Users,
   Linkedin,
   Search,
   ScanLine,
+  Plus,
+  Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useScanCard } from '../hooks/useAI';
 import { useContacts } from '../hooks/useContacts';
 import { contactsApi, queryClient } from '../api/client';
-import { getInitials, timeAgo, formatDate } from '../lib/utils';
+import { getInitials, timeAgo, formatDate, contactPhones } from '../lib/utils';
+import ContactDetailModal from '../components/ContactDetailModal';
 
 const isScanned = (c) => /card|scan/.test((c?.source || '').toLowerCase());
 const fullName = (c) =>
@@ -33,10 +39,12 @@ const fullName = (c) =>
 const SCAN_SOURCE = 'card_scan';
 
 /**
- * The card-OCR endpoint isn't guaranteed to return our exact field names — map
- * the common variants (email_address, phone_number, job_title, organization, a
- * single `name`, an optional { data }/{ contact } wrapper, …) onto the form
- * fields so every detail it extracted actually populates and gets saved.
+ * Normalize the OCR/Claude-vision result onto our form fields. The endpoint
+ * isn't guaranteed to return our exact field names — map the common variants
+ * (email_address, phone_number, job_title, organization, a single `name`, an
+ * optional { data }/{ contact } wrapper, …). Phone numbers get special care:
+ * we keep EVERY number found (phone/mobile/fax plus a `phones` array) as a
+ * labelled list so none are lost.
  */
 function normalizeScanResult(raw) {
   if (!raw || typeof raw !== 'object') return {};
@@ -62,36 +70,63 @@ function normalizeScanResult(raw) {
     last = parts.join(' ');
   }
 
+  // Collect all phone numbers, de-duplicated, into a labelled list.
+  const phones = [];
+  const seen = new Set();
+  const digits = (s) => String(s).replace(/\D/g, '');
+  const addPhone = (label, number) => {
+    const num = (number == null ? '' : String(number)).trim();
+    if (!num) return;
+    const key = digits(num) || num.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    phones.push({ label: label || 'Phone', number: num });
+  };
+  addPhone('Office', pick('phone', 'phone_number', 'phoneNumber', 'tel', 'telephone', 'office', 'work'));
+  addPhone('Mobile', pick('mobile', 'mobile_phone', 'cell', 'cell_phone'));
+  addPhone('Fax', pick('fax', 'fax_number'));
+  const rawPhones = Array.isArray(d.phones) ? d.phones : [];
+  for (const p of rawPhones) {
+    if (p && typeof p === 'object') addPhone(p.label || p.type, p.number || p.value);
+    else addPhone(null, p);
+  }
+
   const out = {
     first_name: first,
     last_name: last,
     title: pick('title', 'job_title', 'jobTitle', 'position', 'role', 'designation'),
+    department: pick('department', 'dept', 'division'),
     company_name: pick('company_name', 'companyName', 'company', 'organization', 'organisation', 'employer', 'org'),
     email: pick('email', 'email_address', 'emailAddress', 'mail', 'e_mail'),
-    phone: pick('phone', 'phone_number', 'phoneNumber', 'mobile', 'mobile_phone', 'tel', 'telephone', 'cell'),
     website: pick('website', 'url', 'web', 'company_website', 'web_url'),
     address: pick('address', 'street', 'street_address', 'address_line', 'address1'),
     city: pick('city', 'town', 'locality'),
     state: pick('state', 'province', 'region'),
+    postal_code: pick('postal_code', 'postalCode', 'zip', 'zip_code', 'zipcode', 'postcode'),
     country: pick('country', 'nation'),
     linkedin_url: pick('linkedin_url', 'linkedinUrl', 'linkedin', 'linked_in'),
     notes: pick('notes', 'note', 'additional_info'),
   };
+
   // Only return fields we actually found, so re-scanning never wipes edited values.
-  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== ''));
+  const filtered = Object.fromEntries(Object.entries(out).filter(([, v]) => v !== ''));
+  if (phones.length) filtered.phones = phones;
+  return filtered;
 }
 
 const INITIAL_FORM = {
   first_name: '',
   last_name: '',
   title: '',
+  department: '',
   company_name: '',
   email: '',
-  phone: '',
+  phones: [], // [{ label, number }]
   website: '',
   address: '',
   city: '',
   state: '',
+  postal_code: '',
   country: '',
   linkedin_url: '',
   notes: '',
@@ -122,13 +157,77 @@ function FormField({ label, field, value, onChange, icon: Icon, type = 'text', p
   );
 }
 
-/** Compact read-only card showing all details extracted from one scanned business card. */
-function ScannedContactCard({ contact }) {
+// Editable list of phone numbers (label + number), so a card with office,
+// mobile and fax numbers keeps all of them.
+function PhoneFields({ phones, onUpdate, onAdd, onRemove }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block text-xs font-medium text-gray-500">Phone Numbers</label>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add number
+        </button>
+      </div>
+      {phones.length === 0 && (
+        <p className="text-xs text-gray-400">No phone numbers detected — add one if needed.</p>
+      )}
+      {phones.map((p, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            type="text"
+            value={p.label || ''}
+            onChange={(e) => onUpdate(i, 'label', e.target.value)}
+            placeholder="Label"
+            className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+          />
+          <div className="relative flex-1">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="tel"
+              value={p.number || ''}
+              onChange={(e) => onUpdate(i, 'number', e.target.value)}
+              placeholder="Number"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => onRemove(i)}
+            className="rounded-md p-1.5 text-gray-300 transition hover:bg-red-50 hover:text-red-500"
+            title="Remove number"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const phoneIcon = (label) => {
+  const l = (label || '').toLowerCase();
+  if (/mobile|cell/.test(l)) return Smartphone;
+  if (/fax/.test(l)) return Printer;
+  return Phone;
+};
+
+/** Compact read-only card showing details extracted from one scanned business card. */
+function ScannedContactCard({ contact, onOpen }) {
   const name = fullName(contact);
   const location = [contact.city, contact.state, contact.country].filter(Boolean).join(', ');
+  const phones = contactPhones(contact);
 
   return (
-    <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md">
+    <button
+      type="button"
+      onClick={() => onOpen(contact)}
+      className="flex flex-col rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
+    >
       {/* Identity */}
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-600">
@@ -136,21 +235,22 @@ function ScannedContactCard({ contact }) {
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-900">{name}</p>
-          {contact.title && <p className="truncate text-xs text-gray-500">{contact.title}</p>}
+          {(contact.title || contact.department) && (
+            <p className="truncate text-xs text-gray-500">
+              {[contact.title, contact.department].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
+        {contact.has_card_image && (
+          <CreditCard className="ml-auto h-4 w-4 flex-shrink-0 text-blue-400" title="Card image saved" />
+        )}
       </div>
 
       {/* Company */}
       {contact.company && (
         <div className="mt-3 flex items-center gap-2 text-sm text-gray-700">
           <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
-          {contact.company_id ? (
-            <Link to={`/companies/${contact.company_id}`} className="truncate font-medium text-blue-600 hover:text-blue-700">
-              {contact.company}
-            </Link>
-          ) : (
-            <span className="truncate">{contact.company}</span>
-          )}
+          <span className="truncate">{contact.company}</span>
         </div>
       )}
 
@@ -164,39 +264,43 @@ function ScannedContactCard({ contact }) {
       {/* Contact details */}
       <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-3">
         {contact.email && (
-          <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
+          <div className="flex items-center gap-2 text-xs text-gray-600">
             <Mail className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
             <span className="truncate">{contact.email}</span>
-          </a>
+          </div>
         )}
-        {contact.phone && (
-          <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
-            <Phone className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
-            <span className="truncate">{contact.phone}</span>
-          </a>
-        )}
+        {phones.map((p, i) => {
+          const Icon = phoneIcon(p.label);
+          return (
+            <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+              <Icon className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+              <span className="truncate">{p.number}</span>
+              {p.label && <span className="text-gray-400">· {p.label}</span>}
+            </div>
+          );
+        })}
         {contact.website && (
-          <a href={contact.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
+          <div className="flex items-center gap-2 text-xs text-gray-600">
             <Globe className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
             <span className="truncate">{contact.website.replace(/^https?:\/\//, '')}</span>
-          </a>
+          </div>
         )}
         {contact.linkedin_url && (
-          <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600">
+          <div className="flex items-center gap-2 text-xs text-gray-600">
             <Linkedin className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
             <span className="truncate">LinkedIn profile</span>
-          </a>
+          </div>
         )}
       </div>
 
       {contact.created_at && (
         <div className="mt-3 border-t border-gray-100 pt-2.5">
           <span className="text-[11px] text-gray-400" title={formatDate(contact.created_at)}>
-            Scanned {timeAgo(contact.created_at)}
+            Scanned {timeAgo(contact.created_at)} · tap for details
           </span>
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -208,6 +312,8 @@ export default function CardScanner() {
   const [saving, setSaving] = useState(false);
   const [savedContact, setSavedContact] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [scanError, setScanError] = useState(null);
+  const [detailContact, setDetailContact] = useState(null);
 
   const [search, setSearch] = useState('');
 
@@ -222,7 +328,7 @@ export default function CardScanner() {
     const q = search.trim().toLowerCase();
     const filtered = q
       ? list.filter((c) =>
-          [c.first_name, c.last_name, c.email, c.phone, c.title, c.company]
+          [c.first_name, c.last_name, c.email, c.title, c.company, ...contactPhones(c).map((p) => p.number)]
             .filter(Boolean)
             .some((v) => String(v).toLowerCase().includes(q))
         )
@@ -243,6 +349,7 @@ export default function CardScanner() {
     }
     setImageFile(file);
     setScanned(false);
+    setScanError(null);
     setSavedContact(null);
     setFormData(INITIAL_FORM);
     const reader = new FileReader();
@@ -269,17 +376,42 @@ export default function CardScanner() {
 
   const handleScan = useCallback(() => {
     if (!imageFile) return;
+    setScanError(null);
     scanCard.mutate(imageFile, {
       onSuccess: (data) => {
-        setFormData((prev) => ({ ...prev, ...normalizeScanResult(data) }));
+        const mapped = normalizeScanResult(data);
+        setFormData((prev) => ({ ...prev, ...mapped }));
         setScanned(true);
-        toast.success('Card scanned successfully');
+        const found = Object.keys(mapped).length;
+        if (found === 0) {
+          toast('No details detected — enter them manually', { icon: '⚠️' });
+        } else {
+          toast.success('Card scanned successfully');
+        }
+      },
+      onError: (err) => {
+        setScanError(err?.response?.data?.detail || 'Could not read the card. Try a clearer photo.');
       },
     });
   }, [imageFile, scanCard]);
 
   const handleFieldChange = useCallback((field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  // --- Phone row editing ---
+  const updatePhone = useCallback((idx, key, value) => {
+    setFormData((prev) => {
+      const phones = [...(prev.phones || [])];
+      phones[idx] = { ...phones[idx], [key]: value };
+      return { ...prev, phones };
+    });
+  }, []);
+  const addPhone = useCallback(() => {
+    setFormData((prev) => ({ ...prev, phones: [...(prev.phones || []), { label: 'Phone', number: '' }] }));
+  }, []);
+  const removePhone = useCallback((idx) => {
+    setFormData((prev) => ({ ...prev, phones: (prev.phones || []).filter((_, i) => i !== idx) }));
   }, []);
 
   const handleAddContact = useCallback(async () => {
@@ -289,48 +421,41 @@ export default function CardScanner() {
     }
     setSaving(true);
     try {
+      // All phone numbers entered, de-duplicated. Derive the dedicated
+      // office/mobile/fax slots from the labels for back-compat; the backend
+      // merges + de-dupes everything anyway.
+      const phones = (formData.phones || [])
+        .map((p) => ({ label: (p.label || '').trim() || 'Phone', number: (p.number || '').trim() }))
+        .filter((p) => p.number);
+      const byLabel = (re) => phones.find((p) => re.test(p.label.toLowerCase()))?.number || '';
+      const office = byLabel(/office|main|phone|direct|tel|work/) || phones[0]?.number || '';
+      const mobile = byLabel(/mobile|cell/);
+      const fax = byLabel(/fax/);
+
       const result = await contactsApi.quickAdd({
         first_name: formData.first_name,
         last_name: formData.last_name,
         title: formData.title,
+        department: formData.department,
         company_name: formData.company_name,
         email: formData.email,
-        phone: formData.phone,
+        phone: office,
+        mobile,
+        fax,
+        additional_phones: phones,
         website: formData.website,
         address: formData.address,
         city: formData.city,
         state: formData.state,
+        postal_code: formData.postal_code,
         country: formData.country,
         linkedin_url: formData.linkedin_url,
         notes: formData.notes,
+        // The scanned image (already a base64 data URL from the FileReader).
+        card_image: imagePreview || undefined,
         // Tag the contact so it surfaces under the "Scanned" tab and counter.
         source: SCAN_SOURCE,
       });
-
-      // quick-add creates the contact + company, but may apply its own default
-      // source or skip some detail fields. Patch the created contact directly to
-      // guarantee the scanned tag and the full extracted details all persist.
-      const newId = result?.contact?.id || result?.id || null;
-      if (newId) {
-        try {
-          const patched = await contactsApi.update(newId, {
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            title: formData.title,
-            email: formData.email,
-            phone: formData.phone,
-            linkedin_url: formData.linkedin_url,
-            source: SCAN_SOURCE,
-          });
-          if (patched && (result?.contact || result)) {
-            // Reflect the persisted values in the saved-state UI.
-            if (result?.contact) result.contact = { ...result.contact, ...patched };
-            else Object.assign(result, patched);
-          }
-        } catch {
-          // Non-fatal: the contact already exists; the tag/detail refresh just didn't apply.
-        }
-      }
 
       setSavedContact(result);
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -341,20 +466,23 @@ export default function CardScanner() {
     } finally {
       setSaving(false);
     }
-  }, [formData]);
+  }, [formData, imagePreview]);
 
   const handleReset = useCallback(() => {
     setImageFile(null);
     setImagePreview(null);
     setFormData(INITIAL_FORM);
     setScanned(false);
+    setScanError(null);
     setSavedContact(null);
     scanCard.reset();
   }, [scanCard]);
 
   // quick-add response shape varies ({contact:{...}} or flat) — handle both.
-  const savedContactId = savedContact?.contact?.id || savedContact?.id || null;
-  const savedCompanyId = savedContact?.contact?.company_id || savedContact?.company_id || null;
+  const savedC = savedContact?.contact || savedContact || null;
+  const savedContactId = savedC?.id || null;
+  const savedCompanyId = savedC?.company_id || savedContact?.company_id || null;
+  const savedPhones = useMemo(() => contactPhones(savedC), [savedC]);
 
   return (
     <div className="space-y-6">
@@ -393,6 +521,12 @@ export default function CardScanner() {
                   alt="Business card"
                   className="max-w-full max-h-80 rounded-lg object-contain shadow-sm"
                 />
+                {scanCard.isPending && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/70 backdrop-blur-sm">
+                    <div className="animate-spin rounded-full h-10 w-10 border-2 border-blue-600 border-t-transparent" />
+                    <p className="text-sm font-medium text-gray-700">Reading the card…</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 px-6 text-center" style={{ minHeight: '320px' }}>
@@ -426,6 +560,14 @@ export default function CardScanner() {
             onChange={(e) => handleFile(e.target.files?.[0])}
           />
 
+          {/* Scan error feedback */}
+          {scanError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>{scanError}</span>
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="flex flex-wrap gap-3">
             {!imagePreview && (
@@ -453,7 +595,7 @@ export default function CardScanner() {
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4" />
-                      Scan Card
+                      {scanned ? 'Re-scan Card' : 'Scan Card'}
                     </>
                   )}
                 </button>
@@ -482,21 +624,67 @@ export default function CardScanner() {
         {/* Right column: Extracted data / form */}
         <div>
           {savedContact ? (
-            /* Saved state */
-            <div className="rounded-xl border border-green-200 bg-green-50 p-8 text-center">
-              <div className="inline-flex items-center justify-center rounded-full bg-green-100 p-3 mb-4">
-                <Check className="h-8 w-8 text-green-600" />
+            /* Saved state — confirmation with all saved details */
+            <div className="rounded-xl border border-green-200 bg-green-50 p-6">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center rounded-full bg-green-100 p-3 mb-3">
+                  <Check className="h-7 w-7 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Contact Saved</h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  {fullName(savedC || formData)}
+                  {(savedC?.company_name || formData.company_name) ? ` at ${savedC?.company_name || formData.company_name}` : ''}
+                  {' '}has been added to your contacts.
+                </p>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">Contact Added</h3>
-              <p className="text-gray-600 text-sm mb-4">
-                {formData.first_name} {formData.last_name}
-                {formData.company_name ? ` at ${formData.company_name}` : ''}
-                {' '}has been saved to your contacts.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-3">
+
+              {/* Saved details summary */}
+              <div className="rounded-lg border border-green-200 bg-white p-4 text-sm">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Saved details</p>
+                <dl className="space-y-1.5 text-gray-700">
+                  {(savedC?.title || formData.title) && (
+                    <div className="flex gap-2"><dt className="w-20 flex-shrink-0 text-gray-400">Title</dt><dd>{savedC?.title || formData.title}</dd></div>
+                  )}
+                  {(savedC?.department || formData.department) && (
+                    <div className="flex gap-2"><dt className="w-20 flex-shrink-0 text-gray-400">Dept</dt><dd>{savedC?.department || formData.department}</dd></div>
+                  )}
+                  {(savedC?.email || formData.email) && (
+                    <div className="flex gap-2"><dt className="w-20 flex-shrink-0 text-gray-400">Email</dt><dd className="break-all">{savedC?.email || formData.email}</dd></div>
+                  )}
+                  {savedPhones.map((p, i) => (
+                    <div key={i} className="flex gap-2">
+                      <dt className="w-20 flex-shrink-0 text-gray-400">{p.label || 'Phone'}</dt>
+                      <dd>{p.number}</dd>
+                    </div>
+                  ))}
+                  {(savedC?.website || formData.website) && (
+                    <div className="flex gap-2"><dt className="w-20 flex-shrink-0 text-gray-400">Website</dt><dd className="break-all">{savedC?.website || formData.website}</dd></div>
+                  )}
+                  {[savedC?.address || formData.address, savedC?.city || formData.city, savedC?.state || formData.state, savedC?.postal_code || formData.postal_code, savedC?.country || formData.country].filter(Boolean).length > 0 && (
+                    <div className="flex gap-2">
+                      <dt className="w-20 flex-shrink-0 text-gray-400">Address</dt>
+                      <dd>{[savedC?.address || formData.address, savedC?.city || formData.city, savedC?.state || formData.state, savedC?.postal_code || formData.postal_code, savedC?.country || formData.country].filter(Boolean).join(', ')}</dd>
+                    </div>
+                  )}
+                  {savedContact?.contact?.has_card_image || imagePreview ? (
+                    <div className="flex gap-2"><dt className="w-20 flex-shrink-0 text-gray-400">Card image</dt><dd className="text-green-700">Saved ✓</dd></div>
+                  ) : null}
+                </dl>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                {savedContactId && (
+                  <button
+                    onClick={() => setDetailContact(savedC)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    View Details
+                  </button>
+                )}
                 <a
                   href={savedContactId ? `/contacts?highlight=${savedContactId}` : '/contacts'}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <Users className="h-4 w-4" />
                   View in Contacts
@@ -527,13 +715,17 @@ export default function CardScanner() {
                 <FormField label="First Name" field="first_name" value={formData.first_name} onChange={handleFieldChange} icon={UserPlus} />
                 <FormField label="Last Name" field="last_name" value={formData.last_name} onChange={handleFieldChange} icon={UserPlus} />
               </div>
-              <FormField label="Title" field="title" value={formData.title} onChange={handleFieldChange} />
-
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Email" field="email" value={formData.email} onChange={handleFieldChange} icon={Mail} type="email" />
-                <FormField label="Phone" field="phone" value={formData.phone} onChange={handleFieldChange} icon={Phone} type="tel" />
+                <FormField label="Title" field="title" value={formData.title} onChange={handleFieldChange} />
+                <FormField label="Department" field="department" value={formData.department} onChange={handleFieldChange} />
               </div>
-              <FormField label="LinkedIn" field="linkedin_url" value={formData.linkedin_url} onChange={handleFieldChange} icon={Globe} placeholder="https://linkedin.com/in/..." />
+
+              <FormField label="Email" field="email" value={formData.email} onChange={handleFieldChange} icon={Mail} type="email" />
+
+              {/* All phone numbers */}
+              <PhoneFields phones={formData.phones} onUpdate={updatePhone} onAdd={addPhone} onRemove={removePhone} />
+
+              <FormField label="LinkedIn" field="linkedin_url" value={formData.linkedin_url} onChange={handleFieldChange} icon={Linkedin} placeholder="https://linkedin.com/in/..." />
 
               {/* Company */}
               <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Company</p>
@@ -544,9 +736,13 @@ export default function CardScanner() {
 
               {/* Location */}
               <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Location</p>
-              <div className="grid grid-cols-3 gap-3">
-                <FormField label="City" field="city" value={formData.city} onChange={handleFieldChange} icon={MapPin} />
-                <FormField label="State" field="state" value={formData.state} onChange={handleFieldChange} />
+              <FormField label="Street Address" field="address" value={formData.address} onChange={handleFieldChange} icon={MapPin} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="City" field="city" value={formData.city} onChange={handleFieldChange} />
+                <FormField label="State / Province" field="state" value={formData.state} onChange={handleFieldChange} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="ZIP / Postal Code" field="postal_code" value={formData.postal_code} onChange={handleFieldChange} />
                 <FormField label="Country" field="country" value={formData.country} onChange={handleFieldChange} />
               </div>
 
@@ -645,11 +841,19 @@ export default function CardScanner() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {scannedCards.map((c) => (
-              <ScannedContactCard key={c.id} contact={c} />
+              <ScannedContactCard key={c.id} contact={c} onOpen={setDetailContact} />
             ))}
           </div>
         )}
       </div>
+
+      {detailContact && (
+        <ContactDetailModal
+          contactId={detailContact.id}
+          initial={detailContact}
+          onClose={() => setDetailContact(null)}
+        />
+      )}
     </div>
   );
 }

@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import MetricCard from '../components/MetricCard';
+import ContactDetailModal from '../components/ContactDetailModal';
 import { useContacts, useDeleteContact } from '../hooks/useContacts';
-import { getInitials, cn, formatDate, timeAgo } from '../lib/utils';
+import { getInitials, cn, formatDate, timeAgo, contactPhones } from '../lib/utils';
 
 /** Friendly label + styling for a contact's source. */
 function sourceMeta(source) {
@@ -49,15 +50,17 @@ function fullName(c) {
   return [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.email || 'Unknown';
 }
 
-function ContactCard({ contact, highlighted, onDelete }) {
+function ContactCard({ contact, highlighted, onDelete, onOpen }) {
   const meta = sourceMeta(contact.source);
   const name = fullName(contact);
   const location = [contact.city, contact.industry_segment].filter(Boolean).join(' · ');
+  const phones = contactPhones(contact);
 
   return (
     <div
+      onClick={() => onOpen(contact)}
       className={cn(
-        'group relative flex flex-col rounded-xl border bg-white p-4 shadow-sm transition-all hover:shadow-md',
+        'group relative flex cursor-pointer flex-col rounded-xl border bg-white p-4 shadow-sm transition-all hover:border-blue-300 hover:shadow-md',
         highlighted ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'
       )}
     >
@@ -88,7 +91,7 @@ function ContactCard({ contact, highlighted, onDelete }) {
         <div className="mt-3 flex items-center gap-2 text-sm text-gray-700">
           <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
           {contact.company_id ? (
-            <Link to={`/companies/${contact.company_id}`} className="truncate font-medium text-blue-600 hover:text-blue-700">
+            <Link to={`/companies/${contact.company_id}`} onClick={(e) => e.stopPropagation()} className="truncate font-medium text-blue-600 hover:text-blue-700">
               {contact.company}
             </Link>
           ) : (
@@ -109,6 +112,7 @@ function ContactCard({ contact, highlighted, onDelete }) {
         {contact.email ? (
           <a
             href={`mailto:${contact.email}`}
+            onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600"
           >
             <Mail className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
@@ -120,20 +124,24 @@ function ContactCard({ contact, highlighted, onDelete }) {
             <span>No email</span>
           </div>
         )}
-        {contact.phone && (
+        {phones.map((p, i) => (
           <a
-            href={`tel:${contact.phone}`}
+            key={i}
+            href={`tel:${p.number}`}
+            onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600"
           >
             <Phone className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
-            <span className="truncate">{contact.phone}</span>
+            <span className="truncate">{p.number}</span>
+            {p.label && <span className="flex-shrink-0 text-gray-400">· {p.label}</span>}
           </a>
-        )}
+        ))}
         {contact.linkedin_url && (
           <a
             href={contact.linkedin_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600"
           >
             <Linkedin className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
@@ -149,7 +157,7 @@ function ContactCard({ contact, highlighted, onDelete }) {
         </span>
         <button
           type="button"
-          onClick={() => onDelete(contact)}
+          onClick={(e) => { e.stopPropagation(); onDelete(contact); }}
           className="rounded-md p-1 text-gray-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
           title="Delete contact"
         >
@@ -172,6 +180,7 @@ export default function Contacts() {
   const [sort, setSort] = useState('recent');
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'scanned'
   const [groupByCompany, setGroupByCompany] = useState(false);
+  const [detailContact, setDetailContact] = useState(null);
 
   const all = contacts || [];
 
@@ -334,7 +343,7 @@ export default function Contacts() {
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {members.map((c) => (
-                  <ContactCard key={c.id} contact={c} highlighted={String(c.id) === highlightId} onDelete={handleDelete} />
+                  <ContactCard key={c.id} contact={c} highlighted={String(c.id) === highlightId} onDelete={handleDelete} onOpen={setDetailContact} />
                 ))}
               </div>
             </div>
@@ -343,9 +352,17 @@ export default function Contacts() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((c) => (
-            <ContactCard key={c.id} contact={c} highlighted={String(c.id) === highlightId} onDelete={handleDelete} />
+            <ContactCard key={c.id} contact={c} highlighted={String(c.id) === highlightId} onDelete={handleDelete} onOpen={setDetailContact} />
           ))}
         </div>
+      )}
+
+      {detailContact && (
+        <ContactDetailModal
+          contactId={detailContact.id}
+          initial={detailContact}
+          onClose={() => setDetailContact(null)}
+        />
       )}
     </div>
   );

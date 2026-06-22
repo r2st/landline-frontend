@@ -38,6 +38,35 @@ export function getInitials(first, last) {
   return initials || '?';
 }
 
+/**
+ * Build a de-duplicated, labelled list of all phone numbers on a contact,
+ * merging the dedicated phone/mobile/fax columns with the additional_phones
+ * JSON list. Returns [{ label, number }].
+ */
+export function contactPhones(contact) {
+  if (!contact) return [];
+  const out = [];
+  const seen = new Set();
+  const digits = (s) => String(s).replace(/\D/g, '');
+  const add = (label, number) => {
+    const num = (number == null ? '' : String(number)).trim();
+    if (!num) return;
+    const key = digits(num) || num.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ label: label || 'Phone', number: num });
+  };
+  add('Office', contact.phone);
+  add('Mobile', contact.mobile);
+  add('Fax', contact.fax);
+  const extra = Array.isArray(contact.additional_phones) ? contact.additional_phones : [];
+  for (const p of extra) {
+    if (p && typeof p === 'object') add(p.label, p.number);
+    else add(null, p);
+  }
+  return out;
+}
+
 export function timeAgo(dateStr) {
   if (!dateStr) return '';
   const then = new Date(dateStr);

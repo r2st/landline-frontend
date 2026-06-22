@@ -30,9 +30,11 @@ export function useContacts() {
           ...ct,
           company: co.name || '',
           industry_segment: co.industry_segment || co.industry || '',
-          city: co.city || '',
-          state: co.state_province || co.state || '',
-          country: co.country || '',
+          // Prefer the contact's own values (scanned cards store these directly);
+          // fall back to the company record for older/manually-added contacts.
+          city: ct.city || co.city || '',
+          state: ct.state || co.state_province || co.state || '',
+          country: ct.country || co.country || '',
           website: ct.website || co.website || '',
         };
       });
