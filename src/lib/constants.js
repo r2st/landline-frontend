@@ -2,7 +2,10 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
   : '/api/v1';
 
-export const STAGES = ['new', 'researched', 'scored', 'contacted', 'engaged', 'qualified', 'opportunity'];
+// Full lead→client pipeline. `customer` and `disqualified` are the won/lost
+// terminal stages — both already permitted by the company.stage DB check
+// constraint, so transitioning into them needs no backend change.
+export const STAGES = ['new', 'researched', 'scored', 'contacted', 'engaged', 'qualified', 'opportunity', 'customer', 'disqualified'];
 
 export const STAGE_LABELS = {
   new: 'New',
@@ -12,6 +15,8 @@ export const STAGE_LABELS = {
   engaged: 'Engaged',
   qualified: 'Qualified',
   opportunity: 'Opportunity',
+  customer: 'Client',
+  disqualified: 'Churned',
 };
 
 export const STAGE_COLORS = {
@@ -22,6 +27,8 @@ export const STAGE_COLORS = {
   engaged: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300', hex: '#a855f7' },
   qualified: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', hex: '#22c55e' },
   opportunity: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', hex: '#10b981' },
+  customer: { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-300', hex: '#14b8a6' },
+  disqualified: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', hex: '#ef4444' },
 };
 
 export const COUNTRIES = ['US', 'CA'];

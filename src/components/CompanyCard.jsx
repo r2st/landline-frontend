@@ -1,10 +1,10 @@
-import { Users, Globe, MapPin } from 'lucide-react';
+import { Users, Globe, MapPin, GripVertical } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { SOURCE_LABELS } from '../lib/constants';
 import ScoreBadge from './ScoreBadge';
 import StageSelector from './StageSelector';
 
-export default function CompanyCard({ company, onClick, onTransition, compact = false }) {
+export default function CompanyCard({ company, onClick, onTransition, compact = false, draggable = false, onDragStart, onDragEnd, dragging = false }) {
   const handleCardClick = () => {
     if (onClick) onClick(company);
   };
@@ -20,11 +20,24 @@ export default function CompanyCard({ company, onClick, onTransition, compact = 
   return (
     <div
       onClick={handleCardClick}
+      draggable={draggable}
+      onDragStart={draggable ? (e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(company.id));
+        onDragStart?.(company);
+      } : undefined}
+      onDragEnd={draggable ? () => onDragEnd?.() : undefined}
       className={cn(
-        'cursor-pointer rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md',
+        'rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md',
+        onClick && 'cursor-pointer',
+        draggable && 'cursor-grab active:cursor-grabbing',
+        dragging && 'opacity-40',
         compact ? 'p-3' : 'p-4'
       )}
     >
+      {draggable && (
+        <GripVertical className="float-right ml-1 h-4 w-4 flex-shrink-0 text-gray-300" aria-hidden="true" />
+      )}
       {/* Header: Name + Score */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">

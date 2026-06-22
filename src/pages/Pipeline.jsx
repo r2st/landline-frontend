@@ -41,12 +41,18 @@ export default function Pipeline() {
 
   const { data: pipeline, isLoading } = usePipeline(activeFilters);
   const transitionMutation = useTransitionStage();
+  const [draggingId, setDraggingId] = useState(null);
 
   const handleCardClick = (company) => {
     navigate(`/companies/${company.id}`);
   };
 
   const handleTransition = (id, stage) => {
+    transitionMutation.mutate({ id, stage });
+  };
+
+  const handleDropCompany = (id, stage) => {
+    setDraggingId(null);
     transitionMutation.mutate({ id, stage });
   };
 
@@ -91,6 +97,10 @@ export default function Pipeline() {
             Clear all
           </button>
         )}
+
+        <span className="ml-auto hidden text-xs text-gray-400 sm:inline">
+          Drag cards between stages, or use the dropdown on each card
+        </span>
       </div>
 
       {/* Filter Row */}
@@ -165,6 +175,10 @@ export default function Pipeline() {
                 companies={pipeline?.[stage] || []}
                 onCardClick={handleCardClick}
                 onTransition={handleTransition}
+                draggingId={draggingId}
+                onCardDragStart={(company) => setDraggingId(company.id)}
+                onCardDragEnd={() => setDraggingId(null)}
+                onDropCompany={handleDropCompany}
               />
             ))
           )}
