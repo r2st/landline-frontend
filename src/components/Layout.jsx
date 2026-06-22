@@ -21,6 +21,9 @@ import {
   CreditCard,
   Users,
   Search,
+  HeartPulse,
+  CheckSquare,
+  PieChart,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -54,6 +57,15 @@ const navSections = [
       { name: 'Sequences', href: '/sequences', icon: ListOrdered },
       { name: 'Follow-ups', href: '/follow-ups', icon: Bell },
       { name: 'Demos', href: '/demos', icon: Rocket },
+    ],
+  },
+  {
+    label: 'Clients',
+    items: [
+      { name: 'Clients', href: '/clients', icon: HeartPulse },
+      { name: 'Client Dashboard', href: '/client-dashboard', icon: PieChart },
+      { name: 'Tasks', href: '/tasks', icon: CheckSquare },
+      { name: 'Reports', href: '/reports', icon: BarChart3 },
     ],
   },
 ];

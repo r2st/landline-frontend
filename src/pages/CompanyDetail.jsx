@@ -36,6 +36,7 @@ import {
   X,
   Pencil,
   Check,
+  CheckSquare,
 } from 'lucide-react';
 import ScoreBadge from '../components/ScoreBadge';
 import StageSelector from '../components/StageSelector';
@@ -43,6 +44,10 @@ import ContactList from '../components/ContactList';
 import ActivityTimeline from '../components/ActivityTimeline';
 import EnrollSequenceMenu from '../components/EnrollSequenceMenu';
 import EmptyState from '../components/EmptyState';
+import HealthWidget from '../components/HealthWidget';
+import DealsTab from '../components/DealsTab';
+import InteractionsTab from '../components/InteractionsTab';
+import TaskFormModal from '../components/TaskFormModal';
 import { useCompany, useUpdateCompany, useScoreCompany, useCompanyScores } from '../hooks/useCompanies';
 import { useCompanyContacts, useCreateContact } from '../hooks/useContacts';
 import { useTransitionStage } from '../hooks/usePipeline';
@@ -51,6 +56,8 @@ import { useEnrichCompany } from '../hooks/useDiscovery';
 import { useAnalyzeCompany, useGenerateEmail } from '../hooks/useAI';
 import { useNews, useCheckCompanyNews, useMarkActioned } from '../hooks/useNews';
 import { useEmailSends } from '../hooks/useEmailSends';
+import { useCompanyHealth } from '../hooks/useHealth';
+import { useCreateTask } from '../hooks/useTasks';
 import {
   useDiscoverExecutives,
   useLinkedinDraft,
@@ -289,6 +296,9 @@ export default function CompanyDetail() {
   const [activeTab, setActiveTab] = useState('contacts');
 
   const { data: company, isLoading, isError } = useCompany(id);
+  const { data: health } = useCompanyHealth(id);
+  const createTask = useCreateTask();
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const updateCompany = useUpdateCompany();
   const scoreCompany = useScoreCompany();
   const transitionStage = useTransitionStage();
@@ -406,6 +416,14 @@ export default function CompanyDetail() {
               <Newspaper className={cn('h-4 w-4', checkCompanyNews.isPending && 'animate-pulse')} />
               {checkCompanyNews.isPending ? 'Checking...' : 'Check News'}
             </button>
+            <button
+              type="button"
+              onClick={() => setTaskModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <CheckSquare className="h-4 w-4" />
+              Add Task
+            </button>
           </div>
         </div>
       </div>
@@ -457,10 +475,15 @@ export default function CompanyDetail() {
         onSave={(data) => updateCompany.mutate({ id: company.id, data })}
       />
 
+      {/* Client health — gauge, history sparkline, key relationship metrics */}
+      <HealthWidget health={health} />
+
       {/* Tabs */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex overflow-x-auto border-b border-gray-200 px-2">
           <TabButton label="Contacts" active={activeTab === 'contacts'} onClick={() => setActiveTab('contacts')} />
+          <TabButton label="Deals" active={activeTab === 'deals'} onClick={() => setActiveTab('deals')} />
+          <TabButton label="Interactions" active={activeTab === 'interactions'} onClick={() => setActiveTab('interactions')} />
           <TabButton label="Score" active={activeTab === 'score'} onClick={() => setActiveTab('score')} />
           <TabButton label="Outreach" active={activeTab === 'outreach'} onClick={() => setActiveTab('outreach')} />
           <TabButton label="Activity" active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
@@ -484,6 +507,12 @@ export default function CompanyDetail() {
               />
             </div>
           )}
+
+          {/* Deals Tab */}
+          {activeTab === 'deals' && <DealsTab companyId={id} />}
+
+          {/* Interactions Tab */}
+          {activeTab === 'interactions' && <InteractionsTab companyId={id} />}
 
           {/* Score Tab */}
           {activeTab === 'score' && (
@@ -1485,6 +1514,15 @@ export default function CompanyDetail() {
           )}
         </div>
       </div>
+
+      {/* Quick-add task pinned to this company */}
+      <TaskFormModal
+        open={taskModalOpen}
+        onClose={() => setTaskModalOpen(false)}
+        onSubmit={(payload) => createTask.mutate(payload, { onSuccess: () => setTaskModalOpen(false) })}
+        companyId={id}
+        saving={createTask.isPending}
+      />
     </div>
   );
 }

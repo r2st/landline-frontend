@@ -18,6 +18,10 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Demos = lazy(() => import('./pages/Demos'));
 const CardScanner = lazy(() => import('./pages/CardScanner'));
 const Contacts = lazy(() => import('./pages/Contacts'));
+const Clients = lazy(() => import('./pages/Clients'));
+const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const Reports = lazy(() => import('./pages/Reports'));
 
 function NotFound() {
   return (
@@ -60,6 +64,10 @@ export default function App() {
           <Route path="/demos" element={<Demos />} />
           <Route path="/scan" element={<CardScanner />} />
           <Route path="/contacts" element={<Contacts />} />
+          <Route path="/clients" element={<Clients />} />
+          <Route path="/client-dashboard" element={<ClientDashboard />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
