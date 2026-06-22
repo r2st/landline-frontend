@@ -40,6 +40,7 @@ import {
 import ScoreBadge from '../components/ScoreBadge';
 import StageSelector from '../components/StageSelector';
 import ContactList from '../components/ContactList';
+import ActivityTimeline from '../components/ActivityTimeline';
 import EmptyState from '../components/EmptyState';
 import { useCompany, useUpdateCompany, useScoreCompany, useCompanyScores } from '../hooks/useCompanies';
 import { useCompanyContacts, useCreateContact } from '../hooks/useContacts';
@@ -48,6 +49,7 @@ import { useOutreachEvents, useSequences, useEnrollCompany } from '../hooks/useO
 import { useEnrichCompany } from '../hooks/useDiscovery';
 import { useAnalyzeCompany, useGenerateEmail } from '../hooks/useAI';
 import { useNews, useCheckCompanyNews, useMarkActioned } from '../hooks/useNews';
+import { useEmailSends } from '../hooks/useEmailSends';
 import {
   useDiscoverExecutives,
   useLinkedinDraft,
@@ -58,7 +60,7 @@ import {
 } from '../hooks/useTactics';
 import toast from 'react-hot-toast';
 import { STAGE_LABELS, STAGE_COLORS, SOURCE_LABELS } from '../lib/constants';
-import { formatDate, formatNumber, getScoreColor, getScoreLabel, timeAgo, cn } from '../lib/utils';
+import { formatDate, formatNumber, getScoreColor, getScoreLabel, cn } from '../lib/utils';
 
 // Map a LeadScore record's sub-scores into displayable factor rows.
 function scoreToFactors(score) {
@@ -301,6 +303,7 @@ export default function CompanyDetail() {
   // The /news endpoint doesn't filter by company server-side, so fetch a wide
   // window and scope to this company below.
   const { data: companyNewsData } = useNews({ limit: 200 });
+  const { data: emailSends = [] } = useEmailSends();
   const markActioned = useMarkActioned();
   const analyzeCompany = useAnalyzeCompany();
   const generateEmail = useGenerateEmail();
@@ -322,6 +325,12 @@ export default function CompanyDetail() {
 
   const latestScore = companyScores[0] || null;
   const realFactors = scoreToFactors(latestScore);
+
+  // News for this company (the /news endpoint isn't scoped server-side).
+  const companyNews = (() => {
+    const all = companyNewsData?.items || companyNewsData || [];
+    return (Array.isArray(all) ? all : []).filter((a) => String(a.company_id) === String(id));
+  })();
 
   const handleStageChange = (newStage) => {
     transitionStage.mutate({ id: company.id, stage: newStage });
@@ -628,54 +637,20 @@ export default function CompanyDetail() {
           {activeTab === 'activity' && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Activity Timeline</h3>
-              <div className="space-y-3">
-                {[
-                  {
-                    id: 'added',
-                    type: 'company_added',
-                    description: 'Company added to Landline',
-                    created_at: company.created_at,
-                  },
-                  ...(latestScore ? [{
-                    id: 'scored',
-                    type: 'lead_scored',
-                    description: `Lead scored ${latestScore.fit_score} — ${getScoreLabel(latestScore.fit_score)}`,
-                    created_at: latestScore.scored_at,
-                  }] : []),
-                  ...(outreachEvents || []).map((e) => ({
-                    id: `event-${e.id}`,
-                    type: e.event_type || e.type,
-                    description: `${String(e.event_type || e.type).replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}`,
-                    created_at: e.occurred_at || e.created_at,
-                  })),
-                ]
-                  .filter((i) => i.created_at)
-                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                  .map((item) => {
-                    const IconComp = eventIcons[item.type] || Clock;
-                    const colorClass = eventColors[item.type] || 'text-gray-500 bg-gray-50';
-                    return (
-                      <div key={item.id} className="flex items-start gap-3">
-                        <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${colorClass}`}>
-                          <IconComp className="h-3.5 w-3.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm text-gray-700">{item.description}</p>
-                          <p className="mt-0.5 text-xs text-gray-400">{timeAgo(item.created_at)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
+              <ActivityTimeline
+                company={company}
+                contacts={companyContacts}
+                scores={companyScores}
+                news={companyNews}
+                sends={emailSends}
+                outreachEvents={outreachEvents}
+              />
             </div>
           )}
 
           {/* News Tab */}
           {activeTab === 'news' && (() => {
-            const allNews = companyNewsData?.items || companyNewsData || [];
-            const newsArticles = (Array.isArray(allNews) ? allNews : []).filter(
-              (a) => String(a.company_id) === String(id)
-            );
+            const newsArticles = companyNews;
             const categoryColors = {
               funding: 'bg-green-100 text-green-700',
               expansion: 'bg-blue-100 text-blue-700',
