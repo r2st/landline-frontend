@@ -209,4 +209,16 @@ export const gmailApi = {
   setActive: (id) => api.post(`/gmail/accounts/${id}/set-active`).then(r => r.data),
   toggleSending: (id, enabled) => api.post(`/gmail/accounts/${id}/toggle-sending`, { sending_enabled: enabled }).then(r => r.data),
   disconnect: (id) => api.delete(`/gmail/accounts/${id}`).then(r => r.data),
+  testSend: (id, toEmail) => api.post(`/gmail/accounts/${id}/test`, { to_email: toEmail || null }).then(r => r.data),
+};
+
+export const smtpApi = {
+  accounts: () => api.get('/smtp/accounts').then(r => r.data),
+  add: (payload) => api.post('/smtp/accounts', payload).then(r => r.data),
+  update: (id, payload) => api.put(`/smtp/accounts/${id}`, payload).then(r => r.data),
+  remove: (id) => api.delete(`/smtp/accounts/${id}`).then(r => r.data),
+  setActive: (id) => api.post(`/smtp/accounts/${id}/set-active`).then(r => r.data),
+  toggleSending: (id, enabled) => api.post(`/smtp/accounts/${id}/toggle-sending`, { sending_enabled: enabled }).then(r => r.data),
+  verify: (id) => api.post(`/smtp/accounts/${id}/verify`).then(r => r.data),
+  testSend: (id, toEmail) => api.post(`/smtp/accounts/${id}/test`, { to_email: toEmail || null }).then(r => r.data),
 };
