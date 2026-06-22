@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Building2,
   Users,
@@ -11,6 +12,13 @@ import {
   UserPlus,
   Activity,
   Factory,
+  Sparkles,
+  CreditCard,
+  AlertTriangle,
+  Snowflake,
+  MailOpen,
+  ChevronRight,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,
@@ -19,8 +27,10 @@ import MetricCard from '../components/MetricCard';
 import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
 import { useDashboardMetrics, useRecentActivity, useTopLeads, useEmailTrends } from '../hooks/useDashboard';
+import { useFollowUps, useStaleContacts } from '../hooks/useFollowUps';
+import { emailApi } from '../api/client';
 import { STAGES, STAGE_LABELS, STAGE_COLORS } from '../lib/constants';
-import { formatNumber, timeAgo } from '../lib/utils';
+import { formatNumber, timeAgo, cn } from '../lib/utils';
 
 const activityIcons = {
   lead_scored: Target,
@@ -74,6 +84,135 @@ function shortDate(d) {
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+const quickActions = [
+  { label: 'Discover companies', icon: Sparkles, to: '/discovery', color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
+  { label: 'Add company', icon: Plus, to: '/companies', color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
+  { label: 'Scan a card', icon: CreditCard, to: '/scan', color: 'text-teal-600 bg-teal-50 hover:bg-teal-100' },
+  { label: 'Compose outreach', icon: Send, to: '/outreach', color: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' },
+];
+
+function QuickActions({ navigate }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {quickActions.map((a) => (
+        <button
+          key={a.label}
+          type="button"
+          onClick={() => navigate(a.to)}
+          className={cn('flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 shadow-sm transition-all hover:shadow-md')}
+        >
+          <span className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg transition-colors', a.color)}>
+            <a.icon className="h-[18px] w-[18px]" />
+          </span>
+          <span className="leading-tight">{a.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// "Needs attention" — the next-best-actions surfaced from the autonomous
+// engine's outputs: overdue reminders, replies waiting, contacts gone cold,
+// and leads still missing a score.
+function ActionCenter({ navigate, metrics }) {
+  const { data: followUps = [] } = useFollowUps({ status: 'pending' });
+  const { data: stale = [] } = useStaleContacts(30);
+  const { data: sends = [] } = useQuery({
+    queryKey: ['dashboard-reply-check'],
+    queryFn: async () => {
+      try {
+        const data = await emailApi.getSends({ limit: 100 });
+        const items = data?.items || data;
+        return Array.isArray(items) ? items : [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60000,
+    retry: false,
+  });
+
+  const overdue = followUps.filter((f) => f.is_overdue).length;
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const newReplies = sends.filter((s) => {
+    if (s.status !== 'replied') return false;
+    const d = new Date(s.replied_at || s.updated_at || s.sent_at);
+    return !isNaN(d) && d > cutoff;
+  }).length;
+  const coldCount = stale.length;
+  const unscored = Math.max(0, (metrics?.total_leads || 0) - (metrics?.total_scored || 0));
+
+  const items = [
+    newReplies > 0 && {
+      icon: MailOpen,
+      tone: 'text-green-600 bg-green-50',
+      label: `${newReplies} new repl${newReplies === 1 ? 'y' : 'ies'} to handle`,
+      hint: 'Someone wrote back in the last 24h',
+      onClick: () => navigate('/outreach'),
+    },
+    overdue > 0 && {
+      icon: AlertTriangle,
+      tone: 'text-red-600 bg-red-50',
+      label: `${overdue} overdue follow-up${overdue === 1 ? '' : 's'}`,
+      hint: 'Past their due date — reach out now',
+      onClick: () => navigate('/follow-ups'),
+    },
+    coldCount > 0 && {
+      icon: Snowflake,
+      tone: 'text-sky-600 bg-sky-50',
+      label: `${coldCount} contact${coldCount === 1 ? '' : 's'} gone cold`,
+      hint: 'No email in 30+ days — re-engage them',
+      onClick: () => navigate('/follow-ups'),
+    },
+    unscored > 0 && {
+      icon: Target,
+      tone: 'text-yellow-600 bg-yellow-50',
+      label: `${formatNumber(unscored)} lead${unscored === 1 ? '' : 's'} not scored yet`,
+      hint: 'Score them to surface your best fits',
+      onClick: () => navigate('/companies'),
+    },
+  ].filter(Boolean);
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+        <h2 className="text-base font-semibold text-gray-900">Needs Attention</h2>
+        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+          {items.length} item{items.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
+          <CheckCircle2 className="h-8 w-8 text-green-400" />
+          <p className="mt-2 text-sm font-medium text-gray-900">You're all caught up</p>
+          <p className="mt-0.5 text-sm text-gray-500">No replies, overdue follow-ups, or cold contacts right now.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-gray-50">
+          {items.map((item, i) => (
+            <li key={i}>
+              <button
+                type="button"
+                onClick={item.onClick}
+                className="flex w-full items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-gray-50"
+              >
+                <span className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full', item.tone)}>
+                  <item.icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-gray-900">{item.label}</span>
+                  <span className="block text-xs text-gray-500">{item.hint}</span>
+                </span>
+                <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-300" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
@@ -101,6 +240,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Quick Actions */}
+      <QuickActions navigate={navigate} />
+
       {/* Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metricsLoading ? (
@@ -141,6 +283,9 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* Action Center — next-best-actions */}
+      <ActionCenter navigate={navigate} metrics={metrics} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Pipeline Funnel Chart */}
