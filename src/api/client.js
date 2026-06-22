@@ -75,7 +75,8 @@ export const followUpsApi = {
 export const outreachApi = {
   getSequences: () => api.get('/outreach/sequences').then(r => r.data),
   createSequence: (data) => api.post('/outreach/sequences', data).then(r => r.data),
-  enrollCompany: (data) => api.post('/outreach/enrollments', data).then(r => r.data),
+  // The enrollment endpoint enrolls a single contact (contact_id + sequence_id).
+  enrollContact: (data) => api.post('/outreach/enrollments', data).then(r => r.data),
   getEvents: (params) => api.get('/outreach/events', { params }).then(r => r.data),
 };
 

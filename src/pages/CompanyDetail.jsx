@@ -41,11 +41,12 @@ import ScoreBadge from '../components/ScoreBadge';
 import StageSelector from '../components/StageSelector';
 import ContactList from '../components/ContactList';
 import ActivityTimeline from '../components/ActivityTimeline';
+import EnrollSequenceMenu from '../components/EnrollSequenceMenu';
 import EmptyState from '../components/EmptyState';
 import { useCompany, useUpdateCompany, useScoreCompany, useCompanyScores } from '../hooks/useCompanies';
 import { useCompanyContacts, useCreateContact } from '../hooks/useContacts';
 import { useTransitionStage } from '../hooks/usePipeline';
-import { useOutreachEvents, useSequences, useEnrollCompany } from '../hooks/useOutreach';
+import { useOutreachEvents } from '../hooks/useOutreach';
 import { useEnrichCompany } from '../hooks/useDiscovery';
 import { useAnalyzeCompany, useGenerateEmail } from '../hooks/useAI';
 import { useNews, useCheckCompanyNews, useMarkActioned } from '../hooks/useNews';
@@ -286,15 +287,12 @@ export default function CompanyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('contacts');
-  const [enrollDropdownOpen, setEnrollDropdownOpen] = useState(false);
 
   const { data: company, isLoading, isError } = useCompany(id);
   const updateCompany = useUpdateCompany();
   const scoreCompany = useScoreCompany();
   const transitionStage = useTransitionStage();
   const { data: outreachEvents } = useOutreachEvents(id);
-  const { data: sequences } = useSequences();
-  const enrollCompany = useEnrollCompany();
   const { data: companyContacts = [] } = useCompanyContacts(id);
   const { data: companyScores = [] } = useCompanyScores(id);
   const createContact = useCreateContact();
@@ -334,11 +332,6 @@ export default function CompanyDetail() {
 
   const handleStageChange = (newStage) => {
     transitionStage.mutate({ id: company.id, stage: newStage });
-  };
-
-  const handleEnroll = (sequenceId) => {
-    enrollCompany.mutate({ company_id: id, sequence_id: sequenceId });
-    setEnrollDropdownOpen(false);
   };
 
   if (isLoading) {
@@ -566,38 +559,7 @@ export default function CompanyDetail() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-900">Outreach Timeline</h3>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setEnrollDropdownOpen(!enrollDropdownOpen)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
-                  >
-                    <Send className="h-4 w-4" />
-                    Enroll in Sequence
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
-                  {enrollDropdownOpen && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                      {(sequences || []).map((seq) => (
-                        <button
-                          key={seq.id}
-                          type="button"
-                          onClick={() => handleEnroll(seq.id)}
-                          className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <Mail className="h-4 w-4 text-gray-400" />
-                          <div>
-                            <p className="font-medium">{seq.name}</p>
-                            <p className="text-xs text-gray-500">{seq.steps?.length || 0} steps</p>
-                          </div>
-                        </button>
-                      ))}
-                      {(!sequences || sequences.length === 0) && (
-                        <p className="px-4 py-2 text-sm text-gray-500">No sequences available</p>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <EnrollSequenceMenu companyId={id} contacts={companyContacts} />
               </div>
 
               {outreachEvents && outreachEvents.length > 0 ? (

@@ -67,6 +67,27 @@ export function contactPhones(contact) {
   return out;
 }
 
+/**
+ * Pick the best contact to enroll in a sequence: an explicitly-primary contact
+ * with an email wins, then any primary, then the first contact with an email
+ * (sequences send email), then the first contact. Null if there are none.
+ */
+export function pickPrimaryContact(contacts) {
+  const list = Array.isArray(contacts) ? contacts : [];
+  if (list.length === 0) return null;
+  return (
+    list.find((c) => c.is_primary && c.email) ||
+    list.find((c) => c.is_primary) ||
+    list.find((c) => c.email) ||
+    list[0]
+  );
+}
+
+export function contactLabel(c) {
+  if (!c) return '';
+  return [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || 'Unnamed contact';
+}
+
 export function timeAgo(dateStr) {
   if (!dateStr) return '';
   const then = new Date(dateStr);
