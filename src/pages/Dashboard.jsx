@@ -26,6 +26,7 @@ import {
 import MetricCard from '../components/MetricCard';
 import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
+import SmartSuggestions from '../components/SmartSuggestions';
 import { useDashboardMetrics, useRecentActivity, useTopLeads, useEmailTrends } from '../hooks/useDashboard';
 import { useFollowUps, useStaleContacts } from '../hooks/useFollowUps';
 import { emailApi } from '../api/client';
@@ -284,8 +285,11 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Action Center — next-best-actions */}
-      <ActionCenter navigate={navigate} metrics={metrics} />
+      {/* Action Center + Smart Suggestions — what needs doing, and who to act on */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ActionCenter navigate={navigate} metrics={metrics} />
+        <SmartSuggestions />
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Pipeline Funnel Chart */}
