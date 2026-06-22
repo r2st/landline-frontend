@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import {
   X,
   Mail,
@@ -12,8 +13,10 @@ import {
   CreditCard,
   Briefcase,
   StickyNote,
+  Pencil,
+  Check,
 } from 'lucide-react';
-import { contactsApi } from '../api/client';
+import { contactsApi, queryClient } from '../api/client';
 import { getInitials, contactPhones, formatDate } from '../lib/utils';
 
 const fullName = (c) =>
@@ -49,6 +52,21 @@ export default function ContactDetailModal({ contactId, initial, onClose }) {
 
   // Merge: detail (authoritative) over the list row we already had.
   const c = { ...(initial || {}), ...(detail || {}) };
+
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
+  useEffect(() => { if (!editingNotes) setNotesDraft(c.notes || ''); }, [c.notes, editingNotes]);
+
+  const saveNotes = useMutation({
+    mutationFn: (notes) => contactsApi.update(contactId, { notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contact', contactId] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      toast.success('Note saved');
+      setEditingNotes(false);
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to save note'),
+  });
   const phones = contactPhones(c);
   const location = [c.address, c.city, c.state, c.postal_code, c.country]
     .filter(Boolean)
@@ -164,11 +182,56 @@ export default function ContactDetailModal({ contactId, initial, onClose }) {
               </Row>
             )}
 
-            {c.notes && (
-              <Row icon={StickyNote}>
-                <span className="whitespace-pre-wrap text-gray-600">{c.notes}</span>
-              </Row>
-            )}
+            {/* Notes — editable */}
+            <div className="flex items-start gap-2.5 text-sm text-gray-700">
+              <StickyNote className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+              <div className="min-w-0 flex-1">
+                {editingNotes ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={notesDraft}
+                      onChange={(e) => setNotesDraft(e.target.value)}
+                      rows={3}
+                      autoFocus
+                      placeholder="Add a note — how you met, what they need, next steps…"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setNotesDraft(c.notes || ''); setEditingNotes(false); }}
+                        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => saveNotes.mutate(notesDraft)}
+                        disabled={saveNotes.isPending}
+                        className="inline-flex items-center gap-1 rounded-md bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+                      >
+                        <Check className="h-3 w-3" />
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="whitespace-pre-wrap text-gray-600">
+                      {c.notes || <span className="text-gray-400">No notes yet.</span>}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingNotes(true)}
+                      className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      {c.notes ? 'Edit' : 'Add'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Right: scanned card image */}

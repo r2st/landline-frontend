@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -33,6 +33,9 @@ import {
   CalendarDays,
   Layers,
   Crosshair,
+  X,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import ScoreBadge from '../components/ScoreBadge';
 import StageSelector from '../components/StageSelector';
@@ -152,6 +155,127 @@ function AddContactForm({ onAdd }) {
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+// Editable Source / Tags / Notes card. Tags save immediately on add/remove;
+// notes save explicitly so a half-typed note isn't persisted.
+function CompanyInfoEditor({ company, onSave, saving }) {
+  const [tags, setTags] = useState(company.tags || []);
+  const [tagInput, setTagInput] = useState('');
+  const [notes, setNotes] = useState(company.notes || '');
+  const [editingNotes, setEditingNotes] = useState(false);
+
+  useEffect(() => { setTags(company.tags || []); }, [company.tags]);
+  useEffect(() => { if (!editingNotes) setNotes(company.notes || ''); }, [company.notes, editingNotes]);
+
+  const commitTags = (next) => {
+    setTags(next);
+    onSave({ tags: next });
+  };
+
+  const addTag = () => {
+    const t = tagInput.trim();
+    if (!t || tags.includes(t)) { setTagInput(''); return; }
+    commitTags([...tags, t]);
+    setTagInput('');
+  };
+
+  const removeTag = (t) => commitTags(tags.filter((x) => x !== t));
+
+  const saveNotes = () => {
+    onSave({ notes });
+    setEditingNotes(false);
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/* Source */}
+        <div>
+          <p className="text-sm text-gray-500">Source</p>
+          <p className="mt-1 font-medium text-gray-900">{SOURCE_LABELS[company.source] || company.source || '—'}</p>
+        </div>
+
+        {/* Tags — editable */}
+        <div className="sm:col-span-2">
+          <p className="text-sm text-gray-500">Tags</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {tags.map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pl-2.5 pr-1 text-xs font-medium text-gray-700">
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  className="rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                  aria-label={`Remove tag ${tag}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+              onBlur={addTag}
+              placeholder={tags.length ? 'Add tag…' : 'Add a tag…'}
+              className="min-w-[7rem] flex-1 rounded-md border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-700 focus:border-blue-400 focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Notes — editable */}
+      <div className="mt-4 border-t border-gray-100 pt-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">Notes</p>
+          {!editingNotes && (
+            <button
+              type="button"
+              onClick={() => setEditingNotes(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              <Pencil className="h-3 w-3" />
+              {company.notes ? 'Edit' : 'Add notes'}
+            </button>
+          )}
+        </div>
+        {editingNotes ? (
+          <div className="mt-2 space-y-2">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              autoFocus
+              placeholder="Add context, relationship history, next steps…"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setNotes(company.notes || ''); setEditingNotes(false); }}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveNotes}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded-md bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+              >
+                <Check className="h-3 w-3" />
+                Save
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">{company.notes || 'No notes yet.'}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -324,33 +448,12 @@ export default function CompanyDetail() {
         </div>
       </div>
 
-      {/* Extra Info: Source, Tags, Notes */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <p className="text-sm text-gray-500">Source</p>
-            <p className="mt-1 font-medium text-gray-900">{SOURCE_LABELS[company.source] || company.source || '—'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Tags</p>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {company.tags && company.tags.length > 0 ? (
-                company.tags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-                    {tag}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-gray-400">No tags</span>
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Notes</p>
-            <p className="mt-1 text-sm text-gray-900">{company.notes || 'No notes yet.'}</p>
-          </div>
-        </div>
-      </div>
+      {/* Extra Info: Source, Tags, Notes — editable */}
+      <CompanyInfoEditor
+        company={company}
+        saving={updateCompany.isPending}
+        onSave={(data) => updateCompany.mutate({ id: company.id, data })}
+      />
 
       {/* Tabs */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
