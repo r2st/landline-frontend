@@ -29,33 +29,49 @@ function normalizeClient(c) {
 
 // The client dashboard's aggregate stats + chart series. Returns null fields
 // (rendered as empty states) if the backend isn't ready yet.
+// Backend health buckets (healthy/at_risk/churned) share the same score
+// thresholds as the UI's RAG vocab (green/yellow/red), so map by bucket.
+const HEALTH_BUCKET_TO_RAG = { healthy: 'green', at_risk: 'yellow', churned: 'red' };
+
+const EMPTY_OVERVIEW = {
+  total_clients: 0,
+  total_revenue: 0,
+  avg_health_score: null,
+  at_risk_count: 0,
+  revenue_over_time: [],
+  health_distribution: [],
+  retention_over_time: [],
+  upcoming_renewals: [],
+};
+
 export function useClientOverview() {
   return useQuery({
     queryKey: ['client-overview'],
     queryFn: async () => {
       try {
         const data = await clientsApi.getOverview();
+        // The backend returns health_distribution as a {bucket: count} map;
+        // the pie chart wants an array of { status, count } in RAG vocab.
+        const dist = data.health_distribution || {};
+        const healthArray = Object.entries(dist)
+          .filter(([, count]) => count > 0)
+          .map(([bucket, count]) => ({ status: HEALTH_BUCKET_TO_RAG[bucket] || bucket, count }));
+        // "At risk" = every client that isn't healthy.
+        const atRisk = (dist.at_risk || 0) + (dist.churned || 0);
         return {
-          total_clients: data.total_clients ?? 0,
-          total_revenue: data.total_revenue ?? 0,
+          total_clients: data.client_count ?? 0,
+          total_revenue: data.total_won_revenue ?? 0,
           avg_health_score: data.avg_health_score ?? null,
-          at_risk_count: data.at_risk_count ?? 0,
+          at_risk_count: atRisk,
+          health_distribution: healthArray,
+          // Time-series + renewals aren't modeled server-side yet; the page
+          // shows honest empty states for these.
           revenue_over_time: asArray(data.revenue_over_time),
-          health_distribution: asArray(data.health_distribution),
           retention_over_time: asArray(data.retention_over_time),
           upcoming_renewals: asArray(data.upcoming_renewals),
         };
       } catch {
-        return {
-          total_clients: 0,
-          total_revenue: 0,
-          avg_health_score: null,
-          at_risk_count: 0,
-          revenue_over_time: [],
-          health_distribution: [],
-          retention_over_time: [],
-          upcoming_renewals: [],
-        };
+        return { ...EMPTY_OVERVIEW };
       }
     },
     retry: false,
