@@ -164,17 +164,18 @@ function CalendarView({ tasks, onOpenCompany }) {
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-px">
+      <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="grid grid-cols-7 gap-px min-w-[500px]">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
           <div key={d} className="pb-1 text-center text-[11px] font-semibold uppercase tracking-wider text-gray-400">{d}</div>
         ))}
         {cells.map((day, i) => {
-          if (day == null) return <div key={`empty-${i}`} className="min-h-[84px] rounded-lg bg-gray-50/50" />;
+          if (day == null) return <div key={`empty-${i}`} className="min-h-[60px] sm:min-h-[84px] rounded-lg bg-gray-50/50" />;
           const key = new Date(year, month, day).toDateString();
           const dayTasks = byDay[key] || [];
           const isToday = key === todayKey;
           return (
-            <div key={key} className={cn('min-h-[84px] rounded-lg border p-1.5', isToday ? 'border-blue-300 bg-blue-50/40' : 'border-gray-100')}>
+            <div key={key} className={cn('min-h-[60px] sm:min-h-[84px] rounded-lg border p-1 sm:p-1.5', isToday ? 'border-blue-300 bg-blue-50/40' : 'border-gray-100')}>
               <div className={cn('mb-1 text-xs font-medium', isToday ? 'text-blue-600' : 'text-gray-500')}>{day}</div>
               <div className="space-y-1">
                 {dayTasks.slice(0, 3).map((t) => {
@@ -199,6 +200,7 @@ function CalendarView({ tasks, onOpenCompany }) {
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

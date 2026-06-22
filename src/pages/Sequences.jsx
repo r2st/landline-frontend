@@ -18,7 +18,7 @@ import { formatNumber, cn } from '../lib/utils';
 
 function SequenceStats({ stats = {} }) {
   return (
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <div className="rounded-lg bg-blue-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-blue-600">
           <Users className="h-3.5 w-3.5" />

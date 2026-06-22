@@ -13,7 +13,7 @@ function PipelineMini({ deals }) {
     if (totals[d.status] != null) totals[d.status] += Number(d.value) || 0;
   }
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {DEAL_STATUSES.map((s) => {
         const palette = DEAL_STATUS_COLORS[s];
         const count = deals.filter((d) => d.status === s).length;
@@ -74,7 +74,7 @@ export default function DealsTab({ companyId }) {
         <>
           <PipelineMini deals={deals} />
 
-          <div className="overflow-hidden rounded-lg border border-gray-200">
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
