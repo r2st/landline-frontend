@@ -36,17 +36,19 @@ export function useCreateSequence() {
   });
 }
 
-export function useEnrollCompany() {
+// Enroll a single contact in a sequence. Pass { contact_id, sequence_id }.
+export function useEnrollContact() {
   return useMutation({
     mutationFn: async (data) => {
-      return await outreachApi.enrollCompany(data);
+      return await outreachApi.enrollContact(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['outreach-events'] });
-      toast.success('Company enrolled in sequence');
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.detail || error?.message || 'Failed to enroll company');
+      // 409 = already enrolled in that sequence; surface the backend message.
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to enroll contact');
     },
   });
 }
