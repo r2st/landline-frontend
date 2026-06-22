@@ -88,6 +88,8 @@ export const contactsApi = {
   update: (id, data) => api.patch(`/contacts/${id}`, data).then(r => r.data),
   remove: (id) => api.delete(`/contacts/${id}`).then(r => r.data),
   quickAdd: (data) => api.post('/contacts/quick-add', data).then(r => r.data),
+  // Find existing contacts that look like the one about to be saved (email / phone / name).
+  checkDuplicate: (params) => api.get('/contacts/check-duplicate', { params }).then(r => r.data),
 };
 
 export const emailApi = {

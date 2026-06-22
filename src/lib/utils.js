@@ -97,6 +97,26 @@ export function contactPhones(contact) {
 }
 
 /**
+ * Turn an editable [{ label, number }] list into the contact payload shape the
+ * backend expects: dedicated phone/mobile/fax slots (derived from labels for
+ * back-compat) plus the full labelled list in `additional_phones`. The backend
+ * merges + de-dupes everything, so nothing is lost. Used by the card scanner and
+ * the contact editor so phone handling stays identical in both.
+ */
+export function phonesToPayload(phones) {
+  const list = (Array.isArray(phones) ? phones : [])
+    .map((p) => ({ label: (p.label || '').trim() || 'Phone', number: (p.number || '').trim() }))
+    .filter((p) => p.number);
+  const byLabel = (re) => list.find((p) => re.test(p.label.toLowerCase()))?.number || '';
+  return {
+    phone: byLabel(/office|main|phone|direct|tel|work/) || list[0]?.number || '',
+    mobile: byLabel(/mobile|cell/),
+    fax: byLabel(/fax/),
+    additional_phones: list,
+  };
+}
+
+/**
  * Pick the best contact to enroll in a sequence: an explicitly-primary contact
  * with an email wins, then any primary, then the first contact with an email
  * (sequences send email), then the first contact. Null if there are none.

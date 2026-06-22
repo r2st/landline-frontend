@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Camera,
   Upload,
@@ -22,13 +21,23 @@ import {
   Plus,
   Trash2,
   AlertCircle,
+  AlertTriangle,
+  Download,
+  LayoutGrid,
+  List as ListIcon,
+  Send,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useScanCard } from '../hooks/useAI';
 import { useContacts } from '../hooks/useContacts';
 import { contactsApi, queryClient } from '../api/client';
-import { getInitials, timeAgo, formatDate, contactPhones } from '../lib/utils';
+import { getInitials, timeAgo, formatDate, contactPhones, phonesToPayload } from '../lib/utils';
+import { compressImage } from '../lib/image';
 import ContactDetailModal from '../components/ContactDetailModal';
+import EnrollSequenceMenu from '../components/EnrollSequenceMenu';
+import CardImageThumb from '../components/CardImageThumb';
 
 const isScanned = (c) => /card|scan/.test((c?.source || '').toLowerCase());
 const fullName = (c) =>
@@ -45,9 +54,13 @@ const SCAN_SOURCE = 'card_scan';
  * optional { data }/{ contact } wrapper, …). Phone numbers get special care:
  * we keep EVERY number found (phone/mobile/fax plus a `phones` array) as a
  * labelled list so none are lost.
+ *
+ * Returns { form, confidence, overall } — `confidence` maps our field names to
+ * a 0..1 score (from the model's `_confidence`), `overall` is the model's
+ * `_overall_confidence` (or null), both used to flag fields worth double-checking.
  */
 function normalizeScanResult(raw) {
-  if (!raw || typeof raw !== 'object') return {};
+  if (!raw || typeof raw !== 'object') return { form: {}, confidence: {}, overall: null };
   const d =
     raw.data && typeof raw.data === 'object' ? { ...raw, ...raw.data }
     : raw.contact && typeof raw.contact === 'object' ? { ...raw, ...raw.contact }
@@ -111,7 +124,12 @@ function normalizeScanResult(raw) {
   // Only return fields we actually found, so re-scanning never wipes edited values.
   const filtered = Object.fromEntries(Object.entries(out).filter(([, v]) => v !== ''));
   if (phones.length) filtered.phones = phones;
-  return filtered;
+
+  const confidence = d._confidence && typeof d._confidence === 'object' ? d._confidence : {};
+  const overallRaw = d._overall_confidence ?? d.overall_confidence;
+  const overall = typeof overallRaw === 'number' ? overallRaw : null;
+
+  return { form: filtered, confidence, overall };
 }
 
 const INITIAL_FORM = {
@@ -132,13 +150,30 @@ const INITIAL_FORM = {
   notes: '',
 };
 
+// Small coloured dot flagging how sure the AI is about an extracted field.
+// Hidden for confident reads (>=0.85) to keep the form uncluttered.
+function ConfidenceDot({ value }) {
+  if (typeof value !== 'number' || value >= 0.85) return null;
+  const pct = Math.round(value * 100);
+  const low = value < 0.6;
+  return (
+    <span
+      title={`AI confidence ${pct}% — please double-check`}
+      className={`ml-1.5 inline-block h-2 w-2 flex-shrink-0 rounded-full align-middle ${low ? 'bg-red-500' : 'bg-amber-400'}`}
+    />
+  );
+}
+
 // Defined at module scope so it keeps a stable component identity across renders.
 // Declaring it inside CardScanner would create a new component type on every
 // keystroke, remounting each input and dropping the user's cursor/focus.
-function FormField({ label, field, value, onChange, icon: Icon, type = 'text', placeholder }) {
+function FormField({ label, field, value, onChange, icon: Icon, type = 'text', placeholder, confidence }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+      <label className="mb-1 flex items-center text-xs font-medium text-gray-500">
+        {label}
+        <ConfidenceDot value={confidence} />
+      </label>
       <div className="relative">
         {Icon && (
           <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -159,11 +194,14 @@ function FormField({ label, field, value, onChange, icon: Icon, type = 'text', p
 
 // Editable list of phone numbers (label + number), so a card with office,
 // mobile and fax numbers keeps all of them.
-function PhoneFields({ phones, onUpdate, onAdd, onRemove }) {
+function PhoneFields({ phones, onUpdate, onAdd, onRemove, confidence }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="block text-xs font-medium text-gray-500">Phone Numbers</label>
+        <label className="flex items-center text-xs font-medium text-gray-500">
+          Phone Numbers
+          <ConfidenceDot value={confidence} />
+        </label>
         <button
           type="button"
           onClick={onAdd}
@@ -304,10 +342,31 @@ function ScannedContactCard({ contact, onOpen }) {
   );
 }
 
+// Overall scan-quality pill shown above the extracted form.
+function QualityBadge({ overall }) {
+  if (typeof overall !== 'number') return null;
+  const pct = Math.round(overall * 100);
+  const cfg =
+    overall >= 0.8
+      ? { cls: 'bg-green-50 text-green-700 border-green-200', label: 'High-quality scan' }
+      : overall >= 0.5
+      ? { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Review flagged fields' }
+      : { cls: 'bg-red-50 text-red-700 border-red-200', label: 'Low quality — verify all fields' };
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.cls}`}>
+      <Sparkles className="h-3 w-3" />
+      {cfg.label} · {pct}%
+    </span>
+  );
+}
+
 export default function CardScanner() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [preparing, setPreparing] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [confidence, setConfidence] = useState({});
+  const [overall, setOverall] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedContact, setSavedContact] = useState(null);
@@ -315,10 +374,19 @@ export default function CardScanner() {
   const [scanError, setScanError] = useState(null);
   const [detailContact, setDetailContact] = useState(null);
 
+  // Likely-duplicate existing contacts for the card being entered.
+  const [dupes, setDupes] = useState([]);
+  const [dupeOverride, setDupeOverride] = useState(false);
+
+  // Cards saved during this visit, newest first (running batch list).
+  const [session, setSession] = useState([]);
+
   const [search, setSearch] = useState('');
+  const [view, setView] = useState('cards'); // 'cards' | 'gallery'
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const topRef = useRef(null);
   const scanCard = useScanCard();
 
   // All previously scanned business cards, newest first, filtered by search.
@@ -336,25 +404,33 @@ export default function CardScanner() {
     return [...filtered].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   }, [contacts, search]);
   const totalScanned = useMemo(() => (contacts || []).filter(isScanned).length, [contacts]);
+  const galleryCards = useMemo(() => scannedCards.filter((c) => c.has_card_image), [scannedCards]);
 
-  const handleFile = useCallback((file) => {
+  const handleFile = useCallback(async (file) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image too large (max 10MB)');
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('Image too large (max 25MB)');
       return;
     }
-    setImageFile(file);
     setScanned(false);
     setScanError(null);
     setSavedContact(null);
     setFormData(INITIAL_FORM);
-    const reader = new FileReader();
-    reader.onload = (e) => setImagePreview(e.target.result);
-    reader.readAsDataURL(file);
+    setConfidence({});
+    setOverall(null);
+    setDupes([]);
+    setDupeOverride(false);
+    setPreparing(true);
+    // Downscale + re-encode so the upload is small/fast and the stored card
+    // image doesn't bloat the DB. Falls back to the original on decode failure.
+    const { file: prepared, dataUrl } = await compressImage(file, { maxDim: 1600, quality: 0.82 });
+    setImageFile(prepared || file);
+    setImagePreview(dataUrl);
+    setPreparing(false);
   }, []);
 
   const handleDrop = useCallback((e) => {
@@ -374,26 +450,46 @@ export default function CardScanner() {
     setDragOver(false);
   }, []);
 
+  // Look for existing contacts matching the just-scanned card (email / phone / name).
+  const runDuplicateCheck = useCallback(async (form) => {
+    const params = {};
+    if (form.email) params.email = form.email;
+    const firstPhone = (form.phones || []).find((p) => p.number)?.number;
+    if (firstPhone) params.phone = firstPhone;
+    if (form.first_name) params.first_name = form.first_name;
+    if (form.last_name) params.last_name = form.last_name;
+    if (!params.email && !params.phone && !(params.first_name && params.last_name)) return;
+    try {
+      const { matches } = await contactsApi.checkDuplicate(params);
+      setDupes(matches || []);
+    } catch {
+      /* non-blocking — duplicate check is best-effort */
+    }
+  }, []);
+
   const handleScan = useCallback(() => {
     if (!imageFile) return;
     setScanError(null);
     scanCard.mutate(imageFile, {
       onSuccess: (data) => {
-        const mapped = normalizeScanResult(data);
-        setFormData((prev) => ({ ...prev, ...mapped }));
+        const { form, confidence: conf, overall: ov } = normalizeScanResult(data);
+        setFormData((prev) => ({ ...prev, ...form }));
+        setConfidence(conf || {});
+        setOverall(ov);
         setScanned(true);
-        const found = Object.keys(mapped).length;
+        const found = Object.keys(form).length;
         if (found === 0) {
           toast('No details detected — enter them manually', { icon: '⚠️' });
         } else {
           toast.success('Card scanned successfully');
+          runDuplicateCheck({ ...INITIAL_FORM, ...form });
         }
       },
       onError: (err) => {
         setScanError(err?.response?.data?.detail || 'Could not read the card. Try a clearer photo.');
       },
     });
-  }, [imageFile, scanCard]);
+  }, [imageFile, scanCard, runDuplicateCheck]);
 
   const handleFieldChange = useCallback((field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -419,18 +515,17 @@ export default function CardScanner() {
       toast.error('At least a name or email is required');
       return;
     }
+    // Make the user acknowledge a likely duplicate before creating another one.
+    if (dupes.length > 0 && !dupeOverride) {
+      setDupeOverride(true);
+      toast('Possible duplicate — review below, then tap "Add anyway"', { icon: '⚠️' });
+      return;
+    }
     setSaving(true);
     try {
-      // All phone numbers entered, de-duplicated. Derive the dedicated
-      // office/mobile/fax slots from the labels for back-compat; the backend
-      // merges + de-dupes everything anyway.
-      const phones = (formData.phones || [])
-        .map((p) => ({ label: (p.label || '').trim() || 'Phone', number: (p.number || '').trim() }))
-        .filter((p) => p.number);
-      const byLabel = (re) => phones.find((p) => re.test(p.label.toLowerCase()))?.number || '';
-      const office = byLabel(/office|main|phone|direct|tel|work/) || phones[0]?.number || '';
-      const mobile = byLabel(/mobile|cell/);
-      const fax = byLabel(/fax/);
+      // All phone numbers entered, de-duplicated, mapped to office/mobile/fax
+      // slots + the full labelled list (backend merges + de-dupes anyway).
+      const { phone, mobile, fax, additional_phones } = phonesToPayload(formData.phones);
 
       const result = await contactsApi.quickAdd({
         first_name: formData.first_name,
@@ -439,10 +534,10 @@ export default function CardScanner() {
         department: formData.department,
         company_name: formData.company_name,
         email: formData.email,
-        phone: office,
+        phone,
         mobile,
         fax,
-        additional_phones: phones,
+        additional_phones,
         website: formData.website,
         address: formData.address,
         city: formData.city,
@@ -451,13 +546,26 @@ export default function CardScanner() {
         country: formData.country,
         linkedin_url: formData.linkedin_url,
         notes: formData.notes,
-        // The scanned image (already a base64 data URL from the FileReader).
+        // The scanned image (already a compressed base64 data URL).
         card_image: imagePreview || undefined,
         // Tag the contact so it surfaces under the "Scanned" tab and counter.
         source: SCAN_SOURCE,
       });
 
       setSavedContact(result);
+      const savedC = result?.contact || result;
+      setSession((prev) => [
+        {
+          id: savedC?.id || Math.random().toString(36).slice(2),
+          name: fullName(savedC || formData),
+          company: result?.company_name || formData.company_name || '',
+          email: savedC?.email || formData.email || '',
+          hasImage: !!imagePreview,
+          at: Date.now(),
+          contact: savedC,
+        },
+        ...prev,
+      ]);
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       toast.success('Contact added successfully');
@@ -466,36 +574,119 @@ export default function CardScanner() {
     } finally {
       setSaving(false);
     }
-  }, [formData, imagePreview]);
+  }, [formData, imagePreview, dupes, dupeOverride]);
 
   const handleReset = useCallback(() => {
     setImageFile(null);
     setImagePreview(null);
     setFormData(INITIAL_FORM);
+    setConfidence({});
+    setOverall(null);
     setScanned(false);
     setScanError(null);
     setSavedContact(null);
+    setDupes([]);
+    setDupeOverride(false);
     scanCard.reset();
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [scanCard]);
+
+  // --- CSV export of scanned contacts ---
+  const exportCsv = useCallback(() => {
+    const rows = scannedCards;
+    if (rows.length === 0) {
+      toast.error('No scanned contacts to export');
+      return;
+    }
+    const COLS = [
+      ['First Name', (c) => c.first_name],
+      ['Last Name', (c) => c.last_name],
+      ['Title', (c) => c.title],
+      ['Department', (c) => c.department],
+      ['Company', (c) => c.company || c.company_name],
+      ['Email', (c) => c.email],
+      ['Phones', (c) => contactPhones(c).map((p) => `${p.label}: ${p.number}`).join(' | ')],
+      ['Website', (c) => c.website],
+      ['LinkedIn', (c) => c.linkedin_url],
+      ['Address', (c) => c.address],
+      ['City', (c) => c.city],
+      ['State', (c) => c.state],
+      ['Postal Code', (c) => c.postal_code],
+      ['Country', (c) => c.country],
+      ['Notes', (c) => c.notes],
+      ['Scanned At', (c) => c.created_at],
+    ];
+    const escape = (val) => `"${(val == null ? '' : String(val)).replace(/"/g, '""')}"`;
+    const csv = [COLS.map(([h]) => h), ...rows.map((c) => COLS.map(([, f]) => f(c)))]
+      .map((r) => r.map(escape).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'landline-scanned-contacts.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} contact${rows.length === 1 ? '' : 's'}`);
+  }, [scannedCards]);
 
   // quick-add response shape varies ({contact:{...}} or flat) — handle both.
   const savedC = savedContact?.contact || savedContact || null;
   const savedContactId = savedC?.id || null;
   const savedCompanyId = savedC?.company_id || savedContact?.company_id || null;
   const savedPhones = useMemo(() => contactPhones(savedC), [savedC]);
+  const introHref = savedC?.email ? `mailto:${savedC.email}` : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={topRef}>
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-1">
-          <CreditCard className="h-7 w-7 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Business Card Scanner</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <CreditCard className="h-7 w-7 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-900">Business Card Scanner</h1>
+          </div>
+          <p className="text-gray-500 text-sm ml-10">
+            Snap a photo or upload a card to instantly add contacts
+          </p>
         </div>
-        <p className="text-gray-500 text-sm ml-10">
-          Snap a photo or upload a card to instantly add contacts
-        </p>
+
+        {/* Batch / session summary */}
+        {session.length > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+            <ScanLine className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-700">
+              {session.length} scanned this session
+            </span>
+            <button
+              onClick={() => setSession([])}
+              className="ml-1 text-xs font-medium text-blue-500 hover:text-blue-700"
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* This-session chips */}
+      {session.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {session.slice(0, 12).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => s.contact && setDetailContact(s.contact)}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 shadow-sm transition hover:border-blue-300 hover:text-blue-700"
+              title={s.company ? `${s.name} · ${s.company}` : s.name}
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[10px] font-semibold text-blue-600">
+                {getInitials(s.name)}
+              </span>
+              <span className="max-w-[140px] truncate">{s.name}</span>
+              {s.hasImage && <CreditCard className="h-3 w-3 text-blue-400" />}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left column: Upload area */}
@@ -531,13 +722,17 @@ export default function CardScanner() {
             ) : (
               <div className="flex flex-col items-center justify-center py-16 px-6 text-center" style={{ minHeight: '320px' }}>
                 <div className="rounded-full bg-blue-50 p-4 mb-4">
-                  <Camera className="h-10 w-10 text-blue-500" />
+                  {preparing ? (
+                    <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+                  ) : (
+                    <Camera className="h-10 w-10 text-blue-500" />
+                  )}
                 </div>
                 <p className="text-gray-700 font-medium mb-1">
-                  Drop a card image here or click to upload
+                  {preparing ? 'Preparing image…' : 'Drop a card image here or click to upload'}
                 </p>
                 <p className="text-gray-400 text-sm">
-                  Supports JPG, PNG, HEIC up to 10MB
+                  Supports JPG, PNG, HEIC up to 25MB
                 </p>
               </div>
             )}
@@ -624,7 +819,7 @@ export default function CardScanner() {
         {/* Right column: Extracted data / form */}
         <div>
           {savedContact ? (
-            /* Saved state — confirmation with all saved details */
+            /* Saved state — confirmation with all saved details + quick actions */
             <div className="rounded-xl border border-green-200 bg-green-50 p-6">
               <div className="text-center">
                 <div className="inline-flex items-center justify-center rounded-full bg-green-100 p-3 mb-3">
@@ -672,78 +867,139 @@ export default function CardScanner() {
                 </dl>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                {savedContactId && (
-                  <button
-                    onClick={() => setDetailContact(savedC)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    View Details
-                  </button>
-                )}
-                <a
-                  href={savedContactId ? `/contacts?highlight=${savedContactId}` : '/contacts'}
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              {/* Quick actions */}
+              <div className="mt-4 space-y-3">
+                <button
+                  onClick={handleReset}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
                 >
-                  <Users className="h-4 w-4" />
-                  View in Contacts
-                </a>
-                {savedCompanyId && (
+                  <ScanLine className="h-4 w-4" />
+                  Scan next card
+                </button>
+
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {savedCompanyId && (
+                    <EnrollSequenceMenu
+                      companyId={savedCompanyId}
+                      contacts={savedC ? [savedC] : undefined}
+                      size="sm"
+                      label="Add to sequence"
+                      align="left"
+                    />
+                  )}
+                  {introHref && (
+                    <a
+                      href={introHref}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Send intro email
+                    </a>
+                  )}
+                  {savedContactId && (
+                    <button
+                      onClick={() => setDetailContact(savedC)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <CreditCard className="h-3.5 w-3.5" />
+                      View / add note
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-1 text-xs">
                   <a
-                    href={`/companies/${savedCompanyId}`}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    href={savedContactId ? `/contacts?highlight=${savedContactId}` : '/contacts'}
+                    className="inline-flex items-center gap-1 text-gray-500 hover:text-blue-600"
                   >
-                    <Building2 className="h-4 w-4" />
-                    View Company
+                    <Users className="h-3.5 w-3.5" />
+                    View in Contacts
                   </a>
-                )}
+                  {savedCompanyId && (
+                    <a
+                      href={`/companies/${savedCompanyId}`}
+                      className="inline-flex items-center gap-1 text-gray-500 hover:text-blue-600"
+                    >
+                      <Building2 className="h-3.5 w-3.5" />
+                      View Company
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           ) : scanned ? (
             /* Editable form */
             <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
                 <Sparkles className="h-5 w-5 text-blue-500" />
                 <h3 className="font-semibold text-gray-900">Extracted Details</h3>
+                <QualityBadge overall={overall} />
                 <span className="text-xs text-gray-400 ml-auto">Edit before saving</span>
               </div>
+
+              {/* Duplicate warning */}
+              {dupes.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+                    <AlertTriangle className="h-4 w-4" />
+                    Possible duplicate{dupes.length > 1 ? 's' : ''} found
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {dupes.slice(0, 4).map((d) => (
+                      <li key={d.id} className="flex items-center justify-between gap-2 text-xs text-amber-900">
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium">{[d.first_name, d.last_name].filter(Boolean).join(' ') || d.email || 'Existing contact'}</span>
+                          {d.company_name && <span className="text-amber-700"> · {d.company_name}</span>}
+                          <span className="text-amber-600"> · matches {d.match_reasons.join(', ')}</span>
+                        </span>
+                        <button
+                          onClick={() => setDetailContact({ id: d.id, ...d })}
+                          className="inline-flex flex-shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-1 font-medium text-amber-700 hover:bg-amber-100"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          View
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Person */}
               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Person</p>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="First Name" field="first_name" value={formData.first_name} onChange={handleFieldChange} icon={UserPlus} />
-                <FormField label="Last Name" field="last_name" value={formData.last_name} onChange={handleFieldChange} icon={UserPlus} />
+                <FormField label="First Name" field="first_name" value={formData.first_name} onChange={handleFieldChange} icon={UserPlus} confidence={confidence.first_name} />
+                <FormField label="Last Name" field="last_name" value={formData.last_name} onChange={handleFieldChange} icon={UserPlus} confidence={confidence.last_name} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Title" field="title" value={formData.title} onChange={handleFieldChange} />
-                <FormField label="Department" field="department" value={formData.department} onChange={handleFieldChange} />
+                <FormField label="Title" field="title" value={formData.title} onChange={handleFieldChange} confidence={confidence.title} />
+                <FormField label="Department" field="department" value={formData.department} onChange={handleFieldChange} confidence={confidence.department} />
               </div>
 
-              <FormField label="Email" field="email" value={formData.email} onChange={handleFieldChange} icon={Mail} type="email" />
+              <FormField label="Email" field="email" value={formData.email} onChange={handleFieldChange} icon={Mail} type="email" confidence={confidence.email} />
 
               {/* All phone numbers */}
-              <PhoneFields phones={formData.phones} onUpdate={updatePhone} onAdd={addPhone} onRemove={removePhone} />
+              <PhoneFields phones={formData.phones} onUpdate={updatePhone} onAdd={addPhone} onRemove={removePhone} confidence={confidence.phone ?? confidence.phones} />
 
-              <FormField label="LinkedIn" field="linkedin_url" value={formData.linkedin_url} onChange={handleFieldChange} icon={Linkedin} placeholder="https://linkedin.com/in/..." />
+              <FormField label="LinkedIn" field="linkedin_url" value={formData.linkedin_url} onChange={handleFieldChange} icon={Linkedin} placeholder="https://linkedin.com/in/..." confidence={confidence.linkedin_url} />
 
               {/* Company */}
               <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Company</p>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Company" field="company_name" value={formData.company_name} onChange={handleFieldChange} icon={Building2} />
-                <FormField label="Website" field="website" value={formData.website} onChange={handleFieldChange} icon={Globe} />
+                <FormField label="Company" field="company_name" value={formData.company_name} onChange={handleFieldChange} icon={Building2} confidence={confidence.company_name} />
+                <FormField label="Website" field="website" value={formData.website} onChange={handleFieldChange} icon={Globe} confidence={confidence.website} />
               </div>
 
               {/* Location */}
               <p className="pt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Location</p>
-              <FormField label="Street Address" field="address" value={formData.address} onChange={handleFieldChange} icon={MapPin} />
+              <FormField label="Street Address" field="address" value={formData.address} onChange={handleFieldChange} icon={MapPin} confidence={confidence.address} />
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="City" field="city" value={formData.city} onChange={handleFieldChange} />
-                <FormField label="State / Province" field="state" value={formData.state} onChange={handleFieldChange} />
+                <FormField label="City" field="city" value={formData.city} onChange={handleFieldChange} confidence={confidence.city} />
+                <FormField label="State / Province" field="state" value={formData.state} onChange={handleFieldChange} confidence={confidence.state} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="ZIP / Postal Code" field="postal_code" value={formData.postal_code} onChange={handleFieldChange} />
-                <FormField label="Country" field="country" value={formData.country} onChange={handleFieldChange} />
+                <FormField label="ZIP / Postal Code" field="postal_code" value={formData.postal_code} onChange={handleFieldChange} confidence={confidence.postal_code} />
+                <FormField label="Country" field="country" value={formData.country} onChange={handleFieldChange} confidence={confidence.country} />
               </div>
 
               <div>
@@ -760,7 +1016,9 @@ export default function CardScanner() {
               <button
                 onClick={handleAddContact}
                 disabled={saving}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                className={`w-full inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed transition ${
+                  dupes.length > 0 && dupeOverride ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
                 {saving ? (
                   <>
@@ -770,7 +1028,7 @@ export default function CardScanner() {
                 ) : (
                   <>
                     <UserPlus className="h-4 w-4" />
-                    Add to Contacts
+                    {dupes.length > 0 ? (dupeOverride ? 'Add anyway' : 'Review & Add to Contacts') : 'Add to Contacts'}
                   </>
                 )}
               </button>
@@ -806,18 +1064,53 @@ export default function CardScanner() {
             </p>
           </div>
 
-          {totalScanned > 0 && (
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search scanned contacts…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {totalScanned > 0 && (
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search scanned contacts…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            )}
+
+            {totalScanned > 0 && (
+              <>
+                {/* View toggle */}
+                <div className="flex rounded-lg border border-gray-300 bg-white p-0.5">
+                  <button
+                    onClick={() => setView('cards')}
+                    className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${view === 'cards' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    title="Card view"
+                  >
+                    <ListIcon className="h-3.5 w-3.5" />
+                    Cards
+                  </button>
+                  <button
+                    onClick={() => setView('gallery')}
+                    className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${view === 'gallery' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                    title="Image gallery"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    Gallery
+                  </button>
+                </div>
+
+                <button
+                  onClick={exportCsv}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  title="Export scanned contacts to CSV"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {contactsLoading ? (
@@ -838,6 +1131,32 @@ export default function CardScanner() {
                 : 'Try a different search term.'}
             </p>
           </div>
+        ) : view === 'gallery' ? (
+          galleryCards.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-400">
+              None of these scanned contacts has a saved card image.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {galleryCards.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setDetailContact(c)}
+                  className="group overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
+                >
+                  <CardImageThumb
+                    contactId={c.id}
+                    alt={`Card for ${fullName(c)}`}
+                    className="aspect-[16/10] w-full bg-gray-50 object-cover"
+                  />
+                  <div className="p-3">
+                    <p className="truncate text-sm font-semibold text-gray-900">{fullName(c)}</p>
+                    {c.company && <p className="truncate text-xs text-gray-500">{c.company}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {scannedCards.map((c) => (
