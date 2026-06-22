@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * On mobile, iOS Safari zooms the viewport when focusing a form control whose
+ * font-size is below 16px. Many inputs here use Tailwind's text-sm (14px), so
+ * force a 16px minimum on touch-sized screens to keep the page readable and
+ * prevent the disorienting auto-zoom.
+ */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Ensure minimum touch targets on mobile */
+@media (max-width: 640px) {
+  button,
+  a,
+  [role='button'] {
+    min-height: 36px;
+  }
+}
+
+/* Prevent horizontal overflow on small screens */
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* Smooth scrolling */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Safe area padding for iOS notch devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .fixed.bottom-6,
+  .fixed.bottom-0 {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Better scrollbar on mobile for horizontal scroll containers */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
