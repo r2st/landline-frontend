@@ -28,10 +28,10 @@ const DEMO_SITES = [
   },
   {
     name: 'NestFlow',
-    url: 'https://nestflow.pages.dev',
+    url: 'https://nestflow-apprend.pages.dev',
     industry: 'Sheet Nesting & Cutting',
     description: 'AI nesting optimization that maximizes material yield and minimizes scrap on every sheet.',
-    color: '#0d9488',
+    color: '#4a56bf',
     letter: 'N',
   },
   {
