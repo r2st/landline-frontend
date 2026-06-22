@@ -23,6 +23,35 @@ export function formatNumber(num) {
   return new Intl.NumberFormat('en-US').format(num);
 }
 
+// Compact-ish USD formatting. Whole dollars by default; abbreviates large
+// values (e.g. $1.2M) when `compact` is set — handy for dashboard cards.
+export function formatCurrency(amount, { compact = false } = {}) {
+  const n = Number(amount);
+  if (amount == null || isNaN(n)) return '—';
+  if (compact) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(n);
+  }
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+// Whole-number days from now until a date (negative = overdue / in the past).
+export function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  const ms = d.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
 export function cn(...classes) {
   return classes.filter(Boolean).join(' ');
 }

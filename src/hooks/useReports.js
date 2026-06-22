@@ -1,0 +1,40 @@
+import { useQuery } from '@tanstack/react-query';
+import { reportsApi } from '../api/client';
+
+function asArray(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+// Each report query degrades to an empty array if the backend isn't ready.
+// `range` is an optional { start, end } passed through as query params.
+function reportQuery(key, fetcher, range) {
+  return useQuery({
+    queryKey: [key, range],
+    queryFn: async () => {
+      try {
+        return asArray(await fetcher(range));
+      } catch {
+        return [];
+      }
+    },
+    retry: false,
+  });
+}
+
+export function useRetentionReport(range) {
+  return reportQuery('report-retention', (r) => reportsApi.retention(r), range);
+}
+
+export function useRevenueFunnelReport(range) {
+  return reportQuery('report-revenue-funnel', (r) => reportsApi.revenueFunnel(r), range);
+}
+
+export function useActivityHeatmapReport(range) {
+  return reportQuery('report-activity-heatmap', (r) => reportsApi.activityHeatmap(r), range);
+}
+
+export function useTopClientsReport(range) {
+  return reportQuery('report-top-clients', (r) => reportsApi.topClients(r), range);
+}

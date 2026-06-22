@@ -27,6 +27,7 @@ import MetricCard from '../components/MetricCard';
 import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
 import SmartSuggestions from '../components/SmartSuggestions';
+import ClientHealthAlerts from '../components/ClientHealthAlerts';
 import { useDashboardMetrics, useRecentActivity, useTopLeads, useEmailTrends } from '../hooks/useDashboard';
 import { useFollowUps, useStaleContacts } from '../hooks/useFollowUps';
 import { emailApi } from '../api/client';
@@ -285,10 +286,12 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Action Center + Smart Suggestions — what needs doing, and who to act on */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Action Center + Smart Suggestions + Client Health — what needs doing,
+          which leads to act on, and which clients are slipping */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <ActionCenter navigate={navigate} metrics={metrics} />
         <SmartSuggestions />
+        <ClientHealthAlerts />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

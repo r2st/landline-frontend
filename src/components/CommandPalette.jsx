@@ -16,8 +16,12 @@ import {
   CornerDownLeft,
   ArrowUp,
   ArrowDown,
+  HeartPulse,
+  CheckSquare,
+  BarChart3,
+  DollarSign,
 } from 'lucide-react';
-import { companiesApi, contactsApi } from '../api/client';
+import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
 import { getInitials, cn } from '../lib/utils';
 
@@ -34,6 +38,10 @@ const COMMANDS = [
   { id: 'news', label: 'Check company news', hint: 'Buying-signal feed', icon: Newspaper, to: '/news', keywords: 'signals funding articles' },
   { id: 'companies', label: 'Go to Companies', hint: 'Browse all companies', icon: Building2, to: '/companies', keywords: 'list table leads' },
   { id: 'contacts', label: 'Go to Contacts', hint: 'Browse all contacts', icon: Users, to: '/contacts', keywords: 'people list' },
+  { id: 'clients', label: 'Go to Clients', hint: 'Active clients & health', icon: HeartPulse, to: '/clients', keywords: 'customers accounts health retention' },
+  { id: 'client-dashboard', label: 'Client Dashboard', hint: 'Revenue, health & retention', icon: BarChart3, to: '/client-dashboard', keywords: 'revenue health retention overview' },
+  { id: 'tasks', label: 'Go to Tasks', hint: 'Follow-ups & to-dos', icon: CheckSquare, to: '/tasks', keywords: 'todo follow-up due calendar' },
+  { id: 'reports', label: 'Go to Reports', hint: 'Retention, revenue & activity', icon: BarChart3, to: '/reports', keywords: 'analytics funnel heatmap export csv' },
 ];
 
 function scoreMatch(text, q) {
@@ -85,6 +93,64 @@ export default function CommandPalette({ open, onClose }) {
     enabled: open,
     staleTime: 60000,
   });
+
+  // Tasks + deals: fetch once while open, filter client-side. Both degrade to
+  // an empty list if the client-lifecycle backend isn't up yet.
+  const { data: allTasks = [] } = useQuery({
+    queryKey: ['palette-tasks'],
+    queryFn: async () => {
+      try {
+        const data = await tasksApi.list({ page_size: 500 });
+        return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: open,
+    staleTime: 60000,
+    retry: false,
+  });
+
+  const { data: allDeals = [] } = useQuery({
+    queryKey: ['palette-deals'],
+    queryFn: async () => {
+      try {
+        const data = await dealsApi.list({ page_size: 500 });
+        return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: open,
+    staleTime: 60000,
+    retry: false,
+  });
+
+  const taskMatches = useMemo(() => {
+    if (q.length < 2) return [];
+    return allTasks
+      .map((t) => {
+        const hay = [t.title, t.description, t.company_name].filter(Boolean).join(' ');
+        return { t, rank: scoreMatch(hay, q) };
+      })
+      .filter((x) => x.rank !== Infinity)
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, 5)
+      .map((x) => x.t);
+  }, [allTasks, q]);
+
+  const dealMatches = useMemo(() => {
+    if (q.length < 2) return [];
+    return allDeals
+      .map((d) => {
+        const hay = [d.title, d.company_name].filter(Boolean).join(' ');
+        return { d, rank: scoreMatch(hay, q) };
+      })
+      .filter((x) => x.rank !== Infinity)
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, 5)
+      .map((x) => x.d);
+  }, [allDeals, q]);
 
   const contactMatches = useMemo(() => {
     if (q.length < 2) return [];
@@ -138,8 +204,28 @@ export default function CommandPalette({ open, onClose }) {
         run: () => navigate(`/contacts?highlight=${c.id}`),
       });
     });
+    taskMatches.forEach((t) => {
+      out.push({
+        key: `tk-${t.id}`,
+        group: 'Tasks',
+        icon: CheckSquare,
+        title: t.title,
+        subtitle: t.company_name || (t.due_date ? 'Task' : 'Task'),
+        run: () => navigate('/tasks'),
+      });
+    });
+    dealMatches.forEach((d) => {
+      out.push({
+        key: `dl-${d.id}`,
+        group: 'Deals',
+        icon: DollarSign,
+        title: d.title,
+        subtitle: d.company_name || 'Deal',
+        run: () => navigate(d.company_id ? `/companies/${d.company_id}` : '/reports'),
+      });
+    });
     return out;
-  }, [commandMatches, companies, contactMatches, navigate]);
+  }, [commandMatches, companies, contactMatches, taskMatches, dealMatches, navigate]);
 
   // Clamp the active index whenever the result set changes.
   useEffect(() => {

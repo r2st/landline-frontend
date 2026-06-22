@@ -155,6 +155,51 @@ export const tacticsApi = {
   multiTouchPlan: (companyId) => api.post(`/tactics/multi-touch-plan/${companyId}`).then(r => r.data),
 };
 
+// ─── Client management ──────────────────────────────────────────────────────
+// These hit the in-progress client-lifecycle backend. Hooks wrap every call in
+// try/catch with graceful empty states so the UI renders before the API ships.
+
+export const clientsApi = {
+  // Aggregate stats + chart series for the client dashboard.
+  getOverview: () => api.get('/clients/overview').then(r => r.data),
+  // List of companies in the client stage, enriched with health/deal/task data.
+  list: (params) => api.get('/clients', { params }).then(r => r.data),
+};
+
+export const dealsApi = {
+  list: (params) => api.get('/deals', { params }).then(r => r.data),
+  getByCompany: (companyId) => api.get('/deals', { params: { company_id: companyId } }).then(r => r.data),
+  create: (data) => api.post('/deals', data).then(r => r.data),
+  update: (id, data) => api.patch(`/deals/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/deals/${id}`).then(r => r.data),
+};
+
+export const tasksApi = {
+  list: (params) => api.get('/tasks', { params }).then(r => r.data),
+  create: (data) => api.post('/tasks', data).then(r => r.data),
+  update: (id, data) => api.patch(`/tasks/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/tasks/${id}`).then(r => r.data),
+};
+
+export const interactionsApi = {
+  list: (params) => api.get('/interactions', { params }).then(r => r.data),
+  getByCompany: (companyId) => api.get('/interactions', { params: { company_id: companyId } }).then(r => r.data),
+  create: (data) => api.post('/interactions', data).then(r => r.data),
+  update: (id, data) => api.patch(`/interactions/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/interactions/${id}`).then(r => r.data),
+};
+
+export const healthApi = {
+  getForCompany: (id) => api.get(`/companies/${id}/health`).then(r => r.data),
+};
+
+export const reportsApi = {
+  retention: (params) => api.get('/reports/retention', { params }).then(r => r.data),
+  revenueFunnel: (params) => api.get('/reports/revenue-funnel', { params }).then(r => r.data),
+  activityHeatmap: (params) => api.get('/reports/activity-heatmap', { params }).then(r => r.data),
+  topClients: (params) => api.get('/reports/top-clients', { params }).then(r => r.data),
+};
+
 // Gmail OAuth — connect a Google account so outreach sends from the user's own
 // address (with Gmail's SPF/DKIM/DMARC, so it stays out of spam).
 export const gmailApi = {
