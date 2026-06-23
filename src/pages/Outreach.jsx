@@ -130,16 +130,23 @@ function FormatToolbar({ textareaRef, value, onChange }) {
   );
 }
 
-const EMAIL_BODY_CLASSES = `prose prose-sm max-w-none text-sm leading-relaxed text-gray-700
-  [&_p]:my-3 [&_a]:text-blue-600 [&_a]:underline
-  [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5
-  [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-5
-  [&_li]:my-1
-  [&_strong]:font-semibold [&_strong]:text-gray-900
-  [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:mt-4 [&_h2]:mb-2
-  [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-3 [&_h3]:mb-1
-  [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600
-  [&_hr]:my-4 [&_hr]:border-gray-200`;
+const EMAIL_BODY_STYLES = `
+  .email-preview p { margin: 0.75rem 0; }
+  .email-preview a { color: #2563eb; text-decoration: underline; }
+  .email-preview a:hover { color: #1d4ed8; }
+  .email-preview ul { margin: 0.75rem 0; padding-left: 1.25rem; list-style-type: disc; }
+  .email-preview ol { margin: 0.75rem 0; padding-left: 1.25rem; list-style-type: decimal; }
+  .email-preview li { margin: 0.25rem 0; }
+  .email-preview strong { font-weight: 600; color: #111827; }
+  .email-preview em { font-style: italic; }
+  .email-preview h2 { font-size: 1rem; font-weight: 600; color: #111827; margin-top: 1rem; margin-bottom: 0.5rem; }
+  .email-preview h3 { font-size: 0.875rem; font-weight: 600; color: #111827; margin-top: 0.75rem; margin-bottom: 0.25rem; }
+  .email-preview blockquote { border-left: 4px solid #d1d5db; padding-left: 1rem; font-style: italic; color: #4b5563; margin: 0.75rem 0; }
+  .email-preview hr { margin: 1rem 0; border: none; border-top: 1px solid #e5e7eb; }
+  .email-preview br { display: block; content: ""; margin-top: 0.5rem; }
+`;
+
+const EMAIL_BODY_CLASSES = `email-preview max-w-none text-sm leading-relaxed text-gray-700`;
 
 function PreviewModal({ open, onClose, loading, subject, body, contextLabel, templateId, templateName, onSaved }) {
   const [editing, setEditing] = useState(false);
@@ -185,6 +192,7 @@ function PreviewModal({ open, onClose, loading, subject, body, contextLabel, tem
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <style>{EMAIL_BODY_STYLES}</style>
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
