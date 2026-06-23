@@ -20,6 +20,14 @@ import {
   TestTube,
   History,
   Clock,
+  Bold,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  Heading2,
+  Pilcrow,
+  Minus,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -62,40 +70,250 @@ function MergeFieldBar({ onInsert }) {
 
 // ─── Preview modal ───────────────────────────────────────────────────────────────
 
-function PreviewModal({ open, onClose, loading, subject, body, contextLabel }) {
+function FormatToolbar({ textareaRef, value, onChange }) {
+  const wrap = (tag, fallback) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const selected = value.slice(start, end);
+    let snippet;
+    if (tag === 'a') {
+      const url = selected.startsWith('http') ? selected : 'https://';
+      const linkText = selected.startsWith('http') ? 'link text' : (selected || 'link text');
+      snippet = `<a href="${url}">${linkText}</a>`;
+    } else if (tag === 'ul') {
+      snippet = selected
+        ? `<ul>\n${selected.split('\n').map(l => `  <li>${l.trim()}</li>`).join('\n')}\n</ul>`
+        : '<ul>\n  <li>Item</li>\n</ul>';
+    } else if (tag === 'ol') {
+      snippet = selected
+        ? `<ol>\n${selected.split('\n').map(l => `  <li>${l.trim()}</li>`).join('\n')}\n</ol>`
+        : '<ol>\n  <li>Item</li>\n</ol>';
+    } else if (tag === 'hr') {
+      snippet = '\n<hr>\n';
+    } else {
+      snippet = `<${tag}>${selected || fallback || ''}</${tag}>`;
+    }
+    onChange(value.slice(0, start) + snippet + value.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = start;
+      el.selectionEnd = start + snippet.length;
+    });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-0.5 rounded-t-lg border border-b-0 border-gray-300 bg-gray-50 px-2 py-1.5">
+      <span className="mr-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">Format:</span>
+      {[
+        { icon: Bold, tag: 'strong', label: 'Bold' },
+        { icon: Italic, tag: 'em', label: 'Italic' },
+        { icon: Heading2, tag: 'h2', label: 'Heading' },
+        { icon: Link2, tag: 'a', label: 'Link' },
+        { icon: List, tag: 'ul', label: 'Bullet List' },
+        { icon: ListOrdered, tag: 'ol', label: 'Numbered List' },
+        { icon: Pilcrow, tag: 'p', label: 'Paragraph' },
+        { icon: Minus, tag: 'hr', label: 'Divider' },
+      ].map((btn) => (
+        <button
+          key={btn.tag}
+          type="button"
+          title={btn.label}
+          onClick={() => wrap(btn.tag)}
+          className="rounded p-1.5 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+        >
+          <btn.icon className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const EMAIL_BODY_CLASSES = `prose prose-sm max-w-none text-sm leading-relaxed text-gray-700
+  [&_p]:my-3 [&_a]:text-blue-600 [&_a]:underline
+  [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5
+  [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-5
+  [&_li]:my-1
+  [&_strong]:font-semibold [&_strong]:text-gray-900
+  [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:mt-4 [&_h2]:mb-2
+  [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-3 [&_h3]:mb-1
+  [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-600
+  [&_hr]:my-4 [&_hr]:border-gray-200`;
+
+function PreviewModal({ open, onClose, loading, subject, body, contextLabel, templateId, templateName, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [editSubject, setEditSubject] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [saveName, setSaveName] = useState('');
+  const bodyRef = useRef(null);
+  const updateTemplate = useUpdateTemplate();
+  const createTemplate = useCreateTemplate();
+
+  // Sync when preview data loads
+  useEffect(() => {
+    if (subject) setEditSubject(subject);
+    if (body) setEditBody(body);
+    if (templateName) setSaveName(templateName);
+  }, [subject, body, templateName]);
+
+  // Reset edit mode when modal closes
+  useEffect(() => {
+    if (!open) setEditing(false);
+  }, [open]);
+
   if (!open) return null;
+
+  const saving = updateTemplate.isPending || createTemplate.isPending;
+
+  const handleSave = () => {
+    if (!templateId) return;
+    updateTemplate.mutate(
+      { id: templateId, data: { subject: editSubject, body: editBody } },
+      { onSuccess: () => { setEditing(false); if (onSaved) onSaved(); } }
+    );
+  };
+
+  const handleSaveAsNew = () => {
+    const name = saveName.trim();
+    if (!name) return;
+    createTemplate.mutate(
+      { name, subject: editSubject, body: editBody },
+      { onSuccess: () => { setEditing(false); if (onSaved) onSaved(); onClose(); } }
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl">
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <div className="flex items-center gap-2">
             <Eye className="h-4 w-4 text-gray-400" />
-            <h3 className="text-sm font-semibold text-gray-900">Email Preview</h3>
-            {contextLabel && (
+            <h3 className="text-sm font-semibold text-gray-900">
+              {editing ? 'Edit & Preview' : 'Email Preview'}
+            </h3>
+            {contextLabel && !editing && (
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
                 {contextLabel}
               </span>
             )}
           </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!loading && !editing && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
+            {editing && (
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Body */}
         <div className="overflow-y-auto p-5">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600" />
             </div>
+          ) : editing ? (
+            /* ─── Edit mode ─── */
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Subject</label>
+                <input
+                  type="text"
+                  value={editSubject}
+                  onChange={(e) => setEditSubject(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Body</label>
+                <FormatToolbar textareaRef={bodyRef} value={editBody} onChange={setEditBody} />
+                <textarea
+                  ref={bodyRef}
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  rows={10}
+                  className="w-full rounded-b-lg rounded-t-none border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              {/* Live preview */}
+              <div>
+                <p className="mb-1 text-xs font-medium text-gray-500">Live Preview</p>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <p className="mb-2 text-sm font-semibold text-gray-900">{editSubject}</p>
+                  <div
+                    className={EMAIL_BODY_CLASSES}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(editBody || '') }}
+                  />
+                </div>
+              </div>
+              {/* Save actions */}
+              <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Save as new template (name)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      placeholder="New template name..."
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveAsNew}
+                      disabled={!saveName.trim() || saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Save New
+                    </button>
+                  </div>
+                </div>
+                {templateId && (
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
+                  >
+                    {saving ? 'Saving…' : 'Update Template'}
+                  </button>
+                )}
+              </div>
+            </div>
           ) : (
+            /* ─── Preview mode ─── */
             <>
-              <div className="mb-3 border-b border-gray-100 pb-3">
+              <div className="mb-4 border-b border-gray-100 pb-3">
                 <p className="text-xs uppercase tracking-wide text-gray-400">Subject</p>
                 <p className="mt-0.5 text-sm font-semibold text-gray-900">{subject}</p>
               </div>
-              <div
-                className="prose prose-sm max-w-none text-sm text-gray-700 [&_a]:text-blue-600 [&_p]:my-2"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body || '') }}
-              />
+              <div className="rounded-lg border border-gray-200 bg-white p-6">
+                <div
+                  className={EMAIL_BODY_CLASSES}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body || '') }}
+                />
+              </div>
             </>
           )}
         </div>
@@ -194,16 +412,17 @@ function TemplateEditor({ template, onClose }) {
 
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <label className="block text-sm font-medium text-gray-700">Body (HTML) *</label>
+            <label className="block text-sm font-medium text-gray-700">Body *</label>
           </div>
+          <FormatToolbar textareaRef={bodyRef} value={body} onChange={(v) => { setBody(v); setActiveField('body'); }} />
           <textarea
             ref={bodyRef}
             value={body}
             onFocus={() => setActiveField('body')}
             onChange={(e) => setBody(e.target.value)}
             rows={12}
-            placeholder="<p>Hi {{first_name}}, ...</p>"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder="<p>Hi {{first_name}},</p>\n\n<p>I wanted to reach out about...</p>"
+            className="w-full rounded-b-lg rounded-t-none border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
@@ -257,6 +476,8 @@ function TemplateEditor({ template, onClose }) {
         loading={preview.isPending}
         subject={preview.data?.subject}
         body={preview.data?.body}
+        templateId={isEdit ? template.id : undefined}
+        templateName={name}
         contextLabel="sample contact"
       />
     </div>
@@ -350,8 +571,10 @@ function TemplatesTab() {
   const [templateSearch, setTemplateSearch] = useState('');
   const preview = usePreviewTemplate();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState(null);
 
   const handlePreview = (template) => {
+    setPreviewTemplate(template);
     setPreviewOpen(true);
     preview.mutate({ template_id: template.id });
   };
@@ -441,6 +664,8 @@ function TemplatesTab() {
         loading={preview.isPending}
         subject={preview.data?.subject}
         body={preview.data?.body}
+        templateId={previewTemplate?.id}
+        templateName={previewTemplate?.name}
         contextLabel="sample contact"
       />
     </div>
@@ -1033,6 +1258,8 @@ function ComposeTab() {
         loading={preview.isPending}
         subject={preview.data?.subject}
         body={preview.data?.body}
+        templateId={templateId}
+        templateName={(templates || []).find((t) => t.id === templateId)?.name}
         contextLabel={
           previewContact
             ? [previewContact.first_name, previewContact.last_name].filter(Boolean).join(' ')
