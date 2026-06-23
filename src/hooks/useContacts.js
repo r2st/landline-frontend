@@ -18,13 +18,30 @@ function normalize(data) {
  * behaviour (fetch first page of 200).
  */
 export function useContacts(params = {}) {
-  const { page = 1, pageSize = 50, search = '', sortBy = 'created_at', sortDir = 'desc' } = params;
+  const {
+    page = 1, pageSize = 50, search = '', sortBy = 'created_at', sortDir = 'desc',
+    status, source, city, companyName,
+  } = params;
   return useQuery({
-    queryKey: ['contacts', 'all', { page, pageSize, search, sortBy, sortDir }],
+    queryKey: ['contacts', 'all', { page, pageSize, search, sortBy, sortDir, status, source, city, companyName }],
     staleTime: 60000,
     queryFn: async () => {
+      const apiParams = {
+        page, page_size: pageSize,
+        q: search || undefined,
+        sort_by: sortBy, sort_dir: sortDir,
+      };
+      // Pass supported filters to backend
+      if (status && status !== 'all') apiParams.status = status;
+      if (source && source !== 'all') {
+        // card_scan maps to 'card_scan' source on the backend
+        apiParams.source = source;
+      }
+      if (city) apiParams.city = city;
+      if (companyName) apiParams.company_name = companyName;
+
       const [contactsRaw, companiesRaw] = await Promise.all([
-        contactsApi.getAll({ page, page_size: pageSize, q: search || undefined, sort_by: sortBy, sort_dir: sortDir }),
+        contactsApi.getAll(apiParams),
         companiesApi.getAll({ page_size: 200 }),
       ]);
       const contacts = normalize(contactsRaw);
