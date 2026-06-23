@@ -11,9 +11,11 @@ import {
   Clock,
   Trash2,
   BarChart3,
+  Pause,
+  Play,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
-import { useSequences, useCreateSequence } from '../hooks/useOutreach';
+import { useSequences, useCreateSequence, useUpdateSequenceStatus } from '../hooks/useOutreach';
 import { formatNumber, cn } from '../lib/utils';
 
 function SequenceStats({ stats = {} }) {
@@ -53,6 +55,7 @@ function SequenceStats({ stats = {} }) {
 
 function SequenceCard({ sequence }) {
   const [expanded, setExpanded] = useState(false);
+  const updateStatus = useUpdateSequenceStatus();
 
   // The API may omit stats for a brand-new sequence — default to zeros so the
   // card renders instead of crashing on `stats.sent`.
@@ -83,9 +86,37 @@ function SequenceCard({ sequence }) {
                 <span>{openRate}% open rate</span>
                 <span className="text-gray-300">|</span>
                 <span>{replyRate}% reply rate</span>
+                <span className="text-gray-300">|</span>
+                <span className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                  (sequence.status || 'active') === 'active' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+                )}>
+                  {(sequence.status || 'active') === 'active' ? 'Active' : 'Paused'}
+                </span>
               </div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const newStatus = (sequence.status || 'active') === 'active' ? 'paused' : 'active';
+              updateStatus.mutate({ id: sequence.id, status: newStatus });
+            }}
+            disabled={updateStatus.isPending}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+              (sequence.status || 'active') === 'active'
+                ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
+                : 'bg-green-50 text-green-700 hover:bg-green-100'
+            )}
+          >
+            {(sequence.status || 'active') === 'active' ? (
+              <><Pause className="h-3.5 w-3.5" /> Pause</>
+            ) : (
+              <><Play className="h-3.5 w-3.5" /> Resume</>
+            )}
+          </button>
           <button
             type="button"
             className="rounded-md p-1 text-gray-400 hover:bg-gray-100"

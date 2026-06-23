@@ -20,6 +20,22 @@ import {
   TestTube,
   History,
   Clock,
+  Bold,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  Heading2,
+  Pilcrow,
+  Minus,
+  Calendar,
+  Shuffle,
+  BarChart3,
+  Play,
+  Pause,
+  GitBranch,
+  TrendingUp,
+  ArrowRight,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -31,9 +47,11 @@ import {
   useSetDefaultTemplate,
   usePreviewTemplate,
   useComposeEmail,
-  useEmailSends,
+  useAllEmailSends,
   useSendTestEmail,
+  useCampaignAnalytics,
 } from '../hooks/useEmailTemplates';
+import { useSequences, useEnrollBatch } from '../hooks/useOutreach';
 import { useContacts, useQuickAddContact } from '../hooks/useContacts';
 import { useGmailStatus } from '../hooks/useGmail';
 import { MERGE_FIELDS, DEMO_LINK } from '../lib/mockData';
@@ -62,40 +80,278 @@ function MergeFieldBar({ onInsert }) {
 
 // ─── Preview modal ───────────────────────────────────────────────────────────────
 
-function PreviewModal({ open, onClose, loading, subject, body, contextLabel }) {
+function FormatToolbar({ textareaRef, value, onChange }) {
+  const wrap = (tag, fallback) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const selected = value.slice(start, end);
+    let snippet;
+    if (tag === 'a') {
+      const url = selected.startsWith('http') ? selected : 'https://';
+      const linkText = selected.startsWith('http') ? 'link text' : (selected || 'link text');
+      snippet = `<a href="${url}">${linkText}</a>`;
+    } else if (tag === 'ul') {
+      snippet = selected
+        ? `<ul>\n${selected.split('\n').map(l => `  <li>${l.trim()}</li>`).join('\n')}\n</ul>`
+        : '<ul>\n  <li>Item</li>\n</ul>';
+    } else if (tag === 'ol') {
+      snippet = selected
+        ? `<ol>\n${selected.split('\n').map(l => `  <li>${l.trim()}</li>`).join('\n')}\n</ol>`
+        : '<ol>\n  <li>Item</li>\n</ol>';
+    } else if (tag === 'hr') {
+      snippet = '\n<hr>\n';
+    } else {
+      snippet = `<${tag}>${selected || fallback || ''}</${tag}>`;
+    }
+    onChange(value.slice(0, start) + snippet + value.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = start;
+      el.selectionEnd = start + snippet.length;
+    });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-0.5 rounded-t-lg border border-b-0 border-gray-300 bg-gray-50 px-2 py-1.5">
+      <span className="mr-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">Format:</span>
+      {[
+        { icon: Bold, tag: 'strong', label: 'Bold' },
+        { icon: Italic, tag: 'em', label: 'Italic' },
+        { icon: Heading2, tag: 'h2', label: 'Heading' },
+        { icon: Link2, tag: 'a', label: 'Link' },
+        { icon: List, tag: 'ul', label: 'Bullet List' },
+        { icon: ListOrdered, tag: 'ol', label: 'Numbered List' },
+        { icon: Pilcrow, tag: 'p', label: 'Paragraph' },
+        { icon: Minus, tag: 'hr', label: 'Divider' },
+      ].map((btn) => (
+        <button
+          key={btn.tag}
+          type="button"
+          title={btn.label}
+          onClick={() => wrap(btn.tag)}
+          className="rounded p-1.5 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+        >
+          <btn.icon className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const EMAIL_BODY_STYLES = `
+  .email-preview p { margin: 0 0 16px 0; line-height: 1.6; }
+  .email-preview p:last-child { margin-bottom: 0; }
+  .email-preview strong, .email-preview b { font-weight: 700; color: #111827; }
+  .email-preview em, .email-preview i { font-style: italic; }
+  .email-preview a { color: #2563eb; text-decoration: underline; }
+  .email-preview a:hover { color: #1d4ed8; }
+  .email-preview ul { list-style-type: disc; margin: 0 0 16px 0; padding-left: 24px; }
+  .email-preview ol { list-style-type: decimal; margin: 0 0 16px 0; padding-left: 24px; }
+  .email-preview li { margin: 0 0 8px 0; line-height: 1.5; }
+  .email-preview li:last-child { margin-bottom: 0; }
+  .email-preview h1 { font-size: 1.5rem; font-weight: 700; color: #111827; margin: 24px 0 12px 0; line-height: 1.3; }
+  .email-preview h2 { font-size: 1.25rem; font-weight: 700; color: #111827; margin: 24px 0 12px 0; line-height: 1.3; }
+  .email-preview h3 { font-size: 1.1rem; font-weight: 600; color: #111827; margin: 20px 0 10px 0; line-height: 1.3; }
+  .email-preview h4 { font-size: 1rem; font-weight: 600; color: #111827; margin: 16px 0 8px 0; }
+  .email-preview blockquote { border-left: 3px solid #d1d5db; padding-left: 16px; margin: 0 0 16px 0; color: #6b7280; font-style: italic; }
+  .email-preview hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+  .email-preview br { display: block; content: ""; margin-top: 4px; }
+  .email-preview table { border-collapse: collapse; width: 100%; margin: 0 0 16px 0; }
+  .email-preview td, .email-preview th { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+  .email-preview th { background: #f9fafb; font-weight: 600; }
+  .email-preview img { max-width: 100%; height: auto; }
+  .email-preview pre { background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 0 0 16px 0; font-size: 0.85em; }
+  .email-preview code { background: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
+`;
+
+const EMAIL_BODY_CLASSES = `email-preview max-w-none text-sm leading-relaxed text-gray-700`;
+
+/** Convert plain-text bodies to HTML with <br> tags so newlines render.
+ *  If the body already contains block-level HTML, leave it alone. */
+function prepareEmailHtml(body) {
+  if (!body) return '';
+  // If it contains block-level HTML tags, it's already formatted
+  if (/<(p|div|ul|ol|h[1-6]|table|br|hr)\b/i.test(body)) return body;
+  // Plain text: convert newlines to <br>
+  return body.replace(/\n/g, '<br>');
+}
+
+function PreviewModal({ open, onClose, loading, subject, body, contextLabel, templateId, templateName, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [editSubject, setEditSubject] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [saveName, setSaveName] = useState('');
+  const bodyRef = useRef(null);
+  const updateTemplate = useUpdateTemplate();
+  const createTemplate = useCreateTemplate();
+
+  // Sync when preview data loads
+  useEffect(() => {
+    if (subject) setEditSubject(subject);
+    if (body) setEditBody(body);
+    if (templateName) setSaveName(templateName);
+  }, [subject, body, templateName]);
+
+  // Reset edit mode when modal closes
+  useEffect(() => {
+    if (!open) setEditing(false);
+  }, [open]);
+
   if (!open) return null;
+
+  const saving = updateTemplate.isPending || createTemplate.isPending;
+
+  const handleSave = () => {
+    if (!templateId) return;
+    updateTemplate.mutate(
+      { id: templateId, data: { subject: editSubject, body: editBody } },
+      { onSuccess: () => { setEditing(false); if (onSaved) onSaved(); } }
+    );
+  };
+
+  const handleSaveAsNew = () => {
+    const name = saveName.trim();
+    if (!name) return;
+    createTemplate.mutate(
+      { name, subject: editSubject, body: editBody },
+      { onSuccess: () => { setEditing(false); if (onSaved) onSaved(); onClose(); } }
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl">
+      <style>{EMAIL_BODY_STYLES}</style>
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl">
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
           <div className="flex items-center gap-2">
             <Eye className="h-4 w-4 text-gray-400" />
-            <h3 className="text-sm font-semibold text-gray-900">Email Preview</h3>
-            {contextLabel && (
+            <h3 className="text-sm font-semibold text-gray-900">
+              {editing ? 'Edit & Preview' : 'Email Preview'}
+            </h3>
+            {contextLabel && !editing && (
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
                 {contextLabel}
               </span>
             )}
           </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!loading && !editing && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
+            {editing && (
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Body */}
         <div className="overflow-y-auto p-5">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600" />
             </div>
+          ) : editing ? (
+            /* ─── Edit mode ─── */
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Subject</label>
+                <input
+                  type="text"
+                  value={editSubject}
+                  onChange={(e) => setEditSubject(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Body</label>
+                <FormatToolbar textareaRef={bodyRef} value={editBody} onChange={setEditBody} />
+                <textarea
+                  ref={bodyRef}
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  rows={10}
+                  className="w-full rounded-b-lg rounded-t-none border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              {/* Live preview */}
+              <div>
+                <p className="mb-1 text-xs font-medium text-gray-500">Live Preview</p>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <p className="mb-2 text-sm font-semibold text-gray-900">{editSubject}</p>
+                  <div
+                    className={EMAIL_BODY_CLASSES}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(prepareEmailHtml(editBody)) }}
+                  />
+                </div>
+              </div>
+              {/* Save actions */}
+              <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Save as new template (name)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      placeholder="New template name..."
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveAsNew}
+                      disabled={!saveName.trim() || saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Save New
+                    </button>
+                  </div>
+                </div>
+                {templateId && (
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
+                  >
+                    {saving ? 'Saving…' : 'Update Template'}
+                  </button>
+                )}
+              </div>
+            </div>
           ) : (
+            /* ─── Preview mode ─── */
             <>
-              <div className="mb-3 border-b border-gray-100 pb-3">
+              <div className="mb-4 border-b border-gray-100 pb-3">
                 <p className="text-xs uppercase tracking-wide text-gray-400">Subject</p>
                 <p className="mt-0.5 text-sm font-semibold text-gray-900">{subject}</p>
               </div>
-              <div
-                className="prose prose-sm max-w-none text-sm text-gray-700 [&_a]:text-blue-600 [&_p]:my-2"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(body || '') }}
-              />
+              <div className="rounded-lg border border-gray-200 bg-white p-6">
+                <div
+                  className={EMAIL_BODY_CLASSES}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(prepareEmailHtml(body)) }}
+                />
+              </div>
             </>
           )}
         </div>
@@ -194,16 +450,17 @@ function TemplateEditor({ template, onClose }) {
 
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <label className="block text-sm font-medium text-gray-700">Body (HTML) *</label>
+            <label className="block text-sm font-medium text-gray-700">Body *</label>
           </div>
+          <FormatToolbar textareaRef={bodyRef} value={body} onChange={(v) => { setBody(v); setActiveField('body'); }} />
           <textarea
             ref={bodyRef}
             value={body}
             onFocus={() => setActiveField('body')}
             onChange={(e) => setBody(e.target.value)}
             rows={12}
-            placeholder="<p>Hi {{first_name}}, ...</p>"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder="<p>Hi {{first_name}},</p>\n\n<p>I wanted to reach out about...</p>"
+            className="w-full rounded-b-lg rounded-t-none border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
@@ -257,6 +514,8 @@ function TemplateEditor({ template, onClose }) {
         loading={preview.isPending}
         subject={preview.data?.subject}
         body={preview.data?.body}
+        templateId={isEdit ? template.id : undefined}
+        templateName={name}
         contextLabel="sample contact"
       />
     </div>
@@ -350,8 +609,10 @@ function TemplatesTab() {
   const [templateSearch, setTemplateSearch] = useState('');
   const preview = usePreviewTemplate();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState(null);
 
   const handlePreview = (template) => {
+    setPreviewTemplate(template);
     setPreviewOpen(true);
     preview.mutate({ template_id: template.id });
   };
@@ -441,6 +702,8 @@ function TemplatesTab() {
         loading={preview.isPending}
         subject={preview.data?.subject}
         body={preview.data?.body}
+        templateId={previewTemplate?.id}
+        templateName={previewTemplate?.name}
         contextLabel="sample contact"
       />
     </div>
@@ -653,7 +916,7 @@ function SendTestModal({ open, onClose, templateId, senderAccountId, defaultEmai
 function ComposeTab() {
   const { data: templates } = useEmailTemplates();
   const { data: contacts, isLoading: contactsLoading } = useContacts();
-  const { data: sends } = useEmailSends();
+  const { data: sends } = useAllEmailSends();
   const { data: gmail } = useGmailStatus();
   const preview = usePreviewTemplate();
   const compose = useComposeEmail();
@@ -668,6 +931,15 @@ function ComposeTab() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [sendTestOpen, setSendTestOpen] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [abTestEnabled, setAbTestEnabled] = useState(false);
+  const [subjectB, setSubjectB] = useState('');
+  const [scheduleMode, setScheduleMode] = useState('now'); // 'now' | 'later'
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [enrollSequenceOpen, setEnrollSequenceOpen] = useState(false);
+  const [selectedSequenceId, setSelectedSequenceId] = useState('');
+
+  const { data: sequences } = useSequences();
+  const enrollBatch = useEnrollBatch();
 
   // Default-select the default template once templates load.
   useEffect(() => {
@@ -773,14 +1045,26 @@ function ComposeTab() {
 
   const handleSendConfirmed = () => {
     setSendConfirmOpen(false);
-    compose.mutate(
-      {
-        contact_ids: selectedIds,
-        template_id: templateId,
-        sender_account_id: senderId === 'rotate' ? undefined : senderId || undefined,
-        contacts: withEmail,
-      },
-      { onSuccess: () => setSelected({}) }
+    const payload = {
+      contact_ids: selectedIds,
+      template_id: templateId,
+      sender_account_id: senderId === 'rotate' ? undefined : senderId || undefined,
+      contacts: withEmail,
+    };
+    if (abTestEnabled && subjectB.trim()) {
+      payload.subject_b = subjectB.trim();
+    }
+    if (scheduleMode === 'later' && scheduledAt) {
+      payload.scheduled_at = new Date(scheduledAt).toISOString();
+    }
+    compose.mutate(payload, { onSuccess: () => setSelected({}) });
+  };
+
+  const handleEnrollInSequence = () => {
+    if (!selectedSequenceId || !selectedIds.length) return;
+    enrollBatch.mutate(
+      { sequenceId: selectedSequenceId, contactIds: selectedIds },
+      { onSuccess: () => { setEnrollSequenceOpen(false); setSelected({}); } }
     );
   };
 
@@ -824,12 +1108,18 @@ function ComposeTab() {
             </div>
           )}
           {gmailAccounts.length > 0 && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {senderId === 'rotate'
-                ? `Emails will rotate across ${sendingEnabledAccounts.length} accounts for better deliverability.`
-                : 'Recipients will see this as the sender — authenticated, inbox-safe.'}
-            </p>
+            <div className="mt-1 flex items-center justify-between">
+              <p className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {senderId === 'rotate'
+                  ? `Emails will rotate across ${sendingEnabledAccounts.length} accounts for better deliverability.`
+                  : 'Recipients will see this as the sender — authenticated, inbox-safe.'}
+              </p>
+              <Link to="/settings" className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline">
+                <Plus className="h-3 w-3" />
+                Add account
+              </Link>
+            </div>
           )}
         </div>
 
@@ -847,6 +1137,37 @@ function ComposeTab() {
                 </option>
               ))}
             </select>
+            {/* A/B Test Toggle */}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAbTestEnabled(!abTestEnabled)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  abTestEnabled
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                )}
+              >
+                <Shuffle className="h-3 w-3" />
+                A/B Test
+              </button>
+            </div>
+            {abTestEnabled && (
+              <div className="mt-2">
+                <label className="mb-1 block text-xs font-medium text-gray-500">Variant B Subject</label>
+                <input
+                  type="text"
+                  value={subjectB}
+                  onChange={(e) => setSubjectB(e.target.value)}
+                  placeholder="Alternative subject line for B variant..."
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  50% of contacts will receive this subject. The other 50% get the template's original subject.
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <button
@@ -867,15 +1188,77 @@ function ComposeTab() {
               <TestTube className="h-4 w-4" />
               Test
             </button>
+            {/* Schedule dropdown */}
+            <select
+              value={scheduleMode}
+              onChange={(e) => setScheduleMode(e.target.value)}
+              className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="now">Send Now</option>
+              <option value="later">Schedule</option>
+            </select>
+            {scheduleMode === 'later' && (
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            )}
             <button
               type="button"
               onClick={handleSend}
-              disabled={!selectedIds.length || !templateId || compose.isPending}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50 sm:w-auto sm:flex-1"
+              disabled={!selectedIds.length || !templateId || compose.isPending || (scheduleMode === 'later' && !scheduledAt)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
             >
-              <Send className="h-4 w-4" />
-              {compose.isPending ? 'Sending…' : `Send to ${selectedIds.length}`}
+              {scheduleMode === 'later' ? <Calendar className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              {compose.isPending ? 'Sending...' : scheduleMode === 'later' ? `Schedule ${selectedIds.length}` : `Send to ${selectedIds.length}`}
             </button>
+            {/* Enroll in Sequence */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setEnrollSequenceOpen(!enrollSequenceOpen)}
+                disabled={!selectedIds.length}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                <GitBranch className="h-4 w-4" />
+                Enroll in Sequence
+              </button>
+              {enrollSequenceOpen && (
+                <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Select Sequence</label>
+                  <select
+                    value={selectedSequenceId}
+                    onChange={(e) => setSelectedSequenceId(e.target.value)}
+                    className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Choose a sequence...</option>
+                    {(sequences || []).filter(s => s.is_active).map((s) => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.step_count} steps)</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEnrollSequenceOpen(false)}
+                      className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEnrollInSequence}
+                      disabled={!selectedSequenceId || enrollBatch.isPending}
+                      className="flex-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
+                    >
+                      {enrollBatch.isPending ? 'Enrolling...' : `Enroll ${selectedIds.length}`}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1027,6 +1410,8 @@ function ComposeTab() {
         loading={preview.isPending}
         subject={preview.data?.subject}
         body={preview.data?.body}
+        templateId={templateId}
+        templateName={(templates || []).find((t) => t.id === templateId)?.name}
         contextLabel={
           previewContact
             ? [previewContact.first_name, previewContact.last_name].filter(Boolean).join(' ')
@@ -1060,7 +1445,8 @@ function ComposeTab() {
 // ─── History tab ────────────────────────────────────────────────────────────────
 
 function HistoryTab() {
-  const { data: sends, isLoading } = useEmailSends();
+  const { data: sends, isLoading } = useAllEmailSends();
+  const { data: analytics, isLoading: analyticsLoading } = useCampaignAnalytics();
   const [historySearch, setHistorySearch] = useState('');
 
   const sorted = useMemo(() => {
@@ -1086,6 +1472,7 @@ function HistoryTab() {
       replied: 'bg-green-50 text-green-700',
       bounced: 'bg-red-50 text-red-700',
       failed: 'bg-red-50 text-red-700',
+      scheduled: 'bg-orange-50 text-orange-700',
     };
     const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
     return (
@@ -1105,6 +1492,66 @@ function HistoryTab() {
 
   return (
     <div className="space-y-5">
+      {/* Campaign Analytics */}
+      {analytics && (
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-gray-400" />
+            <h3 className="text-sm font-semibold text-gray-900">Campaign Analytics</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+            <div className="rounded-lg bg-blue-50 p-3 text-center">
+              <p className="text-lg font-bold text-blue-700">{analytics.total_sent_7d}</p>
+              <p className="text-xs text-blue-600/70">Last 7 days</p>
+            </div>
+            <div className="rounded-lg bg-blue-50 p-3 text-center">
+              <p className="text-lg font-bold text-blue-700">{analytics.total_sent_30d}</p>
+              <p className="text-xs text-blue-600/70">Last 30 days</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3 text-center">
+              <p className="text-lg font-bold text-gray-700">{analytics.total_sent_all}</p>
+              <p className="text-xs text-gray-500">All time</p>
+            </div>
+            <div className="rounded-lg bg-green-50 p-3 text-center">
+              <p className="text-lg font-bold text-green-700">{analytics.open_rate}%</p>
+              <p className="text-xs text-green-600/70">Open rate</p>
+            </div>
+            <div className="rounded-lg bg-yellow-50 p-3 text-center">
+              <p className="text-lg font-bold text-yellow-700">{analytics.click_rate}%</p>
+              <p className="text-xs text-yellow-600/70">Click rate</p>
+            </div>
+            <div className="rounded-lg bg-purple-50 p-3 text-center">
+              <p className="text-lg font-bold text-purple-700">{analytics.reply_rate}%</p>
+              <p className="text-xs text-purple-600/70">Reply rate</p>
+            </div>
+            <div className="rounded-lg bg-red-50 p-3 text-center">
+              <p className="text-lg font-bold text-red-700">{analytics.bounce_rate}%</p>
+              <p className="text-xs text-red-600/70">Bounce rate</p>
+            </div>
+          </div>
+          {/* Daily sends sparkline bar chart */}
+          {analytics.daily_sends?.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-medium text-gray-500">Daily sends (last 30 days)</p>
+              <div className="flex items-end gap-0.5" style={{ height: '48px' }}>
+                {analytics.daily_sends.map((d, i) => {
+                  const max = Math.max(...analytics.daily_sends.map(x => x.count), 1);
+                  const pct = (d.count / max) * 100;
+                  return (
+                    <div
+                      key={i}
+                      title={`${d.date}: ${d.count} emails`}
+                      className="flex-1 rounded-t bg-blue-400 transition-all hover:bg-blue-500"
+                      style={{ height: `${Math.max(pct, 2)}%`, minWidth: '4px' }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="relative w-full sm:w-72">
         <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
         <input
@@ -1131,6 +1578,7 @@ function HistoryTab() {
                   <th className="px-4 py-2">Recipient</th>
                   <th className="px-4 py-2">Subject</th>
                   <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Variant</th>
                   <th className="px-4 py-2">Opened At</th>
                   <th className="px-4 py-2">Sent At</th>
                 </tr>
@@ -1141,6 +1589,18 @@ function HistoryTab() {
                     <td className="px-4 py-2.5 text-gray-900">{s.to_email || '—'}</td>
                     <td className="px-4 py-2.5 text-gray-600">{s.subject || '—'}</td>
                     <td className="px-4 py-2.5">{statusBadge(s.status)}</td>
+                    <td className="px-4 py-2.5">
+                      {s.ab_variant ? (
+                        <span className={cn(
+                          'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                          s.ab_variant === 'A' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                        )}>
+                          {s.ab_variant}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5">
                       {s.opened_at ? (
                         <span className="inline-flex items-center gap-1 text-xs text-blue-600">
@@ -1175,7 +1635,7 @@ function HistoryTab() {
 // ─── Page ────────────────────────────────────────────────────────────────────────
 
 export default function Outreach() {
-  const [tab, setTab] = useState('templates');
+  const [tab, setTab] = useState('compose');
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -1191,8 +1651,8 @@ export default function Outreach() {
 
       <div className="flex gap-1 border-b border-gray-200">
         {[
-          { id: 'templates', label: 'Templates' },
           { id: 'compose', label: 'Compose & Send' },
+          { id: 'templates', label: 'Templates' },
           { id: 'history', label: 'History' },
         ].map((t) => (
           <button
@@ -1211,8 +1671,8 @@ export default function Outreach() {
         ))}
       </div>
 
-      {tab === 'templates' && <TemplatesTab />}
       {tab === 'compose' && <ComposeTab />}
+      {tab === 'templates' && <TemplatesTab />}
       {tab === 'history' && <HistoryTab />}
     </div>
   );

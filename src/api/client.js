@@ -78,6 +78,8 @@ export const outreachApi = {
   // The enrollment endpoint enrolls a single contact (contact_id + sequence_id).
   enrollContact: (data) => api.post('/outreach/enrollments', data).then(r => r.data),
   getEvents: (params) => api.get('/outreach/events', { params }).then(r => r.data),
+  updateSequenceStatus: (id, status) => api.patch(`/sequences/${id}/status`, { status }).then(r => r.data),
+  enrollBatch: (sequenceId, contactIds) => api.post(`/sequences/${sequenceId}/enroll`, { contact_ids: contactIds }).then(r => r.data),
 };
 
 export const contactsApi = {
@@ -102,6 +104,8 @@ export const emailApi = {
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
   sendTest: (data) => api.post('/email-templates/send-test', data).then(r => r.data),
+  getABStats: (templateId) => api.get(`/email-sends/ab-stats`, { params: { template_id: templateId } }).then(r => r.data),
+  getAnalytics: () => api.get('/email-sends/analytics').then(r => r.data),
 };
 
 export const discoveryApi = {

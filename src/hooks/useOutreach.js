@@ -52,3 +52,35 @@ export function useEnrollContact() {
     },
   });
 }
+
+export function useUpdateSequenceStatus() {
+  return useMutation({
+    mutationFn: async ({ id, status }) => {
+      return await outreachApi.updateSequenceStatus(id, status);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sequences'] });
+      toast.success('Sequence status updated');
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to update sequence status');
+    },
+  });
+}
+
+export function useEnrollBatch() {
+  return useMutation({
+    mutationFn: async ({ sequenceId, contactIds }) => {
+      return await outreachApi.enrollBatch(sequenceId, contactIds);
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['sequences'] });
+      queryClient.invalidateQueries({ queryKey: ['outreach-events'] });
+      const msg = `Enrolled ${res.enrolled_count} contact${res.enrolled_count !== 1 ? 's' : ''}${res.skipped_count ? ` (${res.skipped_count} skipped)` : ''}`;
+      toast.success(msg);
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to enroll contacts');
+    },
+  });
+}

@@ -79,13 +79,16 @@ export function usePreviewTemplate() {
 
 export function useComposeEmail() {
   return useMutation({
-    mutationFn: async ({ contact_ids, template_id, sender_account_id }) => {
+    mutationFn: async ({ contact_ids, template_id, sender_account_id, subject_b, scheduled_at }) => {
       const payload = { contact_ids, template_id };
       if (sender_account_id) payload.sender_account_id = sender_account_id;
+      if (subject_b) payload.subject_b = subject_b;
+      if (scheduled_at) payload.scheduled_at = scheduled_at;
       return await emailApi.compose(payload);
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['email-sends'] });
+      queryClient.invalidateQueries({ queryKey: ['campaign-analytics'] });
       const parts = [];
       if (res.sent) parts.push(`${res.sent} sent`);
       if (res.skipped) parts.push(`${res.skipped} skipped`);
@@ -97,7 +100,7 @@ export function useComposeEmail() {
   });
 }
 
-export function useEmailSends() {
+export function useAllEmailSends() {
   return useQuery({
     queryKey: ['email-sends'],
     // The endpoint may return either a bare array or a paginated {items,total}
@@ -117,5 +120,24 @@ export function useSendTestEmail() {
     mutationFn: async (data) => await emailApi.sendTest(data),
     onSuccess: (res) => toast.success(`Test email sent: ${res.subject || 'check inbox'}`),
     onError: (e) => toast.error(errMsg(e, 'Failed to send test email')),
+  });
+}
+
+// ─── A/B Stats ────────────────────────────────────────────────────────────────
+
+export function useABStats(templateId) {
+  return useQuery({
+    queryKey: ['ab-stats', templateId],
+    queryFn: async () => await emailApi.getABStats(templateId),
+    enabled: !!templateId,
+  });
+}
+
+// ─── Campaign Analytics ───────────────────────────────────────────────────────
+
+export function useCampaignAnalytics() {
+  return useQuery({
+    queryKey: ['campaign-analytics'],
+    queryFn: async () => await emailApi.getAnalytics(),
   });
 }
