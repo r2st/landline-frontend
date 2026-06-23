@@ -776,6 +776,15 @@ function RemindersTab() {
 
         {/* Content */}
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3 py-3 pr-4 transition-colors hover:bg-gray-50/50">
+          {f.status === 'pending' && (
+            <input
+              type="checkbox"
+              checked={selectedIds.has(f.id)}
+              onChange={() => toggleSelect(f.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -870,8 +879,39 @@ function RemindersTab() {
       {/* Quick create form */}
       <QuickCreateForm />
 
+      {/* Streak indicator */}
+      {!isLoading && streakInfo && (
+        <div className={cn(
+          'flex items-center gap-3 rounded-xl border px-4 py-3',
+          streakInfo.hasOverdue
+            ? 'border-amber-200 bg-amber-50'
+            : 'border-green-200 bg-green-50'
+        )}>
+          <div className={cn(
+            'flex h-10 w-10 items-center justify-center rounded-full',
+            streakInfo.hasOverdue ? 'bg-amber-100' : 'bg-green-100'
+          )}>
+            <TrendingUp className={cn(
+              'h-5 w-5',
+              streakInfo.hasOverdue ? 'text-amber-600' : 'text-green-600'
+            )} />
+          </div>
+          <div>
+            <p className={cn(
+              'text-sm font-semibold',
+              streakInfo.hasOverdue ? 'text-amber-800' : 'text-green-800'
+            )}>
+              {streakInfo.message}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Summary stats */}
       {!isLoading && items.length > 0 && <SummaryStats items={items} />}
+
+      {/* Mini calendar heatmap */}
+      {!isLoading && items.length > 0 && <MiniCalendarHeatmap followUps={items} />}
 
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3">
@@ -894,6 +934,7 @@ function RemindersTab() {
           />
           Show completed
         </label>
+        <TemplateQuickAdd />
       </div>
 
       {/* Bulk complete overdue button */}
@@ -909,6 +950,48 @@ function RemindersTab() {
             ? 'Completing...'
             : `Complete All Overdue (${overdue.length})`}
         </button>
+      )}
+
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5">
+          <span className="text-sm font-medium text-blue-700">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleBulkAction('complete')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Complete
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkAction('snooze')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600"
+            >
+              <AlarmClock className="h-3.5 w-3.5" />
+              Snooze 3d
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkAction('dismiss')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-gray-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-600"
+            >
+              <X className="h-3.5 w-3.5" />
+              Dismiss
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="ml-auto text-xs font-medium text-blue-600 hover:text-blue-700"
+          >
+            Clear selection
+          </button>
+        </div>
       )}
 
       {/* Filtered count when searching */}

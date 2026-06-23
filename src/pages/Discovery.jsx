@@ -488,6 +488,7 @@ export default function Discovery() {
           </div>
 
           {results.companies && results.companies.length > 0 ? (
+            viewMode === 'table' ? (
             <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -580,6 +581,83 @@ export default function Discovery() {
                 </tbody>
               </table>
             </div>
+            ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {results.companies.map((company, idx) => (
+                <div
+                  key={company.id || idx}
+                  className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <div className="mb-3 flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                      <span className="text-sm font-bold text-gray-900">{company.name}</span>
+                    </div>
+                    {company.status === 'imported' ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                        <Plus className="h-3 w-3" />
+                        New
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Exists
+                      </span>
+                    )}
+                  </div>
+                  {company.domain && (
+                    <a
+                      href={`https://${company.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mb-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      {company.domain}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                  <div className="mt-2 space-y-1.5 text-xs text-gray-600">
+                    {company.industry && (
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-gray-400" />
+                        {company.industry}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                      {[company.city, company.state].filter(Boolean).join(', ') || '--'}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-gray-400" />
+                      {company.employees ? formatNumber(company.employees) : '--'} employees
+                    </div>
+                  </div>
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    {company.status === 'imported' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleEnrich(company.id)}
+                        disabled={enrichCompany.isPending}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Enrich & Find Contacts
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/companies/${company.id}`)}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View Company
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            )
           ) : (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white py-16">
               <Search className="h-10 w-10 text-gray-300" />

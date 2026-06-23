@@ -157,6 +157,14 @@ function autoMapHeader(header) {
   return aliases[normalized] || '';
 }
 
+// Simple email validation
+function isValidEmail(str) {
+  if (!str || typeof str !== 'string') return true; // empty is not "invalid email"
+  const trimmed = str.trim();
+  if (!trimmed) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+}
+
 // ---------------------------------------------------------------------------
 // Duplicate email detection
 // ---------------------------------------------------------------------------
@@ -287,7 +295,22 @@ function StepIndicator({ currentStep }) {
 // ---------------------------------------------------------------------------
 // Import Progress Bar Component
 // ---------------------------------------------------------------------------
-function ImportProgressBar({ isImporting, isComplete }) {
+function ImportProgressBar({ isImporting, isComplete, totalRows = 0 }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isImporting || isComplete) return;
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isImporting, isComplete]);
+
+  const estimatedTotal = totalRows ? Math.max(5, Math.ceil(totalRows / 50)) : 30;
+  const pct = isComplete ? 100 : Math.min(95, Math.round((elapsed / estimatedTotal) * 100));
+  const remaining = Math.max(0, estimatedTotal - elapsed);
+
   return (
     <div className="w-full">
       <div className="mb-2 flex items-center justify-between text-sm">
@@ -295,33 +318,20 @@ function ImportProgressBar({ isImporting, isComplete }) {
           {isComplete ? 'Import complete' : 'Importing data...'}
         </span>
         <span className="text-gray-500">
-          {isComplete ? '100%' : 'Processing...'}
+          {isComplete ? '100%' : `${pct}% · ~${remaining}s remaining`}
         </span>
       </div>
       <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
         <div
           className={`h-full rounded-full transition-all duration-500 ease-out ${
-            isComplete
-              ? 'w-full bg-green-500'
-              : 'bg-blue-500'
+            isComplete ? 'bg-green-500' : 'bg-blue-500'
           }`}
-          style={
-            !isComplete
-              ? {
-                  width: '85%',
-                  animation: 'progress-pulse 2s ease-in-out infinite',
-                }
-              : undefined
-          }
+          style={{ width: `${pct}%` }}
         />
       </div>
-      <style>{`
-        @keyframes progress-pulse {
-          0% { width: 30%; }
-          50% { width: 85%; }
-          100% { width: 30%; }
-        }
-      `}</style>
+      {!isComplete && totalRows > 0 && (
+        <p className="mt-1 text-xs text-gray-400">Processing {totalRows} rows...</p>
+      )}
     </div>
   );
 }
@@ -427,8 +437,25 @@ export default function Import() {
   const [importResult, setImportResult] = useState(null);
   const [lastImportResult, setLastImportResult] = useState(null);
   const [duplicateHandling, setDuplicateHandling] = useState('skip');
-  const [importHistory, setImportHistory] = useState([]);
+  const [importHistory, setImportHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem(IMPORT_HISTORY_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isImportRunning, setIsImportRunning] = useState(false);
+
+  // Track which fields were auto-mapped for visual distinction
+  const [autoMappedFields, setAutoMappedFields] = useState(new Set());
+
+  // Persist import history to localStorage (keep last 50)
+  useEffect(() => {
+    try {
+      localStorage.setItem(IMPORT_HISTORY_KEY, JSON.stringify(importHistory.slice(0, 50)));
+    } catch { /* localStorage unavailable */ }
+  }, [importHistory]);
 
   // Drag-and-drop state for the enhanced drop zone
   const [isDragOver, setIsDragOver] = useState(false);
@@ -510,6 +537,7 @@ export default function Import() {
         }
       });
       setMappings(autoMappings);
+      setAutoMappedFields(new Set(Object.entries(autoMappings).filter(([, v]) => v).map(([k]) => Number(k))));
       setCurrentStep(1);
     };
     reader.onerror = () => {
@@ -674,17 +702,21 @@ export default function Import() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`relative mb-4 rounded-xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
+            className={`relative mb-4 rounded-xl border-2 border-dashed p-8 text-center transition-all duration-300 ease-in-out ${
               isDragOver
-                ? 'border-blue-500 bg-blue-50 scale-[1.01] shadow-lg'
-                : 'border-gray-300 bg-gray-50'
+                ? 'border-blue-500 bg-blue-50 scale-[1.02] shadow-lg ring-4 ring-blue-100'
+                : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100/50'
             }`}
           >
-            <Upload
-              className={`mx-auto mb-3 h-12 w-12 transition-colors ${
-                isDragOver ? 'text-blue-500' : 'text-gray-300'
-              }`}
-            />
+            {isDragOver ? (
+              <FileText
+                className="mx-auto mb-3 h-12 w-12 text-blue-500 transition-all duration-300 animate-bounce"
+              />
+            ) : (
+              <Upload
+                className="mx-auto mb-3 h-12 w-12 text-gray-300 transition-all duration-300"
+              />
+            )}
             <p
               className={`text-base font-medium transition-colors ${
                 isDragOver ? 'text-blue-600' : 'text-gray-600'
@@ -840,9 +872,11 @@ export default function Import() {
                       className={`flex-1 rounded-lg border px-3 py-2 text-sm ${
                         isRequired
                           ? 'border-blue-300 bg-blue-50 font-medium text-blue-700'
-                          : mapped
-                            ? 'border-gray-300 bg-white text-gray-700'
-                            : 'border-gray-200 bg-white text-gray-400'
+                          : autoMappedFields.has(idx) && mapped
+                            ? 'border-blue-200 bg-blue-50/50 text-blue-600'
+                            : mapped
+                              ? 'border-gray-300 bg-white text-gray-700'
+                              : 'border-gray-200 bg-white text-gray-400'
                       }`}
                     >
                       {TARGET_FIELDS.map((field) => (
@@ -852,6 +886,9 @@ export default function Import() {
                         </option>
                       ))}
                     </select>
+                    {autoMappedFields.has(idx) && mapped && (
+                      <span className="text-[10px] font-medium text-blue-500 whitespace-nowrap">Auto</span>
+                    )}
                   </div>
                 );
               })}
@@ -950,6 +987,42 @@ export default function Import() {
             <h3 className="mb-3 text-sm font-semibold text-gray-700">
               Preview (first {Math.min(previewRows.length, 10)} rows)
             </h3>
+
+            {/* Validation summary */}
+            {(() => {
+              const emailColIdx = Object.entries(mappings).find(([, v]) => v === 'contact_email');
+              const companyColIdx = Object.entries(mappings).find(([, v]) => v === 'company_name');
+              let invalidEmails = 0;
+              let emptyRequired = 0;
+              for (const row of parsedData.rows) {
+                if (emailColIdx) {
+                  const val = row[Number(emailColIdx[0])] || '';
+                  if (val.trim() && !isValidEmail(val)) invalidEmails++;
+                }
+                if (companyColIdx) {
+                  const val = row[Number(companyColIdx[0])] || '';
+                  if (!val.trim()) emptyRequired++;
+                }
+              }
+              if (invalidEmails === 0 && emptyRequired === 0) return null;
+              return (
+                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                  <span className="text-sm text-amber-800">Validation issues found:</span>
+                  {invalidEmails > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                      {invalidEmails} invalid email{invalidEmails !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {emptyRequired > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                      {emptyRequired} empty company name{emptyRequired !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="w-full text-left text-sm">
                 <thead>
@@ -986,14 +1059,28 @@ export default function Import() {
                       <td className="whitespace-nowrap border-b border-gray-100 px-3 py-2 text-xs text-gray-400">
                         {rowIdx + 1}
                       </td>
-                      {parsedData.headers.map((_, colIdx) => (
-                        <td
-                          key={colIdx}
-                          className="whitespace-nowrap border-b border-gray-100 px-3 py-2 text-sm text-gray-700"
-                        >
-                          {row[colIdx] || ''}
-                        </td>
-                      ))}
+                      {parsedData.headers.map((_, colIdx) => {
+                        const cellValue = row[colIdx] || '';
+                        const mappedField = mappings[colIdx] || '';
+                        const isBadEmail = mappedField === 'contact_email' && cellValue.trim() && !isValidEmail(cellValue);
+                        const isEmptyRequired = mappedField === 'company_name' && !cellValue.trim();
+                        return (
+                          <td
+                            key={colIdx}
+                            className={`whitespace-nowrap border-b border-gray-100 px-3 py-2 text-sm ${
+                              isBadEmail
+                                ? 'bg-red-50 text-red-700'
+                                : isEmptyRequired
+                                  ? 'bg-amber-50 text-amber-700'
+                                  : 'text-gray-700'
+                            }`}
+                            title={isBadEmail ? 'Invalid email format' : isEmptyRequired ? 'Required field is empty' : undefined}
+                          >
+                            {cellValue}
+                            {isBadEmail && <AlertCircle className="ml-1 inline h-3 w-3 text-red-400" />}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -1054,7 +1141,7 @@ export default function Import() {
                 Processing {parsedData?.rows.length ?? 0} rows from {selectedFile?.name}...
               </p>
               <div className="w-full max-w-md">
-                <ImportProgressBar isImporting={isImportRunning} isComplete={false} />
+                <ImportProgressBar isImporting={isImportRunning} isComplete={false} totalRows={parsedData?.rows.length ?? 0} />
               </div>
               <p className="mt-4 text-xs text-gray-400">
                 Please do not close this page while the import is in progress.

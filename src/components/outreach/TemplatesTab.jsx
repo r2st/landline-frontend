@@ -6,11 +6,21 @@ import TemplateCard from './TemplateCard';
 import PreviewModal from './PreviewModal';
 import { Plus } from 'lucide-react';
 import { useEmailTemplates, usePreviewTemplate } from '../../hooks/useEmailTemplates';
+import { cn } from '../../lib/utils';
+
+function getTemplateCategory(name) {
+  const lower = (name || '').toLowerCase();
+  if (lower.includes('follow')) return 'Follow-up';
+  if (lower.includes('intro')) return 'Introduction';
+  if (lower.includes('demo')) return 'Product Demo';
+  return 'General';
+}
 
 export default function TemplatesTab() {
   const { data: templates, isLoading } = useEmailTemplates();
   const [editing, setEditing] = useState(null);
   const [templateSearch, setTemplateSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const preview = usePreviewTemplate();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState(null);
@@ -31,12 +41,18 @@ export default function TemplatesTab() {
   };
 
   const filteredTemplates = useMemo(() => {
+    let result = templates || [];
+    if (categoryFilter) {
+      result = result.filter((t) => getTemplateCategory(t.name) === categoryFilter);
+    }
     const q = templateSearch.trim().toLowerCase();
-    if (!q || !templates?.length) return templates || [];
-    return templates.filter((t) =>
-      [t.name, t.subject].filter(Boolean).some((v) => v.toLowerCase().includes(q))
-    );
-  }, [templates, templateSearch]);
+    if (q) {
+      result = result.filter((t) =>
+        [t.name, t.subject].filter(Boolean).some((v) => v.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [templates, templateSearch, categoryFilter]);
 
   if (isLoading) {
     return (
@@ -71,6 +87,35 @@ export default function TemplatesTab() {
         </div>
       )}
 
+      {!editing && templates?.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-500">Filter:</span>
+          {['All', 'Introduction', 'Follow-up', 'Product Demo', 'General'].map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategoryFilter(cat === 'All' ? '' : cat)}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                (cat === 'All' && !categoryFilter) || categoryFilter === cat
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!editing && templates?.length > 0 && (
+        <div className="flex items-center gap-4 rounded-lg bg-gray-50 px-4 py-2.5 text-xs text-gray-500">
+          <span className="font-medium text-gray-700">{templates.length} template{templates.length !== 1 ? 's' : ''}</span>
+          <span>{templates.filter(t => t.is_default).length > 0 ? '1 default set' : 'No default set'}</span>
+          <span>{filteredTemplates.length} shown</span>
+        </div>
+      )}
+
       {editing && (
         <TemplateEditor
           template={editing === 'new' ? null : editing}
@@ -81,7 +126,9 @@ export default function TemplatesTab() {
       {!editing && (filteredTemplates.length ? (
         <div className="grid gap-4 sm:grid-cols-2">
           {filteredTemplates.map((t) => (
-            <TemplateCard key={t.id} template={t} onEdit={setEditing} onPreview={handlePreview} onDuplicate={handleDuplicate} />
+            <div key={t.id} title={`Subject: ${t.subject || 'No subject'}\n\nClick Preview for full view`}>
+              <TemplateCard template={t} onEdit={setEditing} onPreview={handlePreview} onDuplicate={handleDuplicate} />
+            </div>
           ))}
         </div>
       ) : templates?.length ? (

@@ -1092,6 +1092,9 @@ export default function Tasks() {
     selectMode,
     expandedId,
     onExpand: setExpandedId,
+    timers: taskTimers,
+    onTimerToggle: toggleTimer,
+    onCompleteFollowUp: handleCompleteAndFollowUp,
   };
 
   const hasFilters = search || priorityFilter || statusFilter;
@@ -1269,6 +1272,20 @@ export default function Tasks() {
           action={!hasFilters ? { label: 'Add Task', onClick: openAdd } : undefined}
         />
       ) : (
+        <>
+        <MyDaySection
+          tasks={filtered}
+          onToggle={toggle}
+          onEdit={openEdit}
+          onDelete={remove}
+          onOpenCompany={(id) => navigate(`/companies/${id}`)}
+          onNotesUpdate={handleNotesUpdate}
+          expandedId={expandedId}
+          onExpand={setExpandedId}
+          timers={taskTimers}
+          onTimerToggle={toggleTimer}
+          onCompleteFollowUp={handleCompleteAndFollowUp}
+        />
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           {/* Quick Add Form */}
           <QuickAddForm onAdd={handleQuickAdd} isAdding={createTask.isPending} />
@@ -1297,6 +1314,7 @@ export default function Tasks() {
             </ul>
           )}
         </div>
+        </>
       )}
 
       {/* Bulk Action Bar */}

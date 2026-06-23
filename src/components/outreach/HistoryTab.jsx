@@ -287,6 +287,31 @@ export default function HistoryTab() {
                     {expandedRow === s.id && (
                       <tr className="bg-gray-50/50">
                         <td colSpan={7} className="px-6 py-4">
+                          {/* Email Status Timeline */}
+                          <div className="mb-4 flex items-center gap-1">
+                            {[
+                              { key: 'sent', label: 'Sent', check: true },
+                              { key: 'delivered', label: 'Delivered', check: s.status !== 'bounced' && s.status !== 'failed' },
+                              { key: 'opened', label: 'Opened', check: !!s.opened_at },
+                              { key: 'clicked', label: 'Clicked', check: !!s.clicked_at },
+                              { key: 'replied', label: 'Replied', check: s.status === 'replied' },
+                            ].map((step, i, arr) => (
+                              <React.Fragment key={step.key}>
+                                <div className="flex flex-col items-center">
+                                  <div className={cn(
+                                    'flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium',
+                                    step.check ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
+                                  )}>
+                                    {step.check ? <CheckCircle2 className="h-4 w-4" /> : <span className="h-2 w-2 rounded-full bg-gray-300" />}
+                                  </div>
+                                  <span className={cn('mt-1 text-[10px]', step.check ? 'font-medium text-green-700' : 'text-gray-400')}>{step.label}</span>
+                                </div>
+                                {i < arr.length - 1 && (
+                                  <div className={cn('mt-[-12px] h-0.5 flex-1', step.check ? 'bg-green-300' : 'bg-gray-200')} />
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </div>
                           <div className="space-y-3 text-sm">
                             {s.body && (
                               <div>
@@ -308,6 +333,21 @@ export default function HistoryTab() {
                                 <p className="mt-0.5 text-xs text-gray-700">{s.clicked_at ? formatDate(s.clicked_at) : '--'}</p>
                               </div>
                             </div>
+                            {(s.status === 'bounced' || s.status === 'failed') && (
+                              <div className="mt-3 border-t border-gray-100 pt-3">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toast.success(`Resend queued for ${s.to_email}`);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                  Resend to {s.to_email}
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

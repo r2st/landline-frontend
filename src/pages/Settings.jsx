@@ -818,7 +818,159 @@ export default function Settings() {
     </div>
   );
 
+  const renderProfileTab = () => {
+    const initials = userName.trim()
+      ? userName.trim().split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2)
+      : '?';
+    return (
+      <div className="space-y-6">
+        {/* Avatar + Name/Email */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+              <User className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Profile</h2>
+              <p className="text-sm text-gray-500">Your personal settings</p>
+            </div>
+          </div>
+
+          {/* Avatar */}
+          <div className="mb-6 flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-xl font-bold text-white shadow-inner">
+              {initials}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">{userName.trim() || 'Not set'}</p>
+              <p className="text-xs text-gray-500">sumaninster7@gmail.com</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+              <input
+                type="text"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="Your name"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+              <input
+                type="email"
+                readOnly
+                value="sumaninster7@gmail.com"
+                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  Timezone
+                </span>
+              </label>
+              <select
+                value={userTimezone}
+                onChange={(e) => setUserTimezone(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {timezones.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Working Hours */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+              <Clock className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Working Hours</h2>
+              <p className="text-sm text-gray-500">Set your availability for scheduling and notifications</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Start Time</label>
+              <input
+                type="time"
+                value={workingHours.start}
+                onChange={(e) => setWorkingHours((prev) => ({ ...prev, start: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">End Time</label>
+              <input
+                type="time"
+                value={workingHours.end}
+                onChange={(e) => setWorkingHours((prev) => ({ ...prev, end: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="mb-2 block text-sm font-medium text-gray-700">Working Days</label>
+            <div className="flex flex-wrap gap-2">
+              {WEEKDAYS.map((day) => {
+                const active = workingHours.days.includes(day.id);
+                return (
+                  <button
+                    key={day.id}
+                    type="button"
+                    onClick={() =>
+                      setWorkingHours((prev) => ({
+                        ...prev,
+                        days: active
+                          ? prev.days.filter((d) => d !== day.id)
+                          : [...prev.days, day.id],
+                      }))
+                    }
+                    className={cn(
+                      'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                      active
+                        ? 'bg-blue-500 text-white shadow-sm'
+                        : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                    )}
+                  >
+                    {day.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Save */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleProfileSave}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+          >
+            <Save className="h-4 w-4" />
+            Save Profile
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const tabContent = {
+    profile: renderProfileTab,
     email: renderEmailTab,
     signatures: renderSignaturesTab,
     scoring: renderScoringTab,
@@ -829,82 +981,19 @@ export default function Settings() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      {/* Profile Section */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-            <User className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Profile</h2>
-            <p className="text-sm text-gray-500">Your personal settings</p>
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
-            <input
-              type="text"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              placeholder="Your name"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              readOnly
-              value="sumaninster7@gmail.com"
-              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />
-                Timezone
-              </span>
-            </label>
-            <select
-              value={userTimezone}
-              onChange={(e) => setUserTimezone(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {timezones.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={handleProfileSave}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
-          >
-            <Save className="h-4 w-4" />
-            Save Profile
-          </button>
-        </div>
-      </div>
-
       {/* Tab Navigation */}
-      <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
         {TABS.map((tab) => {
           const Icon = tab.icon;
+          const showGreen = tab.id === 'email' && gmailConnected;
+          const showWarning = tab.id === 'scoring' && weightsTotal !== 100;
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                'relative flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 activeTab === tab.id
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-gray-600 hover:bg-gray-100'
@@ -912,6 +1001,12 @@ export default function Settings() {
             >
               <Icon className="h-3.5 w-3.5" />
               {tab.label}
+              {showGreen && (
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-green-500" />
+              )}
+              {showWarning && (
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-amber-500" />
+              )}
             </button>
           );
         })}

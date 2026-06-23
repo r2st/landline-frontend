@@ -17,6 +17,7 @@ import {
   Save,
   AlertCircle,
   ChevronDown,
+  Wand2,
 } from 'lucide-react';
 import EmptyState from '../EmptyState';
 import PreviewModal from './PreviewModal';
@@ -586,6 +587,15 @@ export default function ComposeTab() {
               <Save className="h-4 w-4" />
               Draft
             </button>
+            <button
+              type="button"
+              onClick={() => toast('AI suggestions coming soon', { icon: '✨' })}
+              className="inline-flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 sm:px-4"
+              title="AI-powered email improvement suggestions"
+            >
+              <Wand2 className="h-4 w-4" />
+              AI Improve
+            </button>
             <select value={scheduleMode} onChange={(e) => setScheduleMode(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="now">Send Now</option>
               <option value="later">Schedule</option>
@@ -639,6 +649,22 @@ export default function ComposeTab() {
           <button type="button" onClick={() => setSelected({})} className="ml-auto text-xs font-medium text-blue-600 hover:text-blue-700">Clear all</button>
         </div>
       )}
+
+      {/* Template word/character count */}
+      {templateId && (() => {
+        const tmpl = (templates || []).find(t => t.id === templateId);
+        if (!tmpl?.body) return null;
+        const plainText = tmpl.body.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+        const charCount = plainText.length;
+        const wordCount = plainText.trim().split(/\s+/).filter(Boolean).length;
+        return (
+          <div className="flex items-center gap-4 rounded-lg border border-gray-100 bg-gray-50 px-4 py-2 text-xs text-gray-500">
+            <span>{wordCount} words</span>
+            <span>{charCount} characters</span>
+            {charCount > 5000 && <span className="text-amber-600 font-medium">Long email — consider shortening</span>}
+          </div>
+        );
+      })()}
 
       {/* Contact selector */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
