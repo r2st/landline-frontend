@@ -1,10 +1,19 @@
-import { Star, Eye, Pencil, Copy, Trash2 } from 'lucide-react';
+import { Star, Eye, Pencil, Copy, Trash2, Clock, BarChart3 } from 'lucide-react';
 import { useSetDefaultTemplate, useDeleteTemplate } from '../../hooks/useEmailTemplates';
-import { cn } from '../../lib/utils';
+import { cn, timeAgo } from '../../lib/utils';
+
+function getCategoryBadge(name) {
+  const lower = (name || '').toLowerCase();
+  if (lower.includes('follow')) return { label: 'Follow-up', classes: 'bg-purple-100 text-purple-700' };
+  if (lower.includes('intro')) return { label: 'Introduction', classes: 'bg-blue-100 text-blue-700' };
+  if (lower.includes('demo')) return { label: 'Product Demo', classes: 'bg-green-100 text-green-700' };
+  return { label: 'General', classes: 'bg-gray-100 text-gray-700' };
+}
 
 export default function TemplateCard({ template, onEdit, onPreview, onDuplicate }) {
   const setDefault = useSetDefaultTemplate();
   const deleteTemplate = useDeleteTemplate();
+  const category = getCategoryBadge(template.name);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -18,8 +27,21 @@ export default function TemplateCard({ template, onEdit, onPreview, onDuplicate 
                 Default
               </span>
             )}
+            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', category.classes)}>
+              {category.label}
+            </span>
           </div>
           <p className="mt-1 truncate text-sm text-gray-500">{template.subject}</p>
+          <div className="mt-1.5 flex items-center gap-3 text-xs text-gray-400">
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {template.created_at ? `Last used ${timeAgo(template.created_at)}` : 'Last used: --'}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <BarChart3 className="h-3 w-3" />
+              -- times used
+            </span>
+          </div>
         </div>
         <button
           type="button"

@@ -68,6 +68,21 @@ export function useUpdateSequenceStatus() {
   });
 }
 
+export function useDeleteSequence() {
+  return useMutation({
+    mutationFn: async (id) => {
+      return await outreachApi.deleteSequence(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sequences'] });
+      toast.success('Sequence deleted');
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to delete sequence');
+    },
+  });
+}
+
 export function useEnrollBatch() {
   return useMutation({
     mutationFn: async ({ sequenceId, contactIds }) => {

@@ -63,6 +63,7 @@ export const dashboardApi = {
   getIndustry: (params) => api.get('/dashboard/industry', { params }).then(r => r.data),
   getEmailTrends: (params) => api.get('/dashboard/email-trends', { params }).then(r => r.data),
   getContactGrowth: (params) => api.get('/dashboard/contact-growth', { params }).then(r => r.data),
+  getKPIs: () => api.get('/dashboard/kpis').then(r => r.data),
 };
 
 export const followUpsApi = {
@@ -76,6 +77,7 @@ export const followUpsApi = {
 export const outreachApi = {
   getSequences: () => api.get('/outreach/sequences').then(r => r.data),
   createSequence: (data) => api.post('/outreach/sequences', data).then(r => r.data),
+  deleteSequence: (id) => api.delete(`/outreach/sequences/${id}`).then(r => r.data),
   // The enrollment endpoint enrolls a single contact (contact_id + sequence_id).
   enrollContact: (data) => api.post('/outreach/enrollments', data).then(r => r.data),
   getEvents: (params) => api.get('/outreach/events', { params }).then(r => r.data),

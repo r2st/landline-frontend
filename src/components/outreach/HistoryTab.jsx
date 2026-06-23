@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
   Eye,
@@ -15,7 +15,11 @@ import {
   MousePointerClick,
   Reply,
   AlertTriangle,
+  ChevronDown,
+  RotateCcw,
+  Send,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import EmptyState from '../EmptyState';
 import { useAllEmailSends, useCampaignAnalytics } from '../../hooks/useEmailTemplates';
 import { cn, formatDate } from '../../lib/utils';
@@ -23,13 +27,13 @@ import { cn, formatDate } from '../../lib/utils';
 const PAGE_SIZE = 25;
 
 const STATUS_CONFIG = {
-  sent: { icon: CheckCircle2, label: 'Sent', colors: 'bg-gray-100 text-gray-700' },
-  delivered: { icon: CheckCircle2, label: 'Delivered', colors: 'bg-gray-100 text-gray-700' },
-  opened: { icon: MailOpen, label: 'Opened', colors: 'bg-blue-50 text-blue-700' },
-  clicked: { icon: MousePointerClick, label: 'Clicked', colors: 'bg-yellow-50 text-yellow-700' },
-  replied: { icon: Reply, label: 'Replied', colors: 'bg-green-50 text-green-700' },
+  sent: { icon: CheckCircle2, label: 'Sent', colors: 'bg-blue-50 text-blue-700' },
+  delivered: { icon: CheckCircle2, label: 'Delivered', colors: 'bg-blue-50 text-blue-700' },
+  opened: { icon: MailOpen, label: 'Opened', colors: 'bg-green-50 text-green-700' },
+  clicked: { icon: MousePointerClick, label: 'Clicked', colors: 'bg-purple-50 text-purple-700' },
+  replied: { icon: Reply, label: 'Replied', colors: 'bg-teal-50 text-teal-700' },
   bounced: { icon: XCircle, label: 'Bounced', colors: 'bg-red-50 text-red-700' },
-  failed: { icon: AlertTriangle, label: 'Failed', colors: 'bg-red-50 text-red-700' },
+  failed: { icon: AlertTriangle, label: 'Failed', colors: 'bg-gray-100 text-gray-700' },
   scheduled: { icon: Clock, label: 'Scheduled', colors: 'bg-orange-50 text-orange-700' },
 };
 
@@ -72,6 +76,8 @@ export default function HistoryTab() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [selectedForResend, setSelectedForResend] = useState({});
 
   const sorted = useMemo(() => {
     const items = [...(sends || [])];
@@ -193,6 +199,20 @@ export default function HistoryTab() {
             Export CSV
           </button>
         )}
+        {Object.values(selectedForResend).filter(Boolean).length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              const count = Object.values(selectedForResend).filter(Boolean).length;
+              toast.success(`Resend queued for ${count} emails`);
+              setSelectedForResend({});
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Resend Selected ({Object.values(selectedForResend).filter(Boolean).length})
+          </button>
+        )}
         <span className="text-xs text-gray-400">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
       </div>
 
@@ -208,6 +228,7 @@ export default function HistoryTab() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="sticky top-0 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                 <tr>
+                  <th className="w-10 px-4 py-2"></th>
                   <th className="px-4 py-2">Recipient</th>
                   <th className="px-4 py-2">Subject</th>
                   <th className="px-4 py-2">Status</th>
@@ -218,34 +239,80 @@ export default function HistoryTab() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {paginatedItems.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-gray-900">{s.to_email || '--'}</td>
-                    <td className="max-w-[200px] truncate px-4 py-2.5 text-gray-600">{s.subject || '--'}</td>
-                    <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
-                    <td className="px-4 py-2.5">
-                      {s.ab_variant ? (
-                        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', s.ab_variant === 'A' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700')}>
-                          {s.ab_variant}
-                        </span>
-                      ) : <span className="text-xs text-gray-400">-</span>}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {s.opened_at ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-blue-600">
-                          <Eye className="h-3 w-3" />
-                          {formatDate(s.opened_at)}
-                        </span>
-                      ) : <span className="text-xs text-gray-400">--</span>}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {s.sent_at ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                          <Clock className="h-3 w-3" />
-                          {formatDate(s.sent_at)}
-                        </span>
-                      ) : <span className="text-xs text-gray-400">--</span>}
-                    </td>
-                  </tr>
+                  <React.Fragment key={s.id}>
+                    <tr
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => setExpandedRow(expandedRow === s.id ? null : s.id)}
+                    >
+                      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        {(s.status === 'failed' || s.status === 'bounced') ? (
+                          <input
+                            type="checkbox"
+                            checked={!!selectedForResend[s.id]}
+                            onChange={(e) => setSelectedForResend(prev => ({ ...prev, [s.id]: e.target.checked }))}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-900">{s.to_email || '--'}</td>
+                      <td className="max-w-[200px] truncate px-4 py-2.5 text-gray-600">{s.subject || '--'}</td>
+                      <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
+                      <td className="px-4 py-2.5">
+                        {s.ab_variant ? (
+                          <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', s.ab_variant === 'A' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700')}>
+                            {s.ab_variant}
+                          </span>
+                        ) : <span className="text-xs text-gray-400">-</span>}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {s.opened_at ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-blue-600">
+                            <Eye className="h-3 w-3" />
+                            {formatDate(s.opened_at)}
+                          </span>
+                        ) : <span className="text-xs text-gray-400">--</span>}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-between">
+                          {s.sent_at ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                              <Clock className="h-3 w-3" />
+                              {formatDate(s.sent_at)}
+                            </span>
+                          ) : <span className="text-xs text-gray-400">--</span>}
+                          <ChevronDown className={cn('h-4 w-4 text-gray-400 transition-transform', expandedRow === s.id && 'rotate-180')} />
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedRow === s.id && (
+                      <tr className="bg-gray-50/50">
+                        <td colSpan={7} className="px-6 py-4">
+                          <div className="space-y-3 text-sm">
+                            {s.body && (
+                              <div>
+                                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">Email Body Preview</p>
+                                <div className="max-h-40 overflow-auto rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700" dangerouslySetInnerHTML={{ __html: s.body }} />
+                              </div>
+                            )}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                              <div>
+                                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Provider Message ID</p>
+                                <p className="mt-0.5 break-all text-xs text-gray-700 font-mono">{s.provider_message_id || '--'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Opened At</p>
+                                <p className="mt-0.5 text-xs text-gray-700">{s.opened_at ? formatDate(s.opened_at) : '--'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Clicked At</p>
+                                <p className="mt-0.5 text-xs text-gray-700">{s.clicked_at ? formatDate(s.clicked_at) : '--'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

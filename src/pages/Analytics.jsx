@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail,
@@ -12,12 +12,18 @@ import {
   Send,
   Download,
   Users,
+  ChevronDown,
+  Lightbulb,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import {
   LineChart,
   Line,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
   XAxis,
   YAxis,
   Tooltip,
@@ -55,6 +61,12 @@ function pctChange(current, previous) {
   return Math.round(((current - previous) / previous) * 100);
 }
 
+function getYTDDays() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  return Math.ceil((now - start) / (1000 * 60 * 60 * 24));
+}
+
 /* ---------- skeleton / card components ---------- */
 
 function SkeletonCard() {
@@ -71,10 +83,13 @@ function SkeletonCard() {
   );
 }
 
-function ChartCard({ title, children, className }) {
+function ChartCard({ title, children, className, headerRight }) {
   return (
     <div className={cn('rounded-xl border border-gray-200 bg-white p-6 shadow-sm', className)}>
-      <h2 className="mb-4 text-base font-semibold text-gray-900">{title}</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        {headerRight && <div>{headerRight}</div>}
+      </div>
       {children}
     </div>
   );
@@ -120,6 +135,73 @@ function RateCard({ title, value, icon: Icon, color, subtitle, colorCode }) {
           <Icon className={cn('h-6 w-6', palette.text)} />
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------- gauge circle ---------- */
+
+function GaugeCircle({ label, value, color, maxValue = 100 }) {
+  const size = 120;
+  const strokeWidth = 10;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const pct = Math.min(value / maxValue, 1);
+  const offset = circumference * (1 - pct);
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#f1f5f9"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="transition-all duration-700"
+        />
+      </svg>
+      <div className="absolute mt-[42px] flex flex-col items-center">
+        <span className="text-xl font-bold text-gray-900">{value}%</span>
+      </div>
+      <p className="text-sm font-medium text-gray-600 -mt-1">{label}</p>
+    </div>
+  );
+}
+
+/* ---------- insight card ---------- */
+
+function InsightCard({ text, type = 'neutral' }) {
+  const borderColor = {
+    positive: 'border-l-green-500',
+    negative: 'border-l-red-500',
+    neutral: 'border-l-blue-500',
+  }[type] || 'border-l-blue-500';
+
+  const iconColor = {
+    positive: 'text-green-500',
+    negative: 'text-red-500',
+    neutral: 'text-blue-500',
+  }[type] || 'text-blue-500';
+
+  return (
+    <div className={cn('rounded-lg border border-gray-200 border-l-4 bg-white px-4 py-3 shadow-sm', borderColor)}>
+      <div className="flex items-start gap-2">
+        <Lightbulb className={cn('mt-0.5 h-4 w-4 flex-shrink-0', iconColor)} />
+        <p className="text-sm text-gray-700">{text}</p>
+      </div>
     </div>
   );
 }
@@ -255,20 +337,99 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
+/* ---------- pie chart label ---------- */
+
+const PIE_COLORS = ['#8b5cf6', '#3b82f6', '#14b8a6', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#10b981'];
+
+function renderPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, name, percent }) {
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 24;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  if (percent < 0.04) return null;
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#374151"
+      textAnchor={x > cx ? 'start' : 'end'}
+      dominantBaseline="central"
+      fontSize={11}
+    >
+      {name} ({(percent * 100).toFixed(0)}%)
+    </text>
+  );
+}
+
+/* ---------- export dropdown ---------- */
+
+function ExportDropdown({ onExportCSV, onExportSummary }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+      >
+        <Download className="h-4 w-4" />
+        Download Report
+        <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            onClick={() => { onExportCSV(); setOpen(false); }}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            onClick={() => { onExportSummary(); setOpen(false); }}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Export Summary
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ========== MAIN COMPONENT ========== */
 
 export default function Analytics() {
   const navigate = useNavigate();
   const [dateRange, setDateRange] = useState(30); // days
+  const [compareMode, setCompareMode] = useState(false);
+
+  const ytdDays = useMemo(() => getYTDDays(), []);
+
   const dateRangeOptions = [
-    { label: 'Last 7 days', value: 7 },
-    { label: 'Last 30 days', value: 30 },
-    { label: 'Last 90 days', value: 90 },
-    { label: 'Last 365 days', value: 365 },
+    { label: '7d', value: 7 },
+    { label: '30d', value: 30 },
+    { label: '90d', value: 90 },
+    { label: '365d', value: 365 },
+    { label: 'YTD', value: ytdDays },
   ];
 
   const { data: metrics, isLoading: metricsLoading } = useAnalyticsMetrics();
   const { data: trends, isLoading: trendsLoading } = useEmailTrendsAnalytics(dateRange);
+  const { data: comparisonTrends } = useEmailTrendsAnalytics(compareMode ? dateRange * 2 : dateRange);
   const { data: topLeads, isLoading: leadsLoading } = useTopEngagedLeads(10);
   const { data: recentEmails, isLoading: emailsLoading } = useRecentEmailActivity(20);
   const { data: emailSends, isLoading: sendsLoading } = useAnalyticsEmailSends(20);
@@ -301,6 +462,29 @@ export default function Analytics() {
     }));
   }, [trends]);
 
+  // Comparison data: split the doubled-range data into previous and current periods
+  const comparisonData = useMemo(() => {
+    if (!compareMode || !comparisonTrends || comparisonTrends.length === 0) return null;
+    const all = (comparisonTrends || []).map((t) => ({
+      date: shortDate(t.date),
+      Sent: t.sent || 0,
+      Opened: t.opened || t.opens || 0,
+      Replied: t.replied || t.replies || 0,
+    }));
+    const midpoint = Math.floor(all.length / 2);
+    const previous = all.slice(0, midpoint);
+    const current = all.slice(midpoint);
+    // Merge previous period data onto current period by index
+    return current.map((c, i) => ({
+      ...c,
+      'Prev Sent': previous[i]?.Sent || 0,
+      'Prev Opened': previous[i]?.Opened || 0,
+      'Prev Replied': previous[i]?.Replied || 0,
+    }));
+  }, [compareMode, comparisonTrends]);
+
+  const chartData = compareMode && comparisonData ? comparisonData : trendData;
+
   // Pipeline conversion funnel
   const funnelData = useMemo(() => {
     const stageCounts = Object.fromEntries(
@@ -314,13 +498,14 @@ export default function Analytics() {
     }));
   }, [metrics?.pipeline]);
 
-  // Top performing industries (horizontal bar)
+  // Top performing industries (pie chart data)
   const industryData = useMemo(() => {
     return (metrics?.industry_breakdown || [])
       .slice(0, 8)
-      .map((i) => ({
+      .map((i, idx) => ({
         name: i.industry || 'Unknown',
-        count: i.count || 0,
+        value: i.count || 0,
+        fill: PIE_COLORS[idx % PIE_COLORS.length],
       }));
   }, [metrics?.industry_breakdown]);
 
@@ -361,6 +546,62 @@ export default function Analytics() {
     }));
   }, [contactGrowth]);
 
+  // --- Key Insights ---
+  const insights = useMemo(() => {
+    if (metricsLoading || !metrics) return [];
+    const items = [];
+
+    // Open rate vs industry average
+    const openRate = metrics.open_rate || 0;
+    const industryAvg = 20;
+    if (openRate > 0) {
+      const diff = openRate - industryAvg;
+      items.push({
+        text: `Open rate is ${openRate}% — ${diff >= 0 ? 'above' : 'below'} the industry average of ${industryAvg}%`,
+        type: diff >= 0 ? 'positive' : 'negative',
+      });
+    }
+
+    // Dormant contacts
+    const dormant = metrics.dormant_contacts || metrics.contacts_not_contacted_30d || 0;
+    if (dormant > 0) {
+      items.push({
+        text: `${formatNumber(dormant)} contacts haven't been contacted in 30+ days`,
+        type: 'negative',
+      });
+    }
+
+    // Week-over-week email volume change
+    if (emailTrend !== 0) {
+      items.push({
+        text: `${Math.abs(emailTrend)}% week-over-week email volume ${emailTrend >= 0 ? 'increase' : 'decrease'}`,
+        type: emailTrend >= 0 ? 'positive' : 'negative',
+      });
+    }
+
+    // Top industry
+    const topIndustry = (metrics.industry_breakdown || [])[0];
+    if (topIndustry) {
+      items.push({
+        text: `Top industry: ${topIndustry.industry || 'Unknown'} with ${formatNumber(topIndustry.count)} contacts`,
+        type: 'neutral',
+      });
+    }
+
+    // Reply rate insight
+    const replyRate = metrics.reply_rate || 0;
+    if (replyRate > 0) {
+      items.push({
+        text: `Reply rate of ${replyRate}% ${replyRate >= 5 ? 'shows strong engagement' : 'has room for improvement'}`,
+        type: replyRate >= 5 ? 'positive' : 'neutral',
+      });
+    }
+
+    return items.slice(0, 4);
+  }, [metrics, metricsLoading, emailTrend]);
+
+  // --- Export handlers ---
+
   function handleExportCSV() {
     const rows = [['Date', 'Sent', 'Opened', 'Replied']];
     (trends || []).forEach((t) => {
@@ -375,6 +616,40 @@ export default function Analytics() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  function handleExportSummary() {
+    const lines = [
+      `Landline Analytics Summary - ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+      `Period: Last ${dateRange} days`,
+      '',
+      '--- Key Metrics ---',
+      `Total Emails Sent: ${formatNumber(metrics?.emails_sent || 0)}`,
+      `Open Rate: ${metrics?.open_rate || 0}%`,
+      `Reply Rate: ${metrics?.reply_rate || 0}%`,
+      `Click Rate: ${metrics?.click_rate || 0}%`,
+      `Week-over-Week Trend: ${emailTrend >= 0 ? '+' : ''}${emailTrend}%`,
+      '',
+      '--- Pipeline ---',
+      ...(funnelData || []).map((s) => `${s.stage}: ${s.count}`),
+      '',
+      '--- Top Industries ---',
+      ...(industryData || []).map((i) => `${i.name}: ${i.value}`),
+      '',
+      '--- Insights ---',
+      ...insights.map((i) => `- ${i.text}`),
+    ];
+    const text = lines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-summary-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Date range label for display
+  const dateRangeLabel = dateRange === ytdDays ? 'YTD' : `Last ${dateRange} Days`;
 
   return (
     <div className="space-y-6">
@@ -406,12 +681,23 @@ export default function Analytics() {
           </div>
           <button
             type="button"
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            onClick={() => setCompareMode((c) => !c)}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium shadow-sm transition-colors',
+              compareMode
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            )}
+            title="Compare with previous period"
           >
-            <Download className="h-4 w-4" />
-            Export CSV
+            {compareMode ? (
+              <ToggleRight className="h-4 w-4" />
+            ) : (
+              <ToggleLeft className="h-4 w-4" />
+            )}
+            Compare
           </button>
+          <ExportDropdown onExportCSV={handleExportCSV} onExportSummary={handleExportSummary} />
         </div>
       </div>
 
@@ -456,15 +742,54 @@ export default function Analytics() {
         )}
       </div>
 
+      {/* Gauge-style Rate Circles */}
+      {!metricsLoading && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Performance Gauges</h2>
+          <div className="flex items-center justify-center gap-12 flex-wrap">
+            <div className="relative flex flex-col items-center">
+              <GaugeCircle label="Open Rate" value={metrics?.open_rate || 0} color="#22c55e" />
+            </div>
+            <div className="relative flex flex-col items-center">
+              <GaugeCircle label="Reply Rate" value={metrics?.reply_rate || 0} color="#8b5cf6" />
+            </div>
+            <div className="relative flex flex-col items-center">
+              <GaugeCircle label="Click Rate" value={metrics?.click_rate || 0} color="#14b8a6" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Key Insights Cards */}
+      {insights.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-base font-semibold text-gray-900">Key Insights</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {insights.map((insight, i) => (
+              <InsightCard key={i} text={insight.text} type={insight.type} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Charts Section (2x2) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Email Activity Over Time */}
-        <ChartCard title={`Email Activity (Last ${dateRange} Days)`}>
+        <ChartCard
+          title={`Email Activity (${dateRangeLabel})`}
+          headerRight={
+            compareMode && (
+              <span className="text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+                Comparing with previous period
+              </span>
+            )
+          }
+        >
           {trendsLoading ? (
             <div className="flex h-[280px] items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
-          ) : trendData.length === 0 ? (
+          ) : chartData.length === 0 ? (
             <EmptyState
               icon={Mail}
               title="No email data yet"
@@ -472,7 +797,7 @@ export default function Analytics() {
             />
           ) : (
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={trendData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
+              <LineChart data={chartData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
@@ -506,6 +831,37 @@ export default function Analytics() {
                   dot={{ r: 2 }}
                   activeDot={{ r: 4 }}
                 />
+                {compareMode && (
+                  <>
+                    <Line
+                      type="monotone"
+                      dataKey="Prev Sent"
+                      stroke="#3b82f6"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 3"
+                      dot={false}
+                      opacity={0.5}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="Prev Opened"
+                      stroke="#8b5cf6"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 3"
+                      dot={false}
+                      opacity={0.5}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="Prev Replied"
+                      stroke="#14b8a6"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 3"
+                      dot={false}
+                      opacity={0.5}
+                    />
+                  </>
+                )}
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -537,8 +893,8 @@ export default function Analytics() {
           )}
         </ChartCard>
 
-        {/* Top Performing Industries */}
-        <ChartCard title="Top Performing Industries">
+        {/* Contacts by Industry - Donut/Pie Chart */}
+        <ChartCard title="Contacts by Industry">
           {metricsLoading ? (
             <div className="flex h-[280px] items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -550,22 +906,24 @@ export default function Analytics() {
             />
           ) : (
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart
-                data={industryData}
-                layout="vertical"
-                margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  width={120}
-                />
+              <PieChart>
+                <Pie
+                  data={industryData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={90}
+                  paddingAngle={2}
+                  dataKey="value"
+                  label={renderPieLabel}
+                  labelLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
+                >
+                  {industryData.map((entry, index) => (
+                    <Cell key={index} fill={entry.fill} />
+                  ))}
+                </Pie>
                 <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={20} />
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
           )}
         </ChartCard>

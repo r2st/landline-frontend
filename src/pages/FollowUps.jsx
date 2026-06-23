@@ -17,6 +17,8 @@ import {
   Search,
   CalendarClock,
   TrendingUp,
+  Plus,
+  CheckCircle2,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import {
@@ -32,6 +34,16 @@ function daysFromNowISO(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString();
+}
+
+function daysUntilNextMonday() {
+  const today = new Date();
+  const day = today.getDay(); // 0=Sun, 1=Mon, ...
+  // If today is Monday (1), next Monday is 7 days away
+  // If today is Tuesday (2), next Monday is 6 days away
+  // If today is Sunday (0), next Monday is 1 day away
+  const daysAway = day === 0 ? 1 : 8 - day;
+  return daysAway;
 }
 
 function SkeletonRows({ rows = 4 }) {
@@ -97,6 +109,7 @@ function SnoozeDropdown({ followUpId, onClose }) {
   const presets = [
     { label: 'Tomorrow', days: 1 },
     { label: 'In 3 days', days: 3 },
+    { label: 'Next Monday', days: daysUntilNextMonday() },
     { label: 'Next week', days: 7 },
   ];
 
@@ -112,7 +125,7 @@ function SnoozeDropdown({ followUpId, onClose }) {
     >
       {presets.map((p) => (
         <button
-          key={p.days}
+          key={p.label}
           type="button"
           onClick={() => snooze(p.days)}
           disabled={updateFollowUp.isPending}
@@ -271,6 +284,143 @@ function SummaryStats({ items }) {
   );
 }
 
+// ─── Quick create follow-up form ─────────────────────────────────────────────
+
+function QuickCreateForm() {
+  const createFollowUp = useCreateFollowUp();
+  const [contactSearch, setContactSearch] = useState('');
+  const [reason, setReason] = useState('');
+  const [dueDate, setDueDate] = useState('');
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!contactSearch.trim() || !dueDate) {
+      toast.error('Contact/company and due date are required');
+      return;
+    }
+    const d = new Date(dueDate);
+    d.setHours(12, 0, 0, 0);
+    createFollowUp.mutate(
+      {
+        due_date: d.toISOString(),
+        reason: reason.trim() || `Follow up with ${contactSearch.trim()}`,
+        notes: `Quick follow-up for: ${contactSearch.trim()}`,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Follow-up created');
+          setContactSearch('');
+          setReason('');
+          setDueDate('');
+        },
+      }
+    );
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 px-4 py-3"
+    >
+      <div className="min-w-[140px] flex-1">
+        <label className="mb-1 block text-xs font-medium text-gray-500">
+          Contact / Company
+        </label>
+        <input
+          type="text"
+          value={contactSearch}
+          onChange={(e) => setContactSearch(e.target.value)}
+          placeholder="Name or company..."
+          className="h-8 w-full rounded-md border border-gray-300 bg-white px-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+      <div className="min-w-[120px] flex-1">
+        <label className="mb-1 block text-xs font-medium text-gray-500">Reason</label>
+        <input
+          type="text"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. Check on proposal"
+          className="h-8 w-full rounded-md border border-gray-300 bg-white px-2.5 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+      <div className="w-[150px]">
+        <label className="mb-1 block text-xs font-medium text-gray-500">Due date</label>
+        <input
+          type="date"
+          value={dueDate}
+          min={todayStr}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="h-8 w-full rounded-md border border-gray-300 bg-white px-2.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={createFollowUp.isPending}
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add
+      </button>
+    </form>
+  );
+}
+
+// ─── Timeline dot ────────────────────────────────────────────────────────────
+
+function TimelineDot({ category }) {
+  if (category === 'overdue') {
+    return (
+      <div className="relative z-10 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-red-400 bg-red-100">
+        <div className="h-2 w-2 rounded-full bg-red-500" />
+      </div>
+    );
+  }
+  if (category === 'today') {
+    return (
+      <div className="relative z-10 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-100">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+      </div>
+    );
+  }
+  if (category === 'upcoming') {
+    return (
+      <div className="relative z-10 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-blue-400 bg-blue-100">
+        <div className="h-2 w-2 rounded-full bg-blue-500" />
+      </div>
+    );
+  }
+  // completed / done
+  return (
+    <div className="relative z-10 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-green-400 bg-green-100">
+      <Check className="h-3 w-3 text-green-600" />
+    </div>
+  );
+}
+
+// ─── Timeline "TODAY" marker ─────────────────────────────────────────────────
+
+function TodayMarker() {
+  return (
+    <div className="relative flex items-center py-2 pl-[7px]">
+      {/* Connector line through the marker */}
+      <div className="absolute bottom-0 left-[16px] top-0 w-0.5 bg-gray-200" />
+      {/* The marker itself */}
+      <div className="relative z-10 flex items-center gap-2">
+        <div className="flex h-5 w-5 items-center justify-center">
+          <div className="h-3 w-3 rotate-45 rounded-sm border-2 border-amber-500 bg-amber-400" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600">
+          Today
+        </span>
+        <div className="h-px flex-1 bg-amber-300" />
+      </div>
+    </div>
+  );
+}
+
 // ─── Reminders tab ────────────────────────────────────────────────────────────
 
 function RemindersTab() {
@@ -282,6 +432,7 @@ function RemindersTab() {
   );
   const updateFollowUp = useUpdateFollowUp();
   const deleteFollowUp = useDeleteFollowUp();
+  const [bulkCompleting, setBulkCompleting] = useState(false);
 
   const items = followUps || [];
 
@@ -307,118 +458,148 @@ function RemindersTab() {
   );
   const done = filtered.filter((f) => f.status !== 'pending');
 
-  const Row = ({ f }) => {
+  // Bulk complete all overdue
+  const handleBulkComplete = async () => {
+    if (overdue.length === 0) return;
+    setBulkCompleting(true);
+    try {
+      await Promise.all(
+        overdue.map(
+          (f) =>
+            new Promise((resolve, reject) => {
+              updateFollowUp.mutate(
+                { id: f.id, data: { status: 'completed' } },
+                { onSuccess: resolve, onError: reject }
+              );
+            })
+        )
+      );
+      toast.success(`Completed ${overdue.length} overdue follow-up${overdue.length === 1 ? '' : 's'}`);
+    } catch {
+      toast.error('Failed to complete some follow-ups');
+    } finally {
+      setBulkCompleting(false);
+    }
+  };
+
+  // Determine the timeline line color for a category segment
+  const lineColor = (category) => {
+    if (category === 'overdue') return 'bg-red-300';
+    if (category === 'today') return 'bg-amber-300';
+    if (category === 'upcoming') return 'bg-blue-300';
+    return 'bg-green-300';
+  };
+
+  const TimelineRow = ({ f, category }) => {
     const [snoozeOpen, setSnoozeOpen] = useState(false);
 
-    const iconStyle = f.is_overdue
-      ? 'bg-red-50 text-red-500'
-      : daysUntil(f.due_date) === 0 && f.status === 'pending'
-        ? 'bg-amber-50 text-amber-500'
-        : f.status !== 'pending'
-          ? 'bg-gray-100 text-gray-400'
-          : 'bg-blue-50 text-blue-500';
-
     return (
-      <li className="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50">
-        <div
-          className={cn(
-            'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full',
-            iconStyle
-          )}
-        >
-          {f.is_overdue ? (
-            <AlertTriangle className="h-4 w-4" />
-          ) : daysUntil(f.due_date) === 0 && f.status === 'pending' ? (
-            <AlarmClock className="h-4 w-4" />
-          ) : (
-            <Clock className="h-4 w-4" />
-          )}
+      <li className="relative flex gap-0">
+        {/* Timeline spine */}
+        <div className="relative flex w-9 flex-shrink-0 flex-col items-center">
+          {/* Vertical line above dot */}
+          <div className={cn('w-0.5 flex-1', lineColor(category))} />
+          {/* Dot */}
+          <TimelineDot category={category} />
+          {/* Vertical line below dot */}
+          <div className={cn('w-0.5 flex-1', lineColor(category))} />
         </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => f.company_id && navigate(`/companies/${f.company_id}`)}
-              className="truncate text-sm font-medium text-gray-900 hover:text-blue-600"
-            >
-              {f.contact_name || f.company_name || 'Follow-up'}
-            </button>
-            {f.company_name && f.contact_name && (
-              <span className="truncate text-xs text-gray-400">{f.company_name}</span>
-            )}
-            <StatusBadge followUp={f} />
-          </div>
-          {f.reason && <p className="mt-0.5 truncate text-sm text-gray-600">{f.reason}</p>}
-          <p className="mt-0.5 text-xs text-gray-400">Due {formatDate(f.due_date)}</p>
-        </div>
-
-        {f.status === 'pending' ? (
-          <div className="relative flex items-center gap-1">
-            <button
-              type="button"
-              title="Mark complete"
-              onClick={() =>
-                updateFollowUp.mutate({ id: f.id, data: { status: 'completed' } })
-              }
-              className="rounded-md p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600"
-            >
-              <Check className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title="Snooze"
-              onClick={() => setSnoozeOpen(!snoozeOpen)}
-              className={cn(
-                'rounded-md p-1.5 text-gray-400 hover:bg-amber-50 hover:text-amber-600',
-                snoozeOpen && 'bg-amber-50 text-amber-600'
-              )}
-            >
-              <AlarmClock className="h-4 w-4" />
-            </button>
-            {f.company_id && (
+        {/* Content */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3 py-3 pr-4 transition-colors hover:bg-gray-50/50">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                title="Open contact"
-                onClick={() => navigate(`/companies/${f.company_id}`)}
-                className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                onClick={() => f.company_id && navigate(`/companies/${f.company_id}`)}
+                className="truncate text-sm font-medium text-gray-900 hover:text-blue-600"
               >
-                <ExternalLink className="h-4 w-4" />
+                {f.contact_name || f.company_name || 'Follow-up'}
               </button>
-            )}
+              {f.company_name && f.contact_name && (
+                <span className="truncate text-xs text-gray-400">{f.company_name}</span>
+              )}
+              <StatusBadge followUp={f} />
+            </div>
+            {f.reason && <p className="mt-0.5 truncate text-sm text-gray-600">{f.reason}</p>}
+            <p className="mt-0.5 text-xs text-gray-400">Due {formatDate(f.due_date)}</p>
+          </div>
+
+          {f.status === 'pending' ? (
+            <div className="relative flex items-center gap-1">
+              <button
+                type="button"
+                title="Mark complete"
+                onClick={() =>
+                  updateFollowUp.mutate({ id: f.id, data: { status: 'completed' } })
+                }
+                className="rounded-md p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                title="Snooze"
+                onClick={() => setSnoozeOpen(!snoozeOpen)}
+                className={cn(
+                  'rounded-md p-1.5 text-gray-400 hover:bg-amber-50 hover:text-amber-600',
+                  snoozeOpen && 'bg-amber-50 text-amber-600'
+                )}
+              >
+                <AlarmClock className="h-4 w-4" />
+              </button>
+              {f.company_id && (
+                <button
+                  type="button"
+                  title="Open contact"
+                  onClick={() => navigate(`/companies/${f.company_id}`)}
+                  className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                title="Dismiss"
+                onClick={() =>
+                  updateFollowUp.mutate({ id: f.id, data: { status: 'dismissed' } })
+                }
+                className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              {snoozeOpen && (
+                <SnoozeDropdown
+                  followUpId={f.id}
+                  onClose={() => setSnoozeOpen(false)}
+                />
+              )}
+            </div>
+          ) : (
             <button
               type="button"
-              title="Dismiss"
-              onClick={() =>
-                updateFollowUp.mutate({ id: f.id, data: { status: 'dismissed' } })
-              }
-              className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              title="Delete"
+              onClick={() => deleteFollowUp.mutate(f.id)}
+              className="rounded-md p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500"
             >
               <X className="h-4 w-4" />
             </button>
-            {snoozeOpen && (
-              <SnoozeDropdown
-                followUpId={f.id}
-                onClose={() => setSnoozeOpen(false)}
-              />
-            )}
-          </div>
-        ) : (
-          <button
-            type="button"
-            title="Delete"
-            onClick={() => deleteFollowUp.mutate(f.id)}
-            className="rounded-md p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+          )}
+        </div>
       </li>
     );
   };
 
+  // Build whether we need the TODAY marker. It goes between overdue/today items and upcoming items.
+  const hasOverdueOrToday = overdue.length > 0 || dueToday.length > 0;
+  const hasUpcoming = pendingUpcoming.length > 0;
+  const showTodayMarker = hasOverdueOrToday && hasUpcoming;
+
   return (
     <div className="space-y-5">
+      {/* Quick create form */}
+      <QuickCreateForm />
+
       {/* Summary stats */}
       {!isLoading && items.length > 0 && <SummaryStats items={items} />}
 
@@ -445,6 +626,21 @@ function RemindersTab() {
         </label>
       </div>
 
+      {/* Bulk complete overdue button */}
+      {!isLoading && overdue.length > 0 && (
+        <button
+          type="button"
+          onClick={handleBulkComplete}
+          disabled={bulkCompleting}
+          className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          {bulkCompleting
+            ? 'Completing...'
+            : `Complete All Overdue (${overdue.length})`}
+        </button>
+      )}
+
       {/* Filtered count when searching */}
       {searchQuery.trim() && !isLoading && (
         <p className="text-xs text-gray-400">
@@ -452,7 +648,7 @@ function RemindersTab() {
         </p>
       )}
 
-      {/* Follow-ups list */}
+      {/* Follow-ups timeline */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         {isLoading ? (
           <SkeletonRows />
@@ -464,9 +660,6 @@ function RemindersTab() {
             action={{
               label: 'View Cold Contacts',
               onClick: () => {
-                // The parent component manages the tab; this is a hint to navigate to cold contacts
-                // We dispatch a custom event that the parent can listen to, but since we're
-                // co-located let's use a simpler approach: find the tab button and click it.
                 const coldTab = document.querySelector('[data-tab="cold"]');
                 if (coldTab) coldTab.click();
               },
@@ -483,56 +676,80 @@ function RemindersTab() {
             }}
           />
         ) : (
-          <>
+          <div className="py-2">
+            {/* Overdue section */}
             {overdue.length > 0 && (
               <div>
-                <div className="border-b border-gray-100 bg-red-50/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-600">
-                  Overdue ({overdue.length})
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <div className="h-2 w-2 rounded-full bg-red-500" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-red-600">
+                    Overdue ({overdue.length})
+                  </span>
                 </div>
-                <ul className="divide-y divide-gray-50">
+                <ul>
                   {overdue.map((f) => (
-                    <Row key={f.id} f={f} />
+                    <TimelineRow key={f.id} f={f} category="overdue" />
                   ))}
                 </ul>
               </div>
             )}
+
+            {/* Due today section */}
             {dueToday.length > 0 && (
               <div>
-                <div className="border-b border-gray-100 bg-amber-50/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-600">
-                  Due today ({dueToday.length})
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <div className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+                    Due today ({dueToday.length})
+                  </span>
                 </div>
-                <ul className="divide-y divide-gray-50">
+                <ul>
                   {dueToday.map((f) => (
-                    <Row key={f.id} f={f} />
+                    <TimelineRow key={f.id} f={f} category="today" />
                   ))}
                 </ul>
               </div>
             )}
+
+            {/* TODAY marker between past/present and future */}
+            {showTodayMarker && <TodayMarker />}
+            {/* Also show marker if only upcoming items exist (no overdue/today) to anchor the timeline */}
+            {!hasOverdueOrToday && hasUpcoming && <TodayMarker />}
+
+            {/* Upcoming section */}
             {pendingUpcoming.length > 0 && (
               <div>
-                <div className="border-b border-gray-100 bg-blue-50/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-500">
-                  Upcoming ({pendingUpcoming.length})
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <div className="h-2 w-2 rounded-full bg-blue-500" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-blue-500">
+                    Upcoming ({pendingUpcoming.length})
+                  </span>
                 </div>
-                <ul className="divide-y divide-gray-50">
+                <ul>
                   {pendingUpcoming.map((f) => (
-                    <Row key={f.id} f={f} />
+                    <TimelineRow key={f.id} f={f} category="upcoming" />
                   ))}
                 </ul>
               </div>
             )}
+
+            {/* Completed / done section */}
             {showCompleted && done.length > 0 && (
               <div>
-                <div className="border-b border-gray-100 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Done ({done.length})
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Done ({done.length})
+                  </span>
                 </div>
-                <ul className="divide-y divide-gray-50">
+                <ul>
                   {done.map((f) => (
-                    <Row key={f.id} f={f} />
+                    <TimelineRow key={f.id} f={f} category="done" />
                   ))}
                 </ul>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

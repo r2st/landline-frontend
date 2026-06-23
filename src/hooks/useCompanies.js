@@ -11,6 +11,8 @@ function toServerParams(filters = {}) {
   if (filters.stage) params.stage = filters.stage;
   if (filters.country) params.country = filters.country;
   if (filters.industry_segment) params.industry_segment = filters.industry_segment;
+  if (filters.enriched) params.enriched = filters.enriched;
+  if (filters.has_contacts) params.has_contacts = true;
   params.page = filters.page || 1;
   params.page_size = filters.page_size || 50;
   return params;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Settings as SettingsIcon,
   Globe,
@@ -15,17 +15,26 @@ import {
   Save,
   Building2,
   Users,
+  Mail,
+  Pen,
+  Bell,
+  Database,
+  User,
+  Clock,
 } from 'lucide-react';
 import GmailConnect from '../components/GmailConnect';
 import EmailSignatureEditor from '../components/EmailSignatureEditor';
 import { api } from '../api/client';
 import { API_BASE_URL } from '../lib/constants';
+import { cn } from '../lib/utils';
 import toast from 'react-hot-toast';
 
-// Automation flags are controlled by backend environment variables and shown
-// read-only. The scheduling link is a UI-side preference persisted locally.
+// localStorage keys
 const SCHEDULING_LINK_KEY = 'landline.scheduling_link';
 const SCORING_WEIGHTS_KEY = 'landline.scoring_weights';
+const NOTIFICATION_PREFS_KEY = 'landline.notification_prefs';
+const USER_NAME_KEY = 'landline.user_name';
+const TIMEZONE_KEY = 'landline.timezone';
 
 const DEFAULT_WEIGHTS = {
   company_size: 25,
@@ -33,6 +42,53 @@ const DEFAULT_WEIGHTS = {
   contact_quality: 25,
   engagement_level: 20,
 };
+
+const DEFAULT_NOTIFICATION_PREFS = {
+  new_reply: true,
+  task_due: true,
+  deal_won: true,
+  sequence_completed: false,
+};
+
+const FALLBACK_TIMEZONES = [
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'Pacific/Honolulu',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'Asia/Tokyo',
+  'Asia/Shanghai',
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'Australia/Sydney',
+  'Pacific/Auckland',
+];
+
+function getTimezones() {
+  try {
+    if (typeof Intl !== 'undefined' && Intl.supportedValuesOf) {
+      return Intl.supportedValuesOf('timeZone');
+    }
+  } catch {
+    // fallback
+  }
+  return FALLBACK_TIMEZONES;
+}
+
+const TABS = [
+  { id: 'email', label: 'Email Accounts', icon: Mail },
+  { id: 'signatures', label: 'Signatures', icon: Pen },
+  { id: 'scoring', label: 'Scoring', icon: Target },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'data', label: 'Data', icon: Download },
+  { id: 'system', label: 'System', icon: Activity },
+];
+
+/* ---------- sub-components ---------- */
 
 function ConnectionStatus({ connected }) {
   return (
@@ -81,16 +137,53 @@ function AutomationStatusRow({ icon: Icon, label, enabled, description }) {
   );
 }
 
+function NotificationToggle({ label, description, checked, onChange }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+      <div>
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        {description && <p className="text-xs text-gray-400">{description}</p>}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+          checked ? 'bg-blue-500' : 'bg-gray-300'
+        )}
+      >
+        <span
+          className={cn(
+            'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0'
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
+/* ---------- main component ---------- */
+
 export default function Settings() {
+  const [activeTab, setActiveTab] = useState('email');
+
+  // API health
   const [apiConnected, setApiConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [healthData, setHealthData] = useState(null);
+
+  // Automation
   const [automation, setAutomation] = useState({
     auto_reply: true,
     auto_followups: false,
     auto_scoring: false,
     scheduling_link: '',
   });
+
+  // Scoring weights
   const [weights, setWeights] = useState(() => {
     try {
       const saved = localStorage.getItem(SCORING_WEIGHTS_KEY);
@@ -101,6 +194,35 @@ export default function Settings() {
   });
   const [weightsDirty, setWeightsDirty] = useState(false);
 
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs] = useState(() => {
+    try {
+      const saved = localStorage.getItem(NOTIFICATION_PREFS_KEY);
+      return saved ? { ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(saved) } : { ...DEFAULT_NOTIFICATION_PREFS };
+    } catch {
+      return { ...DEFAULT_NOTIFICATION_PREFS };
+    }
+  });
+
+  // Profile
+  const [userName, setUserName] = useState(() => {
+    try {
+      return localStorage.getItem(USER_NAME_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [userTimezone, setUserTimezone] = useState(() => {
+    try {
+      return localStorage.getItem(TIMEZONE_KEY) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+    } catch {
+      return 'America/New_York';
+    }
+  });
+
+  const timezones = useMemo(() => getTimezones(), []);
+
+  // Load scheduling link from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SCHEDULING_LINK_KEY);
@@ -112,15 +234,7 @@ export default function Settings() {
     }
   }, []);
 
-  const handleSchedulingLinkSave = () => {
-    try {
-      localStorage.setItem(SCHEDULING_LINK_KEY, automation.scheduling_link.trim());
-      toast.success('Scheduling link saved');
-    } catch {
-      toast.error('Could not save scheduling link');
-    }
-  };
-
+  // Check API connection
   useEffect(() => {
     const checkConnection = async () => {
       setChecking(true);
@@ -136,6 +250,39 @@ export default function Settings() {
     };
     checkConnection();
   }, []);
+
+  // Persist notification prefs whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(notifPrefs));
+    } catch {
+      // localStorage unavailable
+    }
+  }, [notifPrefs]);
+
+  const handleNotifChange = useCallback((key, value) => {
+    setNotifPrefs((prev) => ({ ...prev, [key]: value }));
+    toast.success('Notification preference updated');
+  }, []);
+
+  const handleProfileSave = useCallback(() => {
+    try {
+      localStorage.setItem(USER_NAME_KEY, userName.trim());
+      localStorage.setItem(TIMEZONE_KEY, userTimezone);
+      toast.success('Profile saved');
+    } catch {
+      toast.error('Could not save profile');
+    }
+  }, [userName, userTimezone]);
+
+  const handleSchedulingLinkSave = () => {
+    try {
+      localStorage.setItem(SCHEDULING_LINK_KEY, automation.scheduling_link.trim());
+      toast.success('Scheduling link saved');
+    } catch {
+      toast.error('Could not save scheduling link');
+    }
+  };
 
   const handleExportCompanies = useCallback(() => {
     const baseURL = import.meta.env.VITE_API_URL
@@ -173,13 +320,155 @@ export default function Settings() {
     setWeightsDirty(true);
   }, []);
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* Email Sending — Gmail OAuth connection */}
-      <GmailConnect />
+  /* ---------- tab content renderers ---------- */
 
-      {/* Email Signatures */}
-      <EmailSignatureEditor />
+  const renderEmailTab = () => (
+    <GmailConnect />
+  );
+
+  const renderSignaturesTab = () => (
+    <EmailSignatureEditor />
+  );
+
+  const renderScoringTab = () => (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-100">
+          <Target className="h-5 w-5 text-yellow-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Scoring Weights</h2>
+          <p className="text-sm text-gray-500">Configure how lead scores are calculated</p>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <WeightSlider
+          label="Company Size"
+          value={weights.company_size}
+          description="Weight based on number of employees and revenue indicators"
+          onChange={(v) => handleWeightChange('company_size', v)}
+        />
+        <WeightSlider
+          label="Industry Match"
+          value={weights.industry_match}
+          description="How well the company fits your target industry profile"
+          onChange={(v) => handleWeightChange('industry_match', v)}
+        />
+        <WeightSlider
+          label="Contact Quality"
+          value={weights.contact_quality}
+          description="Decision-maker contacts found and engagement quality"
+          onChange={(v) => handleWeightChange('contact_quality', v)}
+        />
+        <WeightSlider
+          label="Engagement Level"
+          value={weights.engagement_level}
+          description="Email opens, replies, website visits, and other signals"
+          onChange={(v) => handleWeightChange('engagement_level', v)}
+        />
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleWeightsSave}
+          disabled={!weightsDirty}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Save className="h-4 w-4" />
+          Save Weights
+        </button>
+        <button
+          type="button"
+          onClick={handleWeightsReset}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Reset to Defaults
+        </button>
+      </div>
+
+      <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-600">
+        These weights are visual indicators only. Actual scoring is performed by the backend ML model.
+      </div>
+    </div>
+  );
+
+  const renderNotificationsTab = () => (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+          <Bell className="h-5 w-5 text-orange-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Notification Preferences</h2>
+          <p className="text-sm text-gray-500">Choose which events trigger email notifications</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <NotificationToggle
+          label="New reply received"
+          description="Get notified when a lead replies to your email"
+          checked={notifPrefs.new_reply}
+          onChange={(v) => handleNotifChange('new_reply', v)}
+        />
+        <NotificationToggle
+          label="Task due reminder"
+          description="Receive a reminder when a task is approaching its due date"
+          checked={notifPrefs.task_due}
+          onChange={(v) => handleNotifChange('task_due', v)}
+        />
+        <NotificationToggle
+          label="Deal won"
+          description="Get notified when a deal moves to the won stage"
+          checked={notifPrefs.deal_won}
+          onChange={(v) => handleNotifChange('deal_won', v)}
+        />
+        <NotificationToggle
+          label="Sequence completed"
+          description="Notification when an email sequence finishes all steps"
+          checked={notifPrefs.sequence_completed}
+          onChange={(v) => handleNotifChange('sequence_completed', v)}
+        />
+      </div>
+    </div>
+  );
+
+  const renderDataTab = () => (
+    <div className="space-y-6">
+      {/* Data Export */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100">
+            <Download className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Data Export</h2>
+            <p className="text-sm text-gray-500">Download your data as CSV files</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleExportCompanies}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            <Building2 className="h-4 w-4" />
+            Export Companies
+          </button>
+          <button
+            type="button"
+            onClick={handleExportContacts}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            <Users className="h-4 w-4" />
+            Export Contacts
+          </button>
+        </div>
+      </div>
 
       {/* Automation */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -244,7 +533,11 @@ export default function Settings() {
           These features are controlled by backend environment variables. Contact your administrator to change automation settings.
         </div>
       </div>
+    </div>
+  );
 
+  const renderSystemTab = () => (
+    <div className="space-y-6">
       {/* API Configuration */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-3">
@@ -297,7 +590,7 @@ export default function Settings() {
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-              <Activity className="h-5 w-5 text-green-600" />
+              <Database className="h-5 w-5 text-green-600" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">System Status</h2>
@@ -336,102 +629,6 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Scoring Weights */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-100">
-            <Target className="h-5 w-5 text-yellow-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Scoring Weights</h2>
-            <p className="text-sm text-gray-500">Configure how lead scores are calculated</p>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          <WeightSlider
-            label="Company Size"
-            value={weights.company_size}
-            description="Weight based on number of employees and revenue indicators"
-            onChange={(v) => handleWeightChange('company_size', v)}
-          />
-          <WeightSlider
-            label="Industry Match"
-            value={weights.industry_match}
-            description="How well the company fits your target industry profile"
-            onChange={(v) => handleWeightChange('industry_match', v)}
-          />
-          <WeightSlider
-            label="Contact Quality"
-            value={weights.contact_quality}
-            description="Decision-maker contacts found and engagement quality"
-            onChange={(v) => handleWeightChange('contact_quality', v)}
-          />
-          <WeightSlider
-            label="Engagement Level"
-            value={weights.engagement_level}
-            description="Email opens, replies, website visits, and other signals"
-            onChange={(v) => handleWeightChange('engagement_level', v)}
-          />
-        </div>
-
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleWeightsSave}
-            disabled={!weightsDirty}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            Save Weights
-          </button>
-          <button
-            type="button"
-            onClick={handleWeightsReset}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset to Defaults
-          </button>
-        </div>
-
-        <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-600">
-          These weights are visual indicators only. Actual scoring is performed by the backend ML model.
-        </div>
-      </div>
-
-      {/* Data Export */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100">
-            <Download className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Data Export</h2>
-            <p className="text-sm text-gray-500">Download your data as CSV files</p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={handleExportCompanies}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            <Building2 className="h-4 w-4" />
-            Export Companies
-          </button>
-          <button
-            type="button"
-            onClick={handleExportContacts}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            <Users className="h-4 w-4" />
-            Export Contacts
-          </button>
-        </div>
-      </div>
-
       {/* About */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3">
@@ -450,6 +647,110 @@ export default function Settings() {
           </p>
         </div>
       </div>
+    </div>
+  );
+
+  const tabContent = {
+    email: renderEmailTab,
+    signatures: renderSignaturesTab,
+    scoring: renderScoringTab,
+    notifications: renderNotificationsTab,
+    data: renderDataTab,
+    system: renderSystemTab,
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      {/* Profile Section */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+            <User className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Profile</h2>
+            <p className="text-sm text-gray-500">Your personal settings</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+            <input
+              type="text"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder="Your name"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+            <input
+              type="email"
+              readOnly
+              value="sumaninster7@gmail.com"
+              className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Timezone
+              </span>
+            </label>
+            <select
+              value={userTimezone}
+              onChange={(e) => setUserTimezone(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {timezones.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz.replace(/_/g, ' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={handleProfileSave}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+          >
+            <Save className="h-4 w-4" />
+            Save Profile
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                activeTab === tab.id
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab Content */}
+      {tabContent[activeTab]()}
     </div>
   );
 }

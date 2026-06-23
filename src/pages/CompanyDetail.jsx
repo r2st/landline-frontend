@@ -293,7 +293,7 @@ function CompanyInfoEditor({ company, onSave, saving }) {
 export default function CompanyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('contacts');
+  const [activeTab, setActiveTab] = useState('overview');
 
   const { data: company, isLoading, isError } = useCompany(id);
   const { data: health } = useCompanyHealth(id);
@@ -481,6 +481,7 @@ export default function CompanyDetail() {
       {/* Tabs */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex overflow-x-auto border-b border-gray-200 px-2">
+          <TabButton label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
           <TabButton label="Contacts" active={activeTab === 'contacts'} onClick={() => setActiveTab('contacts')} />
           <TabButton label="Deals" active={activeTab === 'deals'} onClick={() => setActiveTab('deals')} />
           <TabButton label="Interactions" active={activeTab === 'interactions'} onClick={() => setActiveTab('interactions')} />
@@ -493,6 +494,87 @@ export default function CompanyDetail() {
         </div>
 
         <div className="p-4">
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Key Metrics */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{companyContacts.length}</p>
+                  <p className="text-xs text-gray-500">Contacts</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{company.score ?? '—'}</p>
+                  <p className="text-xs text-gray-500">Lead Score</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{company.domain ? 'Yes' : 'No'}</p>
+                  <p className="text-xs text-gray-500">Enriched</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{company.stage ? STAGE_LABELS[company.stage] : '—'}</p>
+                  <p className="text-xs text-gray-500">Stage</p>
+                </div>
+              </div>
+
+              {/* Recent Contacts Preview */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Recent Contacts</h3>
+                  <button onClick={() => setActiveTab('contacts')} className="text-xs text-blue-600 hover:text-blue-700">View all</button>
+                </div>
+                {companyContacts.slice(0, 3).map(contact => (
+                  <div key={contact.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-600">
+                      {((contact.first_name || '')[0] || '') + ((contact.last_name || '')[0] || '')}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{contact.first_name} {contact.last_name}</p>
+                      <p className="text-xs text-gray-500">{contact.title || contact.email || ''}</p>
+                    </div>
+                  </div>
+                ))}
+                {companyContacts.length === 0 && (
+                  <p className="text-sm text-gray-400">No contacts yet</p>
+                )}
+              </div>
+
+              {/* Quick Navigation */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => scoreCompany.mutate(company.id)}
+                    disabled={scoreCompany.isPending}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-1.5 text-xs font-medium text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
+                  >
+                    <Target className="h-3.5 w-3.5" />
+                    {company.score != null ? 'Re-score' : 'Score'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => enrichCompany.mutate({ id: company.id, data: { find_contacts: true } })}
+                    disabled={enrichCompany.isPending}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Enrich
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => checkCompanyNews.mutate(company.id)}
+                    disabled={checkCompanyNews.isPending}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                  >
+                    <Newspaper className="h-3.5 w-3.5" />
+                    Check News
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Contacts Tab */}
           {activeTab === 'contacts' && (
             <div>

@@ -16,9 +16,9 @@ import {
   GitBranch,
   Save,
   AlertCircle,
+  ChevronDown,
 } from 'lucide-react';
 import EmptyState from '../EmptyState';
-import ConfirmDialog from '../ConfirmDialog';
 import PreviewModal from './PreviewModal';
 import {
   useEmailTemplates,
@@ -31,6 +31,7 @@ import { useSequences, useEnrollBatch } from '../../hooks/useOutreach';
 import { useContacts, useQuickAddContact } from '../../hooks/useContacts';
 import { useGmailStatus } from '../../hooks/useGmail';
 import { cn, timeAgo } from '../../lib/utils';
+import { MERGE_FIELDS } from '../../lib/mockData';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -167,6 +168,71 @@ function SendTestModal({ open, onClose, templateId, senderAccountId, defaultEmai
   );
 }
 
+// ---- Send Confirm Modal ----
+function SendConfirmModal({ open, onClose, onConfirm, templateName, senderEmail, subjectLine, contactCount, scheduleMode, scheduledAt, abTestEnabled }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+          <div className="flex items-center gap-2">
+            <Send className="h-4 w-4 text-blue-500" />
+            <h3 className="text-sm font-semibold text-gray-900">Confirm Email Send</h3>
+          </div>
+          <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-3 p-5">
+          <div className="space-y-2 rounded-lg bg-gray-50 p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Template</span>
+              <span className="font-medium text-gray-900">{templateName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">From</span>
+              <span className="font-medium text-gray-900">{senderEmail || 'Default sender'}</span>
+            </div>
+            {subjectLine && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Subject</span>
+                <span className="max-w-[220px] truncate font-medium text-gray-900">{subjectLine}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-500">Recipients</span>
+              <span className="font-medium text-gray-900">{contactCount} contact{contactCount !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Delivery</span>
+              <span className="font-medium text-gray-900">
+                {scheduleMode === 'later' && scheduledAt
+                  ? `Scheduled: ${new Date(scheduledAt).toLocaleString()}`
+                  : 'Send immediately'}
+              </span>
+            </div>
+            {abTestEnabled && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">A/B Test</span>
+                <span className="font-medium text-purple-700">Enabled (50/50 split)</span>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-400">This action cannot be undone. Emails will be sent to all selected contacts.</p>
+          <div className="flex justify-end gap-3 border-t border-gray-100 pt-3">
+            <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="button" onClick={onConfirm} className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600">
+              <Send className="h-4 w-4" />
+              Confirm Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Draft helpers ----
 const DRAFT_KEY = 'landline_outreach_draft';
 function loadDraft() {
@@ -206,6 +272,7 @@ export default function ComposeTab() {
   const [enrollSequenceOpen, setEnrollSequenceOpen] = useState(false);
   const [selectedSequenceId, setSelectedSequenceId] = useState('');
   const [sendError, setSendError] = useState('');
+  const [mergeFieldOpen, setMergeFieldOpen] = useState(false);
 
   const { data: sequences } = useSequences();
   const enrollBatch = useEnrollBatch();
@@ -384,20 +451,43 @@ export default function ComposeTab() {
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-gray-700">From</label>
           {gmailAccounts.length > 0 ? (
-            <select
-              value={senderId}
-              onChange={(e) => setSenderId(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {sendingEnabledAccounts.length > 1 && (
-                <option value="rotate">Auto-rotate ({sendingEnabledAccounts.length} accounts)</option>
-              )}
-              {gmailAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.email}{a.is_active ? ' (primary)' : ''}{!a.sending_enabled ? ' (disabled)' : ''}{a.daily_send_count ? ` [${a.daily_send_count} sent today]` : ''}
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                value={senderId}
+                onChange={(e) => setSenderId(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {sendingEnabledAccounts.length > 1 && (
+                  <option value="rotate">Auto-rotate ({sendingEnabledAccounts.length} accounts)</option>
+                )}
+                {gmailAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.email}{a.is_active ? ' (primary)' : ''}{!a.sending_enabled ? ' (disabled)' : ''}{a.daily_send_count ? ` [${a.daily_send_count} sent today]` : ''}
+                  </option>
+                ))}
+              </select>
+              {(() => {
+                const selectedAccount = senderId === 'rotate'
+                  ? null
+                  : gmailAccounts.find((a) => a.id === senderId) || gmailAccounts.find((a) => a.is_active);
+                if (!selectedAccount) return null;
+                const count = selectedAccount.daily_send_count || 0;
+                const limit = 500;
+                const dotColor = count > 450 ? 'bg-red-500' : count >= 300 ? 'bg-yellow-500' : 'bg-green-500';
+                return (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className={cn('inline-block h-2.5 w-2.5 rounded-full', dotColor)} />
+                    <span className="text-xs text-gray-500">{count} / {limit} sent today</span>
+                    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className={cn('h-full rounded-full transition-all', count > 450 ? 'bg-red-500' : count >= 300 ? 'bg-yellow-500' : 'bg-green-500')}
+                        style={{ width: `${Math.min((count / limit) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
           ) : (
             <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
               <Mail className="h-4 w-4 flex-shrink-0" />
@@ -445,6 +535,35 @@ export default function ComposeTab() {
                 <Shuffle className="h-3 w-3" />
                 A/B Test
               </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMergeFieldOpen(!mergeFieldOpen)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                >
+                  Insert Merge Field
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+                {mergeFieldOpen && (
+                  <div className="absolute left-0 top-full z-20 mt-1 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                    {MERGE_FIELDS.map((f) => (
+                      <button
+                        key={f.value}
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(f.value);
+                          toast.success(`Copied ${f.value} to clipboard`);
+                          setMergeFieldOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-gray-50"
+                      >
+                        <span className="text-gray-700">{f.label}</span>
+                        <span className="font-mono text-xs text-gray-400">{f.value}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             {abTestEnabled && (
               <div className="mt-2">
@@ -563,6 +682,28 @@ export default function ComposeTab() {
           </div>
         )}
 
+        {(industryFilter || companyFilter) && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-2">
+            <span className="text-xs font-medium text-gray-500">Active filters:</span>
+            {industryFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+                Industry: {industryFilter}
+                <button type="button" onClick={() => setIndustryFilter('')} className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-200">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {companyFilter && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                Company: {companyFilter}
+                <button type="button" onClick={() => setCompanyFilter('')} className="ml-0.5 rounded-full p-0.5 hover:bg-emerald-200">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
+
         {contactsLoading ? (
           <div className="flex justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600" />
@@ -638,14 +779,17 @@ export default function ComposeTab() {
         defaultEmail={fromEmail || ''}
       />
 
-      <ConfirmDialog
+      <SendConfirmModal
         open={sendConfirmOpen}
-        title="Confirm Email Send"
-        message={`You're about to send emails to ${selectedIds.length} contact${selectedIds.length === 1 ? '' : 's'} using the '${selectedTemplateName}' template. This cannot be undone. Continue?`}
-        confirmLabel="Send Emails"
-        variant="warning"
+        onClose={() => setSendConfirmOpen(false)}
         onConfirm={handleSendConfirmed}
-        onCancel={() => setSendConfirmOpen(false)}
+        templateName={selectedTemplateName}
+        senderEmail={senderId === 'rotate' ? `Auto-rotate (${sendingEnabledAccounts.length} accounts)` : sendingVia}
+        subjectLine={(templates || []).find((t) => t.id === templateId)?.subject}
+        contactCount={selectedIds.length}
+        scheduleMode={scheduleMode}
+        scheduledAt={scheduledAt}
+        abTestEnabled={abTestEnabled}
       />
     </div>
   );

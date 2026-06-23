@@ -24,8 +24,31 @@ export function useDashboardMetrics() {
         active_deals_count: data.active_deals_count || 0,
         active_deals_value: data.active_deals_value || 0,
         contacts_this_week: data.contacts_this_week || 0,
+        // Trend data from backend for week-over-week comparisons
+        leads_prev_week: data.leads_prev_week || 0,
+        emails_sent_prev_week: data.emails_sent_prev_week || 0,
+        contacts_prev_week: data.contacts_prev_week || 0,
+        deals_won_this_month: data.deals_won_this_month || 0,
+        deals_won_value_this_month: data.deals_won_value_this_month || 0,
+        emails_sent_today: data.emails_sent_today || 0,
+        emails_opened: data.emails_opened || 0,
       };
     },
+  });
+}
+
+export function useKPIs() {
+  return useQuery({
+    queryKey: ['dashboard-kpis'],
+    queryFn: async () => {
+      try {
+        const data = await dashboardApi.getKPIs();
+        return data;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 60000,
   });
 }
 

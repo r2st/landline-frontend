@@ -19,9 +19,14 @@ import {
   FileText,
   TrendingUp,
   Award,
+  GripVertical,
+  CheckCircle2,
+  Circle,
+  ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
-import { useSequences, useCreateSequence, useUpdateSequenceStatus } from '../hooks/useOutreach';
+import { useSequences, useCreateSequence, useUpdateSequenceStatus, useDeleteSequence } from '../hooks/useOutreach';
 import { formatNumber, cn } from '../lib/utils';
 
 /* -------------------------------------------------------------------------- */
@@ -34,13 +39,22 @@ function safeNum(val) {
   return isFinite(n) ? n : 0;
 }
 
-/** Compute a percentage safely — returns "0.0" when denominator is 0 or result is NaN. */
+/** Compute a percentage safely -- returns "0.0" when denominator is 0 or result is NaN. */
 function safeRate(numerator, denominator) {
   const num = safeNum(numerator);
   const den = safeNum(denominator);
   if (den <= 0) return '0.0';
   const rate = (num / den) * 100;
   return isNaN(rate) || !isFinite(rate) ? '0.0' : rate.toFixed(1);
+}
+
+/** Return the raw numeric rate (0-100) for comparisons. */
+function safeRateNum(numerator, denominator) {
+  const num = safeNum(numerator);
+  const den = safeNum(denominator);
+  if (den <= 0) return 0;
+  const rate = (num / den) * 100;
+  return isNaN(rate) || !isFinite(rate) ? 0 : rate;
 }
 
 /** Render a template body with placeholder styling for preview. */
@@ -52,47 +66,158 @@ function renderPreview(body) {
   );
 }
 
+/** Compute total days spanned by a sequence from its step delay_days. */
+function computeTotalDays(steps) {
+  if (!steps || steps.length === 0) return 0;
+  return steps.reduce((sum, s) => sum + safeNum(s.delay_days), 0);
+}
+
 /* -------------------------------------------------------------------------- */
-/*  SequenceStats                                                             */
+/*  Send condition options (frontend-only)                                    */
 /* -------------------------------------------------------------------------- */
 
-function SequenceStats({ stats = {} }) {
+const SEND_CONDITIONS = [
+  { value: 'always', label: 'Always send' },
+  { value: 'if_opened', label: 'Only if previous opened' },
+  { value: 'if_not_replied', label: 'Only if not replied' },
+];
+
+function getConditionLabel(value) {
+  return SEND_CONDITIONS.find((c) => c.value === value)?.label || 'Always send';
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SequenceStats -- enhanced with step funnel                                */
+/* -------------------------------------------------------------------------- */
+
+function SequenceStats({ stats = {}, steps = [] }) {
+  const stepStats = stats?.step_stats;
+  const hasStepData = Array.isArray(stepStats) && stepStats.length > 0;
+
+  // Find best/worst open rate step indices
+  const { bestIdx, worstIdx } = useMemo(() => {
+    if (!hasStepData) return { bestIdx: -1, worstIdx: -1 };
+    let best = -1;
+    let worst = -1;
+    let bestRate = -1;
+    let worstRate = Infinity;
+    stepStats.forEach((ss, i) => {
+      const sent = safeNum(ss.sent);
+      if (sent <= 0) return;
+      const rate = safeRateNum(ss.opened, sent);
+      if (rate > bestRate) { bestRate = rate; best = i; }
+      if (rate < worstRate) { worstRate = rate; worst = i; }
+    });
+    // Only differentiate if there are at least 2 steps with data
+    if (best === worst) return { bestIdx: -1, worstIdx: -1 };
+    return { bestIdx: best, worstIdx: worst };
+  }, [stepStats, hasStepData]);
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div className="rounded-lg bg-blue-50 p-2.5 text-center">
-        <div className="flex items-center justify-center gap-1 text-blue-600">
-          <Users className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(safeNum(stats.enrolled))}</span>
+    <div className="space-y-4">
+      {/* Core stat cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-lg bg-blue-50 p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 text-blue-600">
+            <Users className="h-3.5 w-3.5" />
+            <span className="text-lg font-bold">{formatNumber(safeNum(stats.enrolled))}</span>
+          </div>
+          <p className="text-xs text-blue-600/70">Enrolled</p>
         </div>
-        <p className="text-xs text-blue-600/70">Enrolled</p>
-      </div>
-      <div className="rounded-lg bg-purple-50 p-2.5 text-center">
-        <div className="flex items-center justify-center gap-1 text-purple-600">
-          <Send className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(safeNum(stats.sent))}</span>
+        <div className="rounded-lg bg-purple-50 p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 text-purple-600">
+            <Send className="h-3.5 w-3.5" />
+            <span className="text-lg font-bold">{formatNumber(safeNum(stats.sent))}</span>
+          </div>
+          <p className="text-xs text-purple-600/70">Sent</p>
         </div>
-        <p className="text-xs text-purple-600/70">Sent</p>
-      </div>
-      <div className="rounded-lg bg-indigo-50 p-2.5 text-center">
-        <div className="flex items-center justify-center gap-1 text-indigo-600">
-          <Eye className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(safeNum(stats.opened))}</span>
+        <div className="rounded-lg bg-indigo-50 p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 text-indigo-600">
+            <Eye className="h-3.5 w-3.5" />
+            <span className="text-lg font-bold">{formatNumber(safeNum(stats.opened))}</span>
+          </div>
+          <p className="text-xs text-indigo-600/70">Opened</p>
         </div>
-        <p className="text-xs text-indigo-600/70">Opened</p>
-      </div>
-      <div className="rounded-lg bg-green-50 p-2.5 text-center">
-        <div className="flex items-center justify-center gap-1 text-green-600">
-          <Mail className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(safeNum(stats.replied))}</span>
+        <div className="rounded-lg bg-green-50 p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 text-green-600">
+            <Mail className="h-3.5 w-3.5" />
+            <span className="text-lg font-bold">{formatNumber(safeNum(stats.replied))}</span>
+          </div>
+          <p className="text-xs text-green-600/70">Replied</p>
         </div>
-        <p className="text-xs text-green-600/70">Replied</p>
       </div>
+
+      {/* Step-by-step funnel */}
+      {hasStepData && (
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <div className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+            <TrendingUp className="h-3.5 w-3.5" />
+            Step-by-Step Funnel
+          </div>
+          <div className="flex items-stretch gap-1 overflow-x-auto">
+            {stepStats.map((ss, i) => {
+              const sent = safeNum(ss.sent);
+              const opened = safeNum(ss.opened);
+              const replied = safeNum(ss.replied);
+              const openRate = safeRate(opened, sent);
+              const replyRate = safeRate(replied, sent);
+              const isBest = i === bestIdx;
+              const isWorst = i === worstIdx;
+
+              // Drop-off from previous step
+              const prevSent = i > 0 ? safeNum(stepStats[i - 1].sent) : null;
+              const dropOff = prevSent !== null && prevSent > 0
+                ? ((prevSent - sent) / prevSent * 100).toFixed(0)
+                : null;
+
+              return (
+                <div key={i} className="flex items-stretch">
+                  {/* Drop-off arrow between steps */}
+                  {i > 0 && (
+                    <div className="flex flex-col items-center justify-center px-1">
+                      <ChevronRight className="h-3.5 w-3.5 text-gray-300" />
+                      {dropOff !== null && Number(dropOff) > 0 && (
+                        <span className="text-[10px] text-red-400">-{dropOff}%</span>
+                      )}
+                    </div>
+                  )}
+
+                  <div
+                    className={cn(
+                      'flex min-w-[100px] flex-1 flex-col rounded-md border p-2 text-center',
+                      isBest ? 'border-green-300 bg-green-50' :
+                      isWorst ? 'border-red-200 bg-red-50/50' :
+                      'border-gray-200 bg-white',
+                    )}
+                  >
+                    <div className="mb-1 flex items-center justify-center gap-1">
+                      <span className={cn(
+                        'text-[10px] font-bold uppercase tracking-wide',
+                        isBest ? 'text-green-600' : isWorst ? 'text-red-500' : 'text-gray-400',
+                      )}>
+                        Step {i + 1}
+                      </span>
+                      {isBest && <Award className="h-3 w-3 text-green-500" />}
+                      {isWorst && <AlertTriangle className="h-3 w-3 text-red-400" />}
+                    </div>
+                    <p className="text-xs text-gray-500">{sent} sent</p>
+                    <p className={cn('text-xs font-medium', isBest ? 'text-green-700' : isWorst ? 'text-red-600' : 'text-indigo-600')}>
+                      {openRate}% opened
+                    </p>
+                    <p className="text-xs text-green-600">{replyRate}% replied</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/*  StepTimeline — visual timeline in expanded card                           */
+/*  StepTimeline -- visual timeline in expanded card                          */
 /* -------------------------------------------------------------------------- */
 
 function StepTimeline({ steps, stats }) {
@@ -156,17 +281,84 @@ function StepTimeline({ steps, stats }) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  EnrollmentSection -- enrollment dashboard in expanded card                */
+/* -------------------------------------------------------------------------- */
+
+function EnrollmentSection({ enrolledCount }) {
+  return (
+    <div className="border-t border-gray-100 px-5 py-4">
+      <h4 className="mb-3 text-sm font-semibold text-gray-700">Enrollments</h4>
+
+      {/* Status legend */}
+      <div className="mb-3 flex items-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1">
+          <Circle className="h-2.5 w-2.5 fill-green-500 text-green-500" />
+          Active
+        </span>
+        <span className="flex items-center gap-1">
+          <CheckCircle2 className="h-2.5 w-2.5 text-blue-500" />
+          Completed
+        </span>
+        <span className="flex items-center gap-1">
+          <Circle className="h-2.5 w-2.5 fill-orange-400 text-orange-400" />
+          Paused
+        </span>
+      </div>
+
+      {enrolledCount > 0 ? (
+        <div className="rounded-lg border border-gray-200 bg-white">
+          {/* Placeholder table header */}
+          <div className="grid grid-cols-4 gap-2 border-b border-gray-100 px-3 py-2 text-xs font-medium text-gray-500">
+            <span>Contact</span>
+            <span>Current Step</span>
+            <span>Status</span>
+            <span>Enrolled</span>
+          </div>
+          {/* Placeholder rows */}
+          <div className="px-3 py-6 text-center">
+            <p className="text-sm text-gray-400">Enrollment details load from individual contact pages.</p>
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100"
+            >
+              <Users className="h-3.5 w-3.5" />
+              View all {formatNumber(enrolledCount)} enrolled contact{enrolledCount !== 1 ? 's' : ''}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">
+          No contacts enrolled yet. Enroll contacts from company pages.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*  SequenceCard                                                              */
 /* -------------------------------------------------------------------------- */
 
-function SequenceCard({ sequence, onDuplicate, isBestPerformer }) {
+function SequenceCard({ sequence, onDuplicate, onDelete, isBestPerformer }) {
   const [expanded, setExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const updateStatus = useUpdateSequenceStatus();
 
   const stats = sequence.stats || {};
   const openRate = safeRate(stats.opened, stats.sent);
   const replyRate = safeRate(stats.replied, stats.sent);
   const enrolledCount = safeNum(stats.enrolled);
+  const totalDays = computeTotalDays(sequence.steps);
+  const stepCount = sequence.steps?.length || 0;
+
+  // Completion rate: approximate as (sent on last step / enrolled)
+  const completionRate = useMemo(() => {
+    if (enrolledCount <= 0) return 0;
+    const stepStats = stats?.step_stats;
+    if (!Array.isArray(stepStats) || stepStats.length === 0) return 0;
+    const lastStepSent = safeNum(stepStats[stepStats.length - 1].sent);
+    return Math.min(100, (lastStepSent / enrolledCount) * 100);
+  }, [enrolledCount, stats]);
 
   return (
     <div
@@ -198,7 +390,7 @@ function SequenceCard({ sequence, onDuplicate, isBestPerformer }) {
             <div>
               <h3 className="text-base font-semibold text-gray-900">{sequence.name}</h3>
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-                <span>{sequence.steps?.length || 0} steps</span>
+                <span>{stepCount} step{stepCount !== 1 ? 's' : ''} over {totalDays} day{totalDays !== 1 ? 's' : ''}</span>
                 <span className="text-gray-300">|</span>
                 <span className="flex items-center gap-0.5">
                   <Eye className="h-3 w-3" /> {openRate}% open
@@ -236,6 +428,41 @@ function SequenceCard({ sequence, onDuplicate, isBestPerformer }) {
               <Copy className="h-4 w-4" />
             </button>
 
+            {/* Delete */}
+            {showDeleteConfirm ? (
+              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(sequence.id);
+                    setShowDeleteConfirm(false);
+                  }}
+                  className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(true);
+                }}
+                title="Delete sequence"
+                className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+
             {/* Pause / Resume */}
             <button
               type="button"
@@ -269,26 +496,42 @@ function SequenceCard({ sequence, onDuplicate, isBestPerformer }) {
           </div>
         </div>
 
+        {/* Stats grid */}
         <div className="mt-4">
-          <SequenceStats stats={stats} />
+          <SequenceStats stats={stats} steps={sequence.steps} />
         </div>
+
+        {/* Completion progress bar */}
+        {enrolledCount > 0 && (
+          <div className="mt-3">
+            <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+              <span>Completion</span>
+              <span>{completionRate.toFixed(0)}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all"
+                style={{ width: `${completionRate}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Expanded: visual timeline */}
-      {expanded && sequence.steps && (
-        <div className="border-t border-gray-100 px-5 py-4">
-          <h4 className="mb-3 text-sm font-semibold text-gray-700">Sequence Steps</h4>
-          <StepTimeline steps={sequence.steps} stats={stats} />
-
-          {/* Enrollment note */}
-          {enrolledCount > 0 && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
-              <Users className="h-3.5 w-3.5" />
-              {formatNumber(enrolledCount)} contact{enrolledCount !== 1 ? 's' : ''} currently enrolled.
-              Manage enrollments from individual company pages.
+      {/* Expanded sections */}
+      {expanded && (
+        <>
+          {/* Step timeline */}
+          {sequence.steps && (
+            <div className="border-t border-gray-100 px-5 py-4">
+              <h4 className="mb-3 text-sm font-semibold text-gray-700">Sequence Steps</h4>
+              <StepTimeline steps={sequence.steps} stats={stats} />
             </div>
           )}
-        </div>
+
+          {/* Enrollment dashboard */}
+          <EnrollmentSection enrolledCount={enrolledCount} />
+        </>
       )}
     </div>
   );
@@ -306,7 +549,7 @@ const templateVariables = [
 ];
 
 /* -------------------------------------------------------------------------- */
-/*  StepPreview — rendered preview of a single step                           */
+/*  StepPreview -- rendered preview of a single step                          */
 /* -------------------------------------------------------------------------- */
 
 function StepPreview({ step }) {
@@ -337,8 +580,12 @@ function SequenceBuilder({ onSave, onCancel, initialData }) {
   const [name, setName] = useState(initialData?.name || '');
   const [steps, setSteps] = useState(
     initialData?.steps?.length
-      ? initialData.steps.map((s, i) => ({ ...s, order: i + 1 }))
-      : [{ order: 1, type: 'email', subject: '', body: '', delay_days: 0 }],
+      ? initialData.steps.map((s, i) => ({
+          ...s,
+          order: i + 1,
+          send_condition: s.send_condition || 'always',
+        }))
+      : [{ order: 1, type: 'email', subject: '', body: '', delay_days: 0, send_condition: 'always' }],
   );
   const [previewIndex, setPreviewIndex] = useState(null);
 
@@ -351,6 +598,7 @@ function SequenceBuilder({ onSave, onCancel, initialData }) {
         subject: '',
         body: '',
         delay_days: 3,
+        send_condition: 'always',
       },
     ]);
   };
@@ -425,119 +673,159 @@ function SequenceBuilder({ onSave, onCancel, initialData }) {
           />
         </div>
 
-        {/* Steps */}
-        <div className="space-y-4">
-          {steps.map((step, idx) => (
-            <div key={idx} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600">
+        {/* Steps with visual timeline */}
+        <div className="relative space-y-0">
+          {steps.map((step, idx) => {
+            const isLast = idx === steps.length - 1;
+
+            return (
+              <div key={idx} className="relative flex gap-4">
+                {/* Left timeline connector */}
+                <div className="flex flex-col items-center pt-4">
+                  {/* Step circle */}
+                  <div className="relative z-10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-blue-400 bg-white text-xs font-bold text-blue-600 shadow-sm">
                     {step.order}
-                  </span>
-                  <span className="text-sm font-medium text-gray-700">Email Step</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {/* Move up / down */}
-                  <button
-                    type="button"
-                    onClick={() => moveStep(idx, -1)}
-                    disabled={idx === 0}
-                    title="Move step up"
-                    className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveStep(idx, 1)}
-                    disabled={idx === steps.length - 1}
-                    title="Move step down"
-                    className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
-                  >
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </button>
-
-                  <div className="mx-1 h-4 w-px bg-gray-200" />
-
-                  {/* Preview toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setPreviewIndex(previewIndex === idx ? null : idx)}
-                    title="Preview rendered email"
-                    className={cn(
-                      'rounded p-1 transition-colors',
-                      previewIndex === idx
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'text-gray-400 hover:bg-gray-200 hover:text-gray-600',
-                    )}
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </button>
-
-                  <div className="mx-1 h-4 w-px bg-gray-200" />
-
-                  {/* Delay */}
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5 text-gray-400" />
-                    <input
-                      type="number"
-                      min="0"
-                      max="30"
-                      value={step.delay_days}
-                      onChange={(e) => updateStep(idx, 'delay_days', Number(e.target.value))}
-                      className="w-14 rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
-                    />
-                    <span className="text-xs text-gray-500">day delay</span>
                   </div>
-
-                  {/* Remove step */}
-                  {steps.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeStep(idx)}
-                      className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-red-500"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                  {/* Vertical line to next step */}
+                  {!isLast && (
+                    <div className="w-0.5 flex-1 bg-gradient-to-b from-blue-300 to-gray-200" />
                   )}
                 </div>
+
+                {/* Step card */}
+                <div className="mb-4 flex-1 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {/* Drag handle icon */}
+                      <GripVertical className="h-4 w-4 text-gray-300" />
+                      <span className="text-sm font-medium text-gray-700">Email Step</span>
+                      {/* Send condition label */}
+                      {step.send_condition && step.send_condition !== 'always' && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
+                          {getConditionLabel(step.send_condition)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/* Move up / down */}
+                      <button
+                        type="button"
+                        onClick={() => moveStep(idx, -1)}
+                        disabled={idx === 0}
+                        title="Move step up"
+                        className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveStep(idx, 1)}
+                        disabled={idx === steps.length - 1}
+                        title="Move step down"
+                        className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+
+                      <div className="mx-1 h-4 w-px bg-gray-200" />
+
+                      {/* Preview toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setPreviewIndex(previewIndex === idx ? null : idx)}
+                        title="Preview rendered email"
+                        className={cn(
+                          'rounded p-1 transition-colors',
+                          previewIndex === idx
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'text-gray-400 hover:bg-gray-200 hover:text-gray-600',
+                        )}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+
+                      <div className="mx-1 h-4 w-px bg-gray-200" />
+
+                      {/* Delay */}
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5 text-gray-400" />
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          value={step.delay_days}
+                          onChange={(e) => updateStep(idx, 'delay_days', Number(e.target.value))}
+                          className="w-14 rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+                        />
+                        <span className="text-xs text-gray-500">day delay</span>
+                      </div>
+
+                      {/* Remove step */}
+                      {steps.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeStep(idx)}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-red-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Email subject line *"
+                    value={step.subject}
+                    onChange={(e) => updateStep(idx, 'subject', e.target.value)}
+                    className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+
+                  <textarea
+                    id={`step-body-${idx}`}
+                    placeholder="Email body text..."
+                    value={step.body}
+                    onChange={(e) => updateStep(idx, 'body', e.target.value)}
+                    rows={4}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Insert:</span>
+                    {templateVariables.map((v) => (
+                      <button
+                        key={v.value}
+                        type="button"
+                        onClick={() => insertVariable(idx, v.value)}
+                        className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-100"
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Send condition dropdown */}
+                  <div className="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3">
+                    <span className="text-xs text-gray-500">Send condition:</span>
+                    <select
+                      value={step.send_condition || 'always'}
+                      onChange={(e) => updateStep(idx, 'send_condition', e.target.value)}
+                      className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none"
+                    >
+                      {SEND_CONDITIONS.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Step preview */}
+                  {previewIndex === idx && <StepPreview step={step} />}
+                </div>
               </div>
-
-              <input
-                type="text"
-                placeholder="Email subject line *"
-                value={step.subject}
-                onChange={(e) => updateStep(idx, 'subject', e.target.value)}
-                className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-
-              <textarea
-                id={`step-body-${idx}`}
-                placeholder="Email body text..."
-                value={step.body}
-                onChange={(e) => updateStep(idx, 'body', e.target.value)}
-                rows={4}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="text-xs text-gray-500">Insert:</span>
-                {templateVariables.map((v) => (
-                  <button
-                    key={v.value}
-                    type="button"
-                    onClick={() => insertVariable(idx, v.value)}
-                    className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-100"
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Step preview */}
-              {previewIndex === idx && <StepPreview step={step} />}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Add Step */}
@@ -580,6 +868,7 @@ function SequenceBuilder({ onSave, onCancel, initialData }) {
 export default function Sequences() {
   const { data: sequences, isLoading, isError } = useSequences();
   const createSequence = useCreateSequence();
+  const deleteSequence = useDeleteSequence();
   const [showBuilder, setShowBuilder] = useState(false);
   const [duplicateData, setDuplicateData] = useState(null);
 
@@ -621,6 +910,10 @@ export default function Sequences() {
       steps: clonedSteps,
     });
     setShowBuilder(true);
+  };
+
+  const handleDelete = (id) => {
+    deleteSequence.mutate(id);
   };
 
   const handleCancel = () => {
@@ -687,6 +980,7 @@ export default function Sequences() {
               key={sequence.id}
               sequence={sequence}
               onDuplicate={handleDuplicate}
+              onDelete={handleDelete}
               isBestPerformer={sequence.id === bestPerformerId}
             />
           ))}

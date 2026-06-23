@@ -17,6 +17,10 @@ import {
   LayoutGrid,
   MapPin,
   Users,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Building2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '../components/DataTable';
@@ -418,7 +422,7 @@ export default function Companies() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bulkOperating, setBulkOperating] = useState(false);
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards' | 'byCity'
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [filters, setFilters] = useState({
@@ -428,6 +432,8 @@ export default function Companies() {
     industry: '',
     scoreMin: '',
     scoreMax: '',
+    enriched: '',
+    has_contacts: false,
   });
 
   // Debounce search input (300ms)
@@ -442,6 +448,8 @@ export default function Companies() {
   if (filters.stage) serverFilters.stage = filters.stage;
   if (filters.country) serverFilters.country = filters.country;
   if (filters.industry) serverFilters.industry_segment = filters.industry;
+  if (filters.enriched) serverFilters.enriched = filters.enriched;
+  if (filters.has_contacts) serverFilters.has_contacts = true;
   serverFilters.page = page;
   serverFilters.page_size = pageSize;
 
@@ -465,6 +473,65 @@ export default function Companies() {
       return true;
     });
   }, [allCompanies, filters.source, filters.scoreMin, filters.scoreMax]);
+
+  // Hash-based color for company initial avatars
+  const AVATAR_COLORS = [
+    { bg: 'bg-blue-100', text: 'text-blue-600' },
+    { bg: 'bg-purple-100', text: 'text-purple-600' },
+    { bg: 'bg-green-100', text: 'text-green-600' },
+    { bg: 'bg-orange-100', text: 'text-orange-600' },
+    { bg: 'bg-pink-100', text: 'text-pink-600' },
+    { bg: 'bg-teal-100', text: 'text-teal-600' },
+    { bg: 'bg-indigo-100', text: 'text-indigo-600' },
+    { bg: 'bg-rose-100', text: 'text-rose-600' },
+    { bg: 'bg-cyan-100', text: 'text-cyan-600' },
+    { bg: 'bg-amber-100', text: 'text-amber-600' },
+  ];
+  const getAvatarColor = (name) => {
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  };
+
+  // Industry breakdown summary (top 8 industries)
+  const industryCounts = useMemo(() => {
+    const counts = {};
+    for (const c of companies) {
+      const ind = c.industry || 'Other';
+      counts[ind] = (counts[ind] || 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [companies]);
+
+  // Industry pill colors
+  const INDUSTRY_COLORS = [
+    'bg-blue-100 text-blue-700',
+    'bg-purple-100 text-purple-700',
+    'bg-green-100 text-green-700',
+    'bg-orange-100 text-orange-700',
+    'bg-pink-100 text-pink-700',
+    'bg-teal-100 text-teal-700',
+    'bg-indigo-100 text-indigo-700',
+    'bg-amber-100 text-amber-700',
+  ];
+
+  // City grouping for "byCity" view
+  const [expandedCities, setExpandedCities] = useState({});
+  const cityGroups = useMemo(() => {
+    const groups = {};
+    for (const c of companies) {
+      const city = c.city || 'Unknown';
+      if (!groups[city]) groups[city] = [];
+      groups[city].push(c);
+    }
+    return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+  }, [companies]);
+
+  const toggleCity = (city) => {
+    setExpandedCities((prev) => ({ ...prev, [city]: !prev[city] }));
+  };
 
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
@@ -699,6 +766,18 @@ export default function Companies() {
       render: (val) => SOURCE_LABELS[val] || val || '—',
     },
     {
+      key: 'domain',
+      label: 'Enriched',
+      render: (val) => val ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+          <Sparkles className="h-3 w-3" />
+          Enriched
+        </span>
+      ) : (
+        <span className="text-xs text-gray-400">Not enriched</span>
+      ),
+    },
+    {
       key: 'health',
       label: 'Health',
       sortable: false,
@@ -719,7 +798,7 @@ export default function Companies() {
     },
   ];
 
-  const hasActiveFilters = filters.stage || filters.country || filters.source || filters.industry || filters.scoreMin || filters.scoreMax;
+  const hasActiveFilters = filters.stage || filters.country || filters.source || filters.industry || filters.scoreMin || filters.scoreMax || filters.enriched || filters.has_contacts;
 
   return (
     <div className="space-y-4">
@@ -751,11 +830,14 @@ export default function Companies() {
         </button>
 
         <div className="inline-flex overflow-hidden rounded-lg border border-gray-300">
-          <button onClick={() => setViewMode('table')} className={cn('px-3 py-2 text-sm', viewMode === 'table' ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-600')}>
+          <button onClick={() => setViewMode('table')} title="Table view" className={cn('px-3 py-2 text-sm', viewMode === 'table' ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-600')}>
             <LayoutList className="h-4 w-4" />
           </button>
-          <button onClick={() => setViewMode('cards')} className={cn('px-3 py-2 text-sm', viewMode === 'cards' ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-600')}>
+          <button onClick={() => setViewMode('cards')} title="Card view" className={cn('px-3 py-2 text-sm', viewMode === 'cards' ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-600')}>
             <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button onClick={() => setViewMode('byCity')} title="Group by city" className={cn('px-3 py-2 text-sm', viewMode === 'byCity' ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-600')}>
+            <Building2 className="h-4 w-4" />
           </button>
         </div>
 
@@ -855,10 +937,33 @@ export default function Companies() {
               className="h-9 w-20 rounded-md border border-gray-300 px-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Enrichment</label>
+            <select
+              value={filters.enriched}
+              onChange={(e) => handleFilterChange('enriched', e.target.value)}
+              className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">All</option>
+              <option value="enriched">Enriched</option>
+              <option value="not_enriched">Not Enriched</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 h-9 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filters.has_contacts}
+                onChange={(e) => handleFilterChange('has_contacts', e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Has contacts</span>
+            </label>
+          </div>
           {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => { setFilters({ stage: '', country: '', source: '', industry: '', scoreMin: '', scoreMax: '' }); setPage(1); }}
+              onClick={() => { setFilters({ stage: '', country: '', source: '', industry: '', scoreMin: '', scoreMax: '', enriched: '', has_contacts: false }); setPage(1); }}
               className="h-9 text-sm text-gray-500 hover:text-gray-700"
             >
               Clear
@@ -867,7 +972,38 @@ export default function Companies() {
         </div>
       )}
 
-      {/* Data Table / Card View */}
+      {/* Industry Breakdown Summary */}
+      {!isLoading && !isError && companies.length > 0 && industryCounts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wider mr-1">Industries:</span>
+          {industryCounts.map(([industry, count], i) => (
+            <button
+              key={industry}
+              type="button"
+              onClick={() => {
+                if (filters.industry === industry) {
+                  handleFilterChange('industry', '');
+                } else {
+                  handleFilterChange('industry', industry);
+                  if (!showFilters) setShowFilters(true);
+                }
+              }}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                filters.industry === industry
+                  ? 'ring-2 ring-blue-400 ring-offset-1'
+                  : '',
+                INDUSTRY_COLORS[i % INDUSTRY_COLORS.length]
+              )}
+            >
+              {industry}
+              <span className="opacity-70">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Data Table / Card View / City View */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -887,17 +1023,25 @@ export default function Companies() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {companies.map((c) => {
             const health = getHealthIndicator(c.stage);
+            const avatarColor = getAvatarColor(c.name);
             return (
               <div key={c.id} onClick={() => navigate(`/companies/${c.id}`)} className="cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-blue-300 hover:shadow-md">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600">
+                  <div className={cn('flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold', avatarColor.bg, avatarColor.text)}>
                     {(c.name || '?')[0].toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-gray-900">{c.name}</p>
                     {c.industry && <p className="text-xs text-gray-500">{c.industry}</p>}
                   </div>
-                  {c.score != null && <ScoreBadge score={c.score} size="sm" />}
+                  <div className="flex items-center gap-1.5">
+                    {c.domain ? (
+                      <Sparkles className="h-3.5 w-3.5 text-green-500" title="Enriched" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5 text-gray-300" title="Not enriched" />
+                    )}
+                    {c.score != null && <ScoreBadge score={c.score} size="sm" />}
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
                   {c.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}</span>}
@@ -916,6 +1060,59 @@ export default function Companies() {
               </div>
             );
           })}
+        </div>
+      ) : viewMode === 'byCity' ? (
+        <div className="space-y-2">
+          {cityGroups.map(([city, cityCompanies]) => (
+            <div key={city} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleCity(city)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-gray-400" />
+                  <span className="font-medium text-gray-900">{city}</span>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{cityCompanies.length}</span>
+                </div>
+                {expandedCities[city] ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+              </button>
+              {expandedCities[city] && (
+                <div className="border-t border-gray-100 divide-y divide-gray-50">
+                  {cityCompanies.map((c) => {
+                    const avatarColor = getAvatarColor(c.name);
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => navigate(`/companies/${c.id}`)}
+                        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50"
+                      >
+                        <div className={cn('flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold', avatarColor.bg, avatarColor.text)}>
+                          {(c.name || '?')[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>
+                          <p className="text-xs text-gray-500">{c.industry || 'No industry'}</p>
+                        </div>
+                        {c.domain ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                            <Sparkles className="h-3 w-3" />
+                            Enriched
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">Not enriched</span>
+                        )}
+                        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', STAGE_COLORS[c.stage]?.bg, STAGE_COLORS[c.stage]?.text)}>
+                          {STAGE_LABELS[c.stage] || c.stage}
+                        </span>
+                        {c.score != null && <ScoreBadge score={c.score} size="sm" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       ) : (
         <DataTable
