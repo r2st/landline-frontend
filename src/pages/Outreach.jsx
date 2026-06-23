@@ -915,7 +915,7 @@ function SendTestModal({ open, onClose, templateId, senderAccountId, defaultEmai
 
 function ComposeTab() {
   const { data: templates } = useEmailTemplates();
-  const { data: contactsRaw, isLoading: contactsLoading } = useContacts();
+  const { data: contactsRaw, isLoading: contactsLoading } = useContacts({ pageSize: 200 });
   const contacts = useMemo(() => contactsRaw?.items || (Array.isArray(contactsRaw) ? contactsRaw : []), [contactsRaw]);
   const { data: sends } = useAllEmailSends();
   const { data: gmail } = useGmailStatus();

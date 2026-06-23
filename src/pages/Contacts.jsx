@@ -14,12 +14,10 @@ import {
   LayoutGrid,
   Trash2,
   Briefcase,
-  Plus,
   X,
   ChevronLeft,
   ChevronRight,
   Download,
-  Upload,
   Check,
   UserPlus,
 } from 'lucide-react';

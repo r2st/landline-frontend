@@ -390,7 +390,7 @@ export default function CardScanner() {
   const scanCard = useScanCard();
 
   // All previously scanned business cards, newest first, filtered by search.
-  const { data: contactsData, isLoading: contactsLoading } = useContacts();
+  const { data: contactsData, isLoading: contactsLoading } = useContacts({ pageSize: 200 });
   const contacts = useMemo(() => contactsData?.items || (Array.isArray(contactsData) ? contactsData : []), [contactsData]);
   const scannedCards = useMemo(() => {
     const list = contacts.filter(isScanned);
