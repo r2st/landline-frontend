@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { STAGE_LABELS, STAGE_COLORS } from '../lib/constants';
 import CompanyCard from './CompanyCard';
@@ -12,6 +13,7 @@ export default function PipelineColumn({
   onCardDragStart,
   onCardDragEnd,
   onDropCompany,
+  onQuickAdd,
 }) {
   const stageColor = STAGE_COLORS[stage] || {};
   const label = STAGE_LABELS[stage] || stage;
@@ -76,12 +78,22 @@ export default function PipelineColumn({
           ))
         ) : (
           <div className={cn(
-            'flex h-24 items-center justify-center rounded-lg border-2 border-dashed',
-            isOver && canDrop ? 'border-blue-300 text-blue-500' : 'border-transparent text-gray-400'
+            'flex h-24 items-center justify-center rounded-lg border-2 border-dashed transition-all',
+            isOver && canDrop ? 'border-blue-300 bg-blue-50 text-blue-500 scale-[1.02]' : 'border-transparent text-gray-400'
           )}>
-            <p className="text-sm">{isOver && canDrop ? 'Drop here' : 'No companies'}</p>
+            <p className="text-sm">{isOver && canDrop ? 'Drop to move here' : 'No companies'}</p>
           </div>
         )}
+
+        {/* Quick Add */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onQuickAdd?.(stage); }}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-gray-200 py-2 text-xs font-medium text-gray-400 transition hover:border-blue-300 hover:text-blue-500"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add
+        </button>
       </div>
     </div>
   );

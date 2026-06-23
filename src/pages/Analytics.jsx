@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail,
@@ -10,6 +10,8 @@ import {
   ArrowUpRight,
   Activity,
   Send,
+  Download,
+  Users,
 } from 'lucide-react';
 import {
   LineChart,
@@ -32,6 +34,9 @@ import {
   useTopEngagedLeads,
   useRecentEmailActivity,
   useAnalyticsEmailSends,
+  useContactGrowth,
+  useEmailPerformance,
+  usePipelineAnalytics,
 } from '../hooks/useAnalytics';
 import { STAGES, STAGE_LABELS, STAGE_COLORS } from '../lib/constants';
 import { formatNumber, timeAgo, cn } from '../lib/utils';
@@ -254,12 +259,23 @@ function ChartTooltip({ active, payload, label }) {
 
 export default function Analytics() {
   const navigate = useNavigate();
+  const [dateRange, setDateRange] = useState(30); // days
+  const dateRangeOptions = [
+    { label: 'Last 7 days', value: 7 },
+    { label: 'Last 30 days', value: 30 },
+    { label: 'Last 90 days', value: 90 },
+    { label: 'Last 365 days', value: 365 },
+  ];
+
   const { data: metrics, isLoading: metricsLoading } = useAnalyticsMetrics();
-  const { data: trends, isLoading: trendsLoading } = useEmailTrendsAnalytics(30);
+  const { data: trends, isLoading: trendsLoading } = useEmailTrendsAnalytics(dateRange);
   const { data: topLeads, isLoading: leadsLoading } = useTopEngagedLeads(10);
   const { data: recentEmails, isLoading: emailsLoading } = useRecentEmailActivity(20);
   const { data: emailSends, isLoading: sendsLoading } = useAnalyticsEmailSends(20);
   const { data: allEmailSends } = useAnalyticsEmailSends(500); // larger set for heatmap
+  const { data: contactGrowth } = useContactGrowth(dateRange);
+  const { data: emailPerf } = useEmailPerformance(dateRange);
+  const { data: pipelineAnalytics } = usePipelineAnalytics();
 
   // --- Derived data ---
 
@@ -338,14 +354,65 @@ export default function Analytics() {
     return unique.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
   }, [recentEmails, emailSends]);
 
+  const contactGrowthData = useMemo(() => {
+    return (contactGrowth || []).map((item) => ({
+      week: shortDate(item.week),
+      count: item.count,
+    }));
+  }, [contactGrowth]);
+
+  function handleExportCSV() {
+    const rows = [['Date', 'Sent', 'Opened', 'Replied']];
+    (trends || []).forEach((t) => {
+      rows.push([t.date, t.sent || 0, t.opened || t.opens || 0, t.replied || t.replies || 0]);
+    });
+    const csv = rows.map((r) => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-${dateRange}d-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Email campaign performance and lead engagement insights
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Email campaign performance and lead engagement insights
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+            {dateRangeOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setDateRange(opt.value)}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  dateRange === opt.value
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Top Metrics Row */}
@@ -392,7 +459,7 @@ export default function Analytics() {
       {/* Charts Section (2x2) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Email Activity Over Time */}
-        <ChartCard title="Email Activity (Last 30 Days)">
+        <ChartCard title={`Email Activity (Last ${dateRange} Days)`}>
           {trendsLoading ? (
             <div className="flex h-[280px] items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -504,8 +571,76 @@ export default function Analytics() {
         </ChartCard>
 
         {/* Send Timing Heatmap */}
-        <ChartCard title="Best Send Times (Engagement Score)">
+        <ChartCard title="Email Send Volume by Day & Hour">
           <SendTimingHeatmap emailSends={allEmailSends || emailSends} />
+        </ChartCard>
+      </div>
+
+      {/* Contact Growth + Pipeline Analytics */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Contact Growth */}
+        <ChartCard title="Contact Growth (Weekly)">
+          {(contactGrowthData || []).length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No contact data yet"
+              description="Add contacts to see growth trends here."
+            />
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={contactGrowthData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="count" name="New Contacts" fill="#14b8a6" radius={[4, 4, 0, 0]} barSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+
+        {/* Pipeline Analytics */}
+        <ChartCard title="Pipeline Conversion Rates">
+          {!pipelineAnalytics?.conversion_rates?.length ? (
+            <EmptyState
+              title="No pipeline data"
+              description="Move companies through stages to see conversion analytics."
+            />
+          ) : (
+            <div className="space-y-3">
+              {(pipelineAnalytics.conversion_rates || []).map((cr, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="w-28 text-xs font-medium text-gray-500 text-right">{cr.from_stage}</span>
+                  <div className="flex-1">
+                    <div className="relative h-6 overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-full bg-blue-500 transition-all"
+                        style={{ width: `${Math.min(cr.rate, 100)}%` }}
+                      />
+                      <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-gray-700">
+                        {cr.rate.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <span className="w-28 text-xs font-medium text-gray-500">{cr.to_stage}</span>
+                </div>
+              ))}
+              <div className="mt-4 grid grid-cols-3 gap-4 border-t border-gray-100 pt-4">
+                <div className="text-center">
+                  <p className="text-lg font-bold text-green-600">{(pipelineAnalytics.win_rate || 0).toFixed(1)}%</p>
+                  <p className="text-xs text-gray-500">Win Rate</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-red-600">{(pipelineAnalytics.loss_rate || 0).toFixed(1)}%</p>
+                  <p className="text-xs text-gray-500">Loss Rate</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-gray-900">{(pipelineAnalytics.avg_deal_cycle_days || 0).toFixed(0)}</p>
+                  <p className="text-xs text-gray-500">Avg Cycle (days)</p>
+                </div>
+              </div>
+            </div>
+          )}
         </ChartCard>
       </div>
 

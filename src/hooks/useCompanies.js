@@ -11,7 +11,8 @@ function toServerParams(filters = {}) {
   if (filters.stage) params.stage = filters.stage;
   if (filters.country) params.country = filters.country;
   if (filters.industry_segment) params.industry_segment = filters.industry_segment;
-  params.page_size = filters.page_size || 200;
+  params.page = filters.page || 1;
+  params.page_size = filters.page_size || 50;
   return params;
 }
 
@@ -21,7 +22,7 @@ export function useCompanies(filters = {}) {
     queryFn: async () => {
       const data = await companiesApi.getAll(toServerParams(filters));
       const items = data.items || data;
-      return normalizeCompanies(items);
+      return { items: normalizeCompanies(items), total: data.total || items.length, page: data.page || 1, pageSize: data.page_size || 50 };
     },
   });
 }
@@ -52,6 +53,8 @@ export function useCreateCompany() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
       toast.success('Company created successfully');
     },
     onError: (error) => {

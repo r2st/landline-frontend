@@ -28,10 +28,10 @@ export default function CompanyCard({ company, onClick, onTransition, compact = 
       } : undefined}
       onDragEnd={draggable ? () => onDragEnd?.() : undefined}
       className={cn(
-        'rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md',
+        'rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5',
         onClick && 'cursor-pointer',
         draggable && 'cursor-grab active:cursor-grabbing',
-        dragging && 'opacity-40',
+        dragging && 'opacity-40 scale-95',
         compact ? 'p-3' : 'p-4'
       )}
     >

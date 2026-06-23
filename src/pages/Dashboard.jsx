@@ -19,6 +19,7 @@ import {
   MailOpen,
   ChevronRight,
   CheckCircle2,
+  Calendar,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,
@@ -28,11 +29,11 @@ import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
 import SmartSuggestions from '../components/SmartSuggestions';
 import ClientHealthAlerts from '../components/ClientHealthAlerts';
-import { useDashboardMetrics, useRecentActivity, useTopLeads, useEmailTrends } from '../hooks/useDashboard';
+import { useDashboardMetrics, useRecentActivity, useTopLeads, useEmailTrends, useUpcomingTasks } from '../hooks/useDashboard';
 import { useFollowUps, useStaleContacts } from '../hooks/useFollowUps';
 import { emailApi } from '../api/client';
 import { STAGES, STAGE_LABELS, STAGE_COLORS } from '../lib/constants';
-import { formatNumber, timeAgo, cn } from '../lib/utils';
+import { formatNumber, formatCurrency, formatDate, timeAgo, cn } from '../lib/utils';
 
 const activityIcons = {
   lead_scored: Target,
@@ -221,6 +222,7 @@ export default function Dashboard() {
   const { data: activity, isLoading: activityLoading } = useRecentActivity();
   const { data: topLeads, isLoading: topLeadsLoading } = useTopLeads();
   const { data: trends } = useEmailTrends(30);
+  const { data: upcomingTasks, isLoading: tasksLoading } = useUpcomingTasks(5);
 
   const stageCounts = Object.fromEntries(
     (metrics?.pipeline || []).map((p) => [p.stage, p.count])
@@ -246,9 +248,11 @@ export default function Dashboard() {
       <QuickActions navigate={navigate} />
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {metricsLoading ? (
           <>
+            <SkeletonCard />
+            <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
@@ -282,6 +286,19 @@ export default function Dashboard() {
               icon={Target}
               color="yellow"
             />
+            <MetricCard
+              title="Active Deals"
+              value={formatNumber(metrics?.active_deals_count || 0)}
+              icon={Target}
+              color="green"
+              subtitle={`${formatCurrency(metrics?.active_deals_value || 0, { compact: true })} pipeline`}
+            />
+            <MetricCard
+              title="Tasks Due Today"
+              value={formatNumber(metrics?.tasks_due_today || 0)}
+              icon={CheckCircle2}
+              color="orange"
+            />
           </>
         )}
       </div>
@@ -294,7 +311,7 @@ export default function Dashboard() {
         <ClientHealthAlerts />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Pipeline Funnel Chart */}
         <div className="lg:col-span-2">
           <ChartCard
@@ -370,6 +387,65 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-700 line-clamp-2">{item.description}</p>
                         <p className="mt-0.5 text-xs text-gray-400">{timeAgo(item.created_at)}</p>
                       </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming Tasks */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+            <h2 className="text-base font-semibold text-gray-900">Upcoming Tasks</h2>
+            <button onClick={() => navigate('/tasks')} className="text-sm font-medium text-blue-600 hover:text-blue-700">View All</button>
+          </div>
+          <div className="max-h-[340px] overflow-y-auto">
+            {tasksLoading ? (
+              <div className="space-y-3 p-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex animate-pulse items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-gray-200" />
+                    <div className="flex-1 space-y-1">
+                      <div className="h-3 w-3/4 rounded bg-gray-200" />
+                      <div className="h-2.5 w-1/4 rounded bg-gray-200" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (upcomingTasks || []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
+                <CheckCircle2 className="h-8 w-8 text-green-400" />
+                <p className="mt-2 text-sm font-medium text-gray-900">No pending tasks</p>
+                <p className="mt-0.5 text-sm text-gray-500">Create tasks from company pages to track your follow-ups.</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-50">
+                {(upcomingTasks || []).slice(0, 5).map((task) => {
+                  const isOverdue = task.due_date && new Date(task.due_date) < new Date();
+                  return (
+                    <li
+                      key={task.id}
+                      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 cursor-pointer"
+                      onClick={() => task.company_id && navigate(`/companies/${task.company_id}`)}
+                    >
+                      <div className={cn('flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full', isOverdue ? 'bg-red-50' : 'bg-blue-50')}>
+                        <Calendar className={cn('h-3.5 w-3.5', isOverdue ? 'text-red-500' : 'text-blue-500')} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-700 line-clamp-1">{task.title}</p>
+                        <p className={cn('mt-0.5 text-xs', isOverdue ? 'text-red-500 font-medium' : 'text-gray-400')}>
+                          {task.due_date ? (isOverdue ? 'Overdue - ' : '') + formatDate(task.due_date) : 'No due date'}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        'flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
+                        task.priority === 'high' || task.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                        task.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'
+                      )}>
+                        {task.priority || 'medium'}
+                      </span>
                     </li>
                   );
                 })}

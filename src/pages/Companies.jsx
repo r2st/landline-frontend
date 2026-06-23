@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -13,12 +13,16 @@ import {
   XCircle,
   Send,
   Tag,
+  LayoutList,
+  LayoutGrid,
+  MapPin,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '../components/DataTable';
 import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
-import { useCompanies, useCreateCompany, useScoreCompany, useDeleteCompany } from '../hooks/useCompanies';
+import { useCompanies, useCreateCompany, useDeleteCompany } from '../hooks/useCompanies';
 import { useGroups, useAddGroupMembers } from '../hooks/useGroups';
 import { useSequences } from '../hooks/useOutreach';
 import { pipelineApi, contactsApi, companiesApi, outreachApi, queryClient } from '../api/client';
@@ -407,29 +411,44 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
 
 export default function Companies() {
   const navigate = useNavigate();
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bulkOperating, setBulkOperating] = useState(false);
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [filters, setFilters] = useState({
     stage: '',
     country: '',
     source: '',
+    industry: '',
     scoreMin: '',
     scoreMax: '',
   });
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // Server-side filters (supported by the company list endpoint).
   const serverFilters = {};
   if (search) serverFilters.search = search;
   if (filters.stage) serverFilters.stage = filters.stage;
   if (filters.country) serverFilters.country = filters.country;
+  if (filters.industry) serverFilters.industry_segment = filters.industry;
+  serverFilters.page = page;
+  serverFilters.page_size = pageSize;
 
-  const { data: allCompanies, isLoading, isError } = useCompanies(serverFilters);
+  const { data: companiesData, isLoading, isError } = useCompanies(serverFilters);
+  const allCompanies = companiesData?.items || [];
+  const totalCompanies = companiesData?.total || 0;
   const createCompany = useCreateCompany();
-  const scoreCompany = useScoreCompany();
   const deleteCompany = useDeleteCompany();
   const { data: groups } = useGroups();
   const { data: sequences } = useSequences();
@@ -449,6 +468,7 @@ export default function Companies() {
 
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
+    setPage(1);
   };
 
   // Serialize rows to a CSV file and trigger a download. `value(row)` cells may
@@ -507,12 +527,21 @@ export default function Companies() {
   const handleScoreAll = async () => {
     if (selectedIds.length === 0) return;
     setBulkOperating(true);
-    for (const id of selectedIds) {
-      scoreCompany.mutate(id);
+    const t = toast.loading(`Scoring ${selectedIds.length} companies...`);
+    try {
+      for (const id of selectedIds) {
+        await companiesApi.score(id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['top-leads'] });
+      toast.success(`Scored ${selectedIds.length} companies`, { id: t });
+      setSelectedIds([]);
+    } catch {
+      toast.error('Some scoring operations failed', { id: t });
+    } finally {
+      setBulkOperating(false);
     }
-    toast.success(`Scoring ${selectedIds.length} companies...`);
-    setSelectedIds([]);
-    setBulkOperating(false);
   };
 
   const handleBulkStageChange = async (stage) => {
@@ -624,6 +653,13 @@ export default function Companies() {
     }
   };
 
+  // Health indicator based on stage
+  const getHealthIndicator = (stage) => {
+    if (['customer', 'engaged', 'qualified'].includes(stage)) return { color: 'bg-green-500', label: 'Active' };
+    if (['contacted', 'opportunity', 'researched'].includes(stage)) return { color: 'bg-yellow-500', label: 'Warm' };
+    return { color: 'bg-gray-400', label: 'Cold' };
+  };
+
   const columns = [
     {
       key: 'name',
@@ -663,13 +699,27 @@ export default function Companies() {
       render: (val) => SOURCE_LABELS[val] || val || '—',
     },
     {
+      key: 'health',
+      label: 'Health',
+      sortable: false,
+      render: (val, row) => {
+        const h = getHealthIndicator(row.stage);
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+            <span className={cn('h-2 w-2 rounded-full', h.color)} />
+            {h.label}
+          </span>
+        );
+      },
+    },
+    {
       key: 'created_at',
       label: 'Created',
       render: (val) => val ? formatDate(val) : '—',
     },
   ];
 
-  const hasActiveFilters = filters.stage || filters.country || filters.source || filters.scoreMin || filters.scoreMax;
+  const hasActiveFilters = filters.stage || filters.country || filters.source || filters.industry || filters.scoreMin || filters.scoreMax;
 
   return (
     <div className="space-y-4">
@@ -680,8 +730,8 @@ export default function Companies() {
           <input
             type="text"
             placeholder="Search companies..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -699,6 +749,15 @@ export default function Companies() {
           <Filter className="h-4 w-4" />
           Filters
         </button>
+
+        <div className="inline-flex overflow-hidden rounded-lg border border-gray-300">
+          <button onClick={() => setViewMode('table')} className={cn('px-3 py-2 text-sm', viewMode === 'table' ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-600')}>
+            <LayoutList className="h-4 w-4" />
+          </button>
+          <button onClick={() => setViewMode('cards')} className={cn('px-3 py-2 text-sm', viewMode === 'cards' ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-600')}>
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+        </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
@@ -750,6 +809,16 @@ export default function Companies() {
             </select>
           </div>
           <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Industry</label>
+            <input
+              type="text"
+              placeholder="Filter industry..."
+              value={filters.industry}
+              onChange={(e) => handleFilterChange('industry', e.target.value)}
+              className="h-9 w-40 rounded-md border border-gray-300 px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">Source</label>
             <select
               value={filters.source}
@@ -789,7 +858,7 @@ export default function Companies() {
           {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => setFilters({ stage: '', country: '', source: '', scoreMin: '', scoreMax: '' })}
+              onClick={() => { setFilters({ stage: '', country: '', source: '', industry: '', scoreMin: '', scoreMax: '' }); setPage(1); }}
               className="h-9 text-sm text-gray-500 hover:text-gray-700"
             >
               Clear
@@ -798,7 +867,7 @@ export default function Companies() {
         </div>
       )}
 
-      {/* Data Table */}
+      {/* Data Table / Card View */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -814,6 +883,40 @@ export default function Companies() {
           description={search || hasActiveFilters ? 'Try adjusting your search or filters.' : 'Get started by adding your first company.'}
           action={!search && !hasActiveFilters ? { label: 'Add Company', onClick: () => setShowModal(true) } : undefined}
         />
+      ) : viewMode === 'cards' ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {companies.map((c) => {
+            const health = getHealthIndicator(c.stage);
+            return (
+              <div key={c.id} onClick={() => navigate(`/companies/${c.id}`)} className="cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-blue-300 hover:shadow-md">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600">
+                    {(c.name || '?')[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-gray-900">{c.name}</p>
+                    {c.industry && <p className="text-xs text-gray-500">{c.industry}</p>}
+                  </div>
+                  {c.score != null && <ScoreBadge score={c.score} size="sm" />}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+                  {c.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}</span>}
+                  {c.contact_count > 0 && <span className="flex items-center gap-1"><Users className="h-3 w-3" />{c.contact_count} contacts</span>}
+                  {c.employees && <span>{formatNumber(c.employees)} employees</span>}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', STAGE_COLORS[c.stage]?.bg, STAGE_COLORS[c.stage]?.text)}>
+                    {STAGE_LABELS[c.stage] || c.stage}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className={cn('h-2 w-2 rounded-full', health.color)} />
+                    {health.label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <DataTable
           columns={columns}
@@ -824,6 +927,26 @@ export default function Companies() {
           onSelectionChange={setSelectedIds}
           emptyMessage="No companies match your criteria"
         />
+      )}
+
+      {/* Pagination */}
+      {totalCompanies > pageSize && (
+        <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-700">
+              Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, totalCompanies)} of {totalCompanies}
+            </span>
+            <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm">
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+            </select>
+          </div>
+          <div className="flex gap-1">
+            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
+            <button disabled={page * pageSize >= totalCompanies} onClick={() => setPage(p => p + 1)} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+          </div>
+        </div>
       )}
 
       {/* Add Company Modal */}

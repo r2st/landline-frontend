@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Filter } from 'lucide-react';
+import { Filter, Search, Plus, X } from 'lucide-react';
 import PipelineColumn from '../components/PipelineColumn';
 import { usePipeline, useTransitionStage } from '../hooks/usePipeline';
-import { STAGES, COUNTRIES, SOURCES, SOURCE_LABELS } from '../lib/constants';
+import { useCreateCompany } from '../hooks/useCompanies';
+import { STAGES, STAGE_LABELS, COUNTRIES, SOURCES, SOURCE_LABELS } from '../lib/constants';
 
 function SkeletonColumn() {
   return (
@@ -41,7 +42,37 @@ export default function Pipeline() {
 
   const { data: pipeline, isLoading } = usePipeline(activeFilters);
   const transitionMutation = useTransitionStage();
+  const createCompanyMutation = useCreateCompany();
   const [draggingId, setDraggingId] = useState(null);
+  const [pipelineSearch, setPipelineSearch] = useState('');
+  const [quickAddStage, setQuickAddStage] = useState(null);
+  const [quickAddName, setQuickAddName] = useState('');
+  const [quickAddDomain, setQuickAddDomain] = useState('');
+
+  // Filter pipeline by search
+  const filteredPipeline = useMemo(() => {
+    if (!pipeline || !pipelineSearch.trim()) return pipeline;
+    const q = pipelineSearch.trim().toLowerCase();
+    const filtered = {};
+    for (const [stage, companies] of Object.entries(pipeline)) {
+      filtered[stage] = companies.filter(c =>
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.domain || '').toLowerCase().includes(q)
+      );
+    }
+    return filtered;
+  }, [pipeline, pipelineSearch]);
+
+  // Metrics from pipeline data
+  const totalCompanies = useMemo(() => {
+    if (!pipeline) return 0;
+    return Object.values(pipeline).reduce((sum, list) => sum + list.length, 0);
+  }, [pipeline]);
+
+  const activeStages = useMemo(() => {
+    if (!pipeline) return 0;
+    return Object.values(pipeline).filter((list) => list.length > 0).length;
+  }, [pipeline]);
 
   const handleCardClick = (company) => {
     navigate(`/companies/${company.id}`);
@@ -54,6 +85,24 @@ export default function Pipeline() {
   const handleDropCompany = (id, stage) => {
     setDraggingId(null);
     transitionMutation.mutate({ id, stage });
+  };
+
+  const handleQuickAdd = async (e) => {
+    e.preventDefault();
+    if (!quickAddName.trim()) return;
+    try {
+      await createCompanyMutation.mutateAsync({
+        name: quickAddName.trim(),
+        domain: quickAddDomain.trim() || undefined,
+        stage: quickAddStage,
+        source: 'manual',
+      });
+      setQuickAddStage(null);
+      setQuickAddName('');
+      setQuickAddDomain('');
+    } catch {
+      // Error toast is handled by useCreateCompany hook
+    }
   };
 
   const handleFilterChange = (field, value) => {
@@ -97,6 +146,18 @@ export default function Pipeline() {
             Clear all
           </button>
         )}
+
+        {/* Pipeline Search */}
+        <div className="relative" style={{ minWidth: '200px', maxWidth: '300px' }}>
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search pipeline..."
+            value={pipelineSearch}
+            onChange={(e) => setPipelineSearch(e.target.value)}
+            className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
 
         <span className="ml-auto hidden text-xs text-gray-400 sm:inline">
           Drag cards between stages, or use the dropdown on each card
@@ -162,6 +223,28 @@ export default function Pipeline() {
         </div>
       )}
 
+      {/* Metrics Bar */}
+      {!isLoading && pipeline && (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-xs font-medium text-gray-500">Total Pipeline</p>
+            <p className="text-lg font-bold text-gray-900">{totalCompanies}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-xs font-medium text-gray-500">Active Stages</p>
+            <p className="text-lg font-bold text-gray-900">{activeStages}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-xs font-medium text-gray-500">Qualified</p>
+            <p className="text-lg font-bold text-green-600">{pipeline?.qualified?.length || 0}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-xs font-medium text-gray-500">Opportunities</p>
+            <p className="text-lg font-bold text-emerald-600">{pipeline?.opportunity?.length || 0}</p>
+          </div>
+        </div>
+      )}
+
       {/* Kanban Board */}
       <div className="flex-1 overflow-x-auto pb-4">
         <div className="inline-flex gap-4" style={{ minWidth: 'max-content' }}>
@@ -172,18 +255,74 @@ export default function Pipeline() {
               <PipelineColumn
                 key={stage}
                 stage={stage}
-                companies={pipeline?.[stage] || []}
+                companies={filteredPipeline?.[stage] || []}
                 onCardClick={handleCardClick}
                 onTransition={handleTransition}
                 draggingId={draggingId}
                 onCardDragStart={(company) => setDraggingId(company.id)}
                 onCardDragEnd={() => setDraggingId(null)}
                 onDropCompany={handleDropCompany}
+                onQuickAdd={(s) => setQuickAddStage(s)}
               />
             ))
           )}
         </div>
       </div>
+
+      {/* Quick-Add Company Modal */}
+      {quickAddStage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setQuickAddStage(null)} />
+          <div className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Add to {STAGE_LABELS[quickAddStage]}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setQuickAddStage(null)}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleQuickAdd} className="mt-4 space-y-3">
+              <input
+                type="text"
+                required
+                placeholder="Company name"
+                value={quickAddName}
+                onChange={(e) => setQuickAddName(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                autoFocus
+              />
+              <input
+                type="text"
+                placeholder="Domain (optional)"
+                value={quickAddDomain}
+                onChange={(e) => setQuickAddDomain(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQuickAddStage(null)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createCompanyMutation.isPending}
+                  className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {createCompanyMutation.isPending ? 'Adding...' : 'Add'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

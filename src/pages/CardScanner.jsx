@@ -390,9 +390,10 @@ export default function CardScanner() {
   const scanCard = useScanCard();
 
   // All previously scanned business cards, newest first, filtered by search.
-  const { data: contacts, isLoading: contactsLoading } = useContacts();
+  const { data: contactsData, isLoading: contactsLoading } = useContacts();
+  const contacts = useMemo(() => contactsData?.items || (Array.isArray(contactsData) ? contactsData : []), [contactsData]);
   const scannedCards = useMemo(() => {
-    const list = (contacts || []).filter(isScanned);
+    const list = contacts.filter(isScanned);
     const q = search.trim().toLowerCase();
     const filtered = q
       ? list.filter((c) =>
@@ -403,7 +404,7 @@ export default function CardScanner() {
       : list;
     return [...filtered].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   }, [contacts, search]);
-  const totalScanned = useMemo(() => (contacts || []).filter(isScanned).length, [contacts]);
+  const totalScanned = useMemo(() => contacts.filter(isScanned).length, [contacts]);
   const galleryCards = useMemo(() => scannedCards.filter((c) => c.has_card_image), [scannedCards]);
 
   const handleFile = useCallback(async (file) => {

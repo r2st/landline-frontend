@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon,
   Globe,
   Target,
-  Trash2,
   Download,
   AlertCircle,
   Flame,
@@ -11,16 +10,29 @@ import {
   Zap,
   BarChart3,
   Calendar,
+  Activity,
+  RotateCcw,
+  Save,
+  Building2,
+  Users,
 } from 'lucide-react';
-import ConfirmDialog from '../components/ConfirmDialog';
 import GmailConnect from '../components/GmailConnect';
 import EmailSignatureEditor from '../components/EmailSignatureEditor';
+import { api } from '../api/client';
 import { API_BASE_URL } from '../lib/constants';
 import toast from 'react-hot-toast';
 
 // Automation flags are controlled by backend environment variables and shown
 // read-only. The scheduling link is a UI-side preference persisted locally.
 const SCHEDULING_LINK_KEY = 'landline.scheduling_link';
+const SCORING_WEIGHTS_KEY = 'landline.scoring_weights';
+
+const DEFAULT_WEIGHTS = {
+  company_size: 25,
+  industry_match: 30,
+  contact_quality: 25,
+  engagement_level: 20,
+};
 
 function ConnectionStatus({ connected }) {
   return (
@@ -31,19 +43,21 @@ function ConnectionStatus({ connected }) {
   );
 }
 
-function WeightSlider({ label, value, description }) {
+function WeightSlider({ label, value, description, onChange }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-gray-700">{label}</label>
         <span className="text-sm font-semibold text-gray-900">{value}%</span>
       </div>
-      <div className="relative h-2 rounded-full bg-gray-200">
-        <div
-          className="absolute left-0 top-0 h-2 rounded-full bg-blue-500"
-          style={{ width: `${value}%` }}
-        />
-      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-gray-200 accent-blue-500"
+      />
       <p className="text-xs text-gray-500">{description}</p>
     </div>
   );
@@ -70,13 +84,22 @@ function AutomationStatusRow({ icon: Icon, label, enabled, description }) {
 export default function Settings() {
   const [apiConnected, setApiConnected] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [healthData, setHealthData] = useState(null);
   const [automation, setAutomation] = useState({
     auto_reply: true,
     auto_followups: false,
     auto_scoring: false,
     scheduling_link: '',
   });
+  const [weights, setWeights] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SCORING_WEIGHTS_KEY);
+      return saved ? JSON.parse(saved) : { ...DEFAULT_WEIGHTS };
+    } catch {
+      return { ...DEFAULT_WEIGHTS };
+    }
+  });
+  const [weightsDirty, setWeightsDirty] = useState(false);
 
   useEffect(() => {
     try {
@@ -102,27 +125,53 @@ export default function Settings() {
     const checkConnection = async () => {
       setChecking(true);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/health`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(5000),
-        });
-        setApiConnected(response.ok);
+        const response = await api.get('/health');
+        setApiConnected(true);
+        setHealthData(response.data);
       } catch {
         setApiConnected(false);
+        setHealthData(null);
       }
       setChecking(false);
     };
     checkConnection();
   }, []);
 
-  const handleExportAll = () => {
-    toast.success('Export started — this would download all data as JSON');
-  };
+  const handleExportCompanies = useCallback(() => {
+    const baseURL = import.meta.env.VITE_API_URL
+      ? `${import.meta.env.VITE_API_URL}/api/v1`
+      : '/api/v1';
+    window.open(`${baseURL}/import-export/export/companies/csv`, '_blank');
+    toast.success('Companies CSV export started');
+  }, []);
 
-  const handleClearData = () => {
-    setShowClearDialog(false);
-    toast.success('Demo mode — data clear simulated');
-  };
+  const handleExportContacts = useCallback(() => {
+    const baseURL = import.meta.env.VITE_API_URL
+      ? `${import.meta.env.VITE_API_URL}/api/v1`
+      : '/api/v1';
+    window.open(`${baseURL}/import-export/export/contacts/csv`, '_blank');
+    toast.success('Contacts CSV export started');
+  }, []);
+
+  const handleWeightChange = useCallback((key, value) => {
+    setWeights((prev) => ({ ...prev, [key]: value }));
+    setWeightsDirty(true);
+  }, []);
+
+  const handleWeightsSave = useCallback(() => {
+    try {
+      localStorage.setItem(SCORING_WEIGHTS_KEY, JSON.stringify(weights));
+      setWeightsDirty(false);
+      toast.success('Scoring weights saved');
+    } catch {
+      toast.error('Could not save scoring weights');
+    }
+  }, [weights]);
+
+  const handleWeightsReset = useCallback(() => {
+    setWeights({ ...DEFAULT_WEIGHTS });
+    setWeightsDirty(true);
+  }, []);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -243,6 +292,50 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* System Status */}
+      {!checking && apiConnected && healthData && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+              <Activity className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">System Status</h2>
+              <p className="text-sm text-gray-500">Backend service information</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {healthData.status && (
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                <span className="text-sm text-gray-700">Status</span>
+                <span className="text-sm font-medium text-green-600">{healthData.status}</span>
+              </div>
+            )}
+            {healthData.version && (
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                <span className="text-sm text-gray-700">Version</span>
+                <span className="text-sm font-medium text-gray-900">{healthData.version}</span>
+              </div>
+            )}
+            {healthData.environment && (
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                <span className="text-sm text-gray-700">Environment</span>
+                <span className="text-sm font-medium text-gray-900">{healthData.environment}</span>
+              </div>
+            )}
+            {healthData.database && (
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                <span className="text-sm text-gray-700">Database</span>
+                <span className={`text-sm font-medium ${healthData.database === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
+                  {healthData.database}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Scoring Weights */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-3">
@@ -256,10 +349,50 @@ export default function Settings() {
         </div>
 
         <div className="space-y-5">
-          <WeightSlider label="Company Size" value={25} description="Weight based on number of employees and revenue indicators" />
-          <WeightSlider label="Industry Match" value={30} description="How well the company fits your target industry profile" />
-          <WeightSlider label="Contact Quality" value={25} description="Decision-maker contacts found and engagement quality" />
-          <WeightSlider label="Engagement Level" value={20} description="Email opens, replies, website visits, and other signals" />
+          <WeightSlider
+            label="Company Size"
+            value={weights.company_size}
+            description="Weight based on number of employees and revenue indicators"
+            onChange={(v) => handleWeightChange('company_size', v)}
+          />
+          <WeightSlider
+            label="Industry Match"
+            value={weights.industry_match}
+            description="How well the company fits your target industry profile"
+            onChange={(v) => handleWeightChange('industry_match', v)}
+          />
+          <WeightSlider
+            label="Contact Quality"
+            value={weights.contact_quality}
+            description="Decision-maker contacts found and engagement quality"
+            onChange={(v) => handleWeightChange('contact_quality', v)}
+          />
+          <WeightSlider
+            label="Engagement Level"
+            value={weights.engagement_level}
+            description="Email opens, replies, website visits, and other signals"
+            onChange={(v) => handleWeightChange('engagement_level', v)}
+          />
+        </div>
+
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleWeightsSave}
+            disabled={!weightsDirty}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" />
+            Save Weights
+          </button>
+          <button
+            type="button"
+            onClick={handleWeightsReset}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reset to Defaults
+          </button>
         </div>
 
         <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-600">
@@ -267,34 +400,34 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Data Management */}
+      {/* Data Export */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
-            <SettingsIcon className="h-5 w-5 text-red-600" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100">
+            <Download className="h-5 w-5 text-indigo-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Data Management</h2>
-            <p className="text-sm text-gray-500">Export or clear your data</p>
+            <h2 className="text-lg font-semibold text-gray-900">Data Export</h2>
+            <p className="text-sm text-gray-500">Download your data as CSV files</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={handleExportAll}
+            onClick={handleExportCompanies}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            <Download className="h-4 w-4" />
-            Export All Data
+            <Building2 className="h-4 w-4" />
+            Export Companies
           </button>
           <button
             type="button"
-            onClick={() => setShowClearDialog(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50"
+            onClick={handleExportContacts}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
           >
-            <Trash2 className="h-4 w-4" />
-            Clear All Data
+            <Users className="h-4 w-4" />
+            Export Contacts
           </button>
         </div>
       </div>
@@ -317,17 +450,6 @@ export default function Settings() {
           </p>
         </div>
       </div>
-
-      {/* Confirm Dialog */}
-      <ConfirmDialog
-        open={showClearDialog}
-        title="Clear All Data"
-        message="This will permanently remove all companies, contacts, and outreach data. This action cannot be undone."
-        confirmLabel="Clear Everything"
-        variant="danger"
-        onConfirm={handleClearData}
-        onCancel={() => setShowClearDialog(false)}
-      />
     </div>
   );
 }

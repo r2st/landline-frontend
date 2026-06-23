@@ -62,6 +62,7 @@ export const dashboardApi = {
   getTopLeads: (params) => api.get('/dashboard/top-leads', { params }).then(r => r.data),
   getIndustry: (params) => api.get('/dashboard/industry', { params }).then(r => r.data),
   getEmailTrends: (params) => api.get('/dashboard/email-trends', { params }).then(r => r.data),
+  getContactGrowth: (params) => api.get('/dashboard/contact-growth', { params }).then(r => r.data),
 };
 
 export const followUpsApi = {
@@ -204,6 +205,8 @@ export const reportsApi = {
   revenueFunnel: (params) => api.get('/reports/revenue-funnel', { params }).then(r => r.data),
   activityHeatmap: (params) => api.get('/reports/activity-heatmap', { params }).then(r => r.data),
   topClients: (params) => api.get('/reports/top-clients', { params }).then(r => r.data),
+  emailPerformance: (params) => api.get('/reports/email-performance', { params }).then(r => r.data),
+  pipelineAnalytics: (params) => api.get('/reports/pipeline-analytics', { params }).then(r => r.data),
 };
 
 // Gmail OAuth — connect a Google account so outreach sends from the user's own
