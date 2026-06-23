@@ -21,6 +21,9 @@ import {
   Database,
   User,
   Clock,
+  AlertOctagon,
+  Trash2,
+  Shield,
 } from 'lucide-react';
 import GmailConnect from '../components/GmailConnect';
 import EmailSignatureEditor from '../components/EmailSignatureEditor';
@@ -35,6 +38,7 @@ const SCORING_WEIGHTS_KEY = 'landline.scoring_weights';
 const NOTIFICATION_PREFS_KEY = 'landline.notification_prefs';
 const USER_NAME_KEY = 'landline.user_name';
 const TIMEZONE_KEY = 'landline.timezone';
+const WORKING_HOURS_KEY = 'landline.working_hours';
 
 const DEFAULT_WEIGHTS = {
   company_size: 25,
@@ -49,6 +53,22 @@ const DEFAULT_NOTIFICATION_PREFS = {
   deal_won: true,
   sequence_completed: false,
 };
+
+const DEFAULT_WORKING_HOURS = {
+  start: '09:00',
+  end: '17:00',
+  days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+};
+
+const WEEKDAYS = [
+  { id: 'mon', label: 'Mon' },
+  { id: 'tue', label: 'Tue' },
+  { id: 'wed', label: 'Wed' },
+  { id: 'thu', label: 'Thu' },
+  { id: 'fri', label: 'Fri' },
+  { id: 'sat', label: 'Sat' },
+  { id: 'sun', label: 'Sun' },
+];
 
 const FALLBACK_TIMEZONES = [
   'America/New_York',
@@ -80,6 +100,7 @@ function getTimezones() {
 }
 
 const TABS = [
+  { id: 'profile', label: 'Profile', icon: User },
   { id: 'email', label: 'Email Accounts', icon: Mail },
   { id: 'signatures', label: 'Signatures', icon: Pen },
   { id: 'scoring', label: 'Scoring', icon: Target },
@@ -168,7 +189,7 @@ function NotificationToggle({ label, description, checked, onChange }) {
 /* ---------- main component ---------- */
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState('email');
+  const [activeTab, setActiveTab] = useState('profile');
 
   // API health
   const [apiConnected, setApiConnected] = useState(false);
@@ -220,6 +241,18 @@ export default function Settings() {
     }
   });
 
+  const [workingHours, setWorkingHours] = useState(() => {
+    try {
+      const saved = localStorage.getItem(WORKING_HOURS_KEY);
+      return saved ? { ...DEFAULT_WORKING_HOURS, ...JSON.parse(saved) } : { ...DEFAULT_WORKING_HOURS };
+    } catch {
+      return { ...DEFAULT_WORKING_HOURS };
+    }
+  });
+
+  // Danger zone confirmation
+  const [resetConfirm, setResetConfirm] = useState(false);
+
   const timezones = useMemo(() => getTimezones(), []);
 
   // Load scheduling link from localStorage
@@ -269,11 +302,12 @@ export default function Settings() {
     try {
       localStorage.setItem(USER_NAME_KEY, userName.trim());
       localStorage.setItem(TIMEZONE_KEY, userTimezone);
+      localStorage.setItem(WORKING_HOURS_KEY, JSON.stringify(workingHours));
       toast.success('Profile saved');
     } catch {
       toast.error('Could not save profile');
     }
-  }, [userName, userTimezone]);
+  }, [userName, userTimezone, workingHours]);
 
   const handleSchedulingLinkSave = () => {
     try {
@@ -319,6 +353,27 @@ export default function Settings() {
     setWeights({ ...DEFAULT_WEIGHTS });
     setWeightsDirty(true);
   }, []);
+
+  const handleResetScoring = useCallback(() => {
+    try {
+      localStorage.removeItem(SCORING_WEIGHTS_KEY);
+      setWeights({ ...DEFAULT_WEIGHTS });
+      setWeightsDirty(false);
+      setResetConfirm(false);
+      toast.success('Scoring weights reset to defaults');
+    } catch {
+      toast.error('Could not reset scoring');
+    }
+  }, []);
+
+  // Tab visual indicators
+  const gmailConnected = useMemo(() => {
+    try { return localStorage.getItem('gmail_connected') === 'true'; } catch { return false; }
+  }, [activeTab]); // re-check when switching tabs
+
+  const weightsTotal = useMemo(() => {
+    return Object.values(weights).reduce((sum, v) => sum + v, 0);
+  }, [weights]);
 
   /* ---------- tab content renderers ---------- */
 
@@ -391,6 +446,47 @@ export default function Settings() {
 
       <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-600">
         These weights are visual indicators only. Actual scoring is performed by the backend ML model.
+      </div>
+
+      {/* Sample Score Preview */}
+      <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">Score Preview — Sample Company</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          See how your current weights would score a sample lead in real-time.
+        </p>
+        <div className="space-y-2 text-xs">
+          {[
+            { key: 'company_size', label: 'Company Size', raw: 80 },
+            { key: 'industry_match', label: 'Industry Match', raw: 90 },
+            { key: 'contact_quality', label: 'Contact Quality', raw: 70 },
+            { key: 'engagement_level', label: 'Engagement Level', raw: 60 },
+          ].map((item) => {
+            const w = weights[item.key] || 0;
+            const contribution = ((item.raw * w) / 100).toFixed(1);
+            return (
+              <div key={item.key} className="flex items-center justify-between rounded bg-white px-3 py-2">
+                <span className="text-gray-600">{item.label} <span className="text-gray-400">(raw {item.raw})</span></span>
+                <span className="font-medium text-gray-900">{contribution} pts <span className="text-gray-400">({w}%)</span></span>
+              </div>
+            );
+          })}
+        </div>
+        {(() => {
+          const sampleScores = { company_size: 80, industry_match: 90, contact_quality: 70, engagement_level: 60 };
+          const total = Object.entries(sampleScores).reduce((sum, [k, raw]) => sum + (raw * (weights[k] || 0)) / 100, 0);
+          return (
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-blue-100 px-4 py-2">
+              <span className="text-sm font-semibold text-blue-800">Total Score</span>
+              <span className="text-lg font-bold text-blue-700">{total.toFixed(1)}</span>
+            </div>
+          );
+        })()}
+        {weightsTotal !== 100 && (
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600">
+            <AlertCircle className="h-3.5 w-3.5" />
+            Weights sum to {weightsTotal}% (expected 100%)
+          </div>
+        )}
       </div>
     </div>
   );
@@ -531,6 +627,78 @@ export default function Settings() {
 
         <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-600">
           These features are controlled by backend environment variables. Contact your administrator to change automation settings.
+        </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="rounded-xl border-2 border-red-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+            <AlertOctagon className="h-5 w-5 text-red-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-red-700">Danger Zone</h2>
+            <p className="text-sm text-gray-500">Destructive actions that cannot be easily undone</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-4 py-3">
+            <div>
+              <span className="text-sm font-medium text-gray-700">Export All Data</span>
+              <p className="text-xs text-gray-400">Download all companies, contacts, and activity as a ZIP</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Export all data? This may take a moment.')) {
+                  handleExportCompanies();
+                  handleExportContacts();
+                  toast.success('All data export started');
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50"
+            >
+              <Download className="h-4 w-4" />
+              Export All
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-4 py-3">
+            <div>
+              <span className="text-sm font-medium text-gray-700">Reset Scoring Weights</span>
+              <p className="text-xs text-gray-400">Revert all scoring weights back to factory defaults</p>
+            </div>
+            {resetConfirm ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-red-600">Are you sure?</span>
+                <button
+                  type="button"
+                  onClick={handleResetScoring}
+                  className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResetConfirm(false)}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setResetConfirm(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Reset Scoring
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

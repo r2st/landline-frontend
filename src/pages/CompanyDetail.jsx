@@ -37,6 +37,9 @@ import {
   Pencil,
   Check,
   CheckSquare,
+  DollarSign,
+  Activity,
+  Link2,
 } from 'lucide-react';
 import ScoreBadge from '../components/ScoreBadge';
 import StageSelector from '../components/StageSelector';
@@ -169,11 +172,31 @@ function AddContactForm({ onAdd }) {
   );
 }
 
+const TAG_COLOR_PALETTE = [
+  'bg-blue-100 text-blue-700',
+  'bg-green-100 text-green-700',
+  'bg-purple-100 text-purple-700',
+  'bg-pink-100 text-pink-700',
+  'bg-amber-100 text-amber-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-rose-100 text-rose-700',
+  'bg-indigo-100 text-indigo-700',
+];
+
+function getTagColor(tag) {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return TAG_COLOR_PALETTE[Math.abs(hash) % TAG_COLOR_PALETTE.length];
+}
+
 // Editable Source / Tags / Notes card. Tags save immediately on add/remove;
 // notes save explicitly so a half-typed note isn't persisted.
 function CompanyInfoEditor({ company, onSave, saving }) {
   const [tags, setTags] = useState(company.tags || []);
   const [tagInput, setTagInput] = useState('');
+  const [showTagInput, setShowTagInput] = useState(false);
   const [notes, setNotes] = useState(company.notes || '');
   const [editingNotes, setEditingNotes] = useState(false);
 
@@ -213,27 +236,39 @@ function CompanyInfoEditor({ company, onSave, saving }) {
           <p className="text-sm text-gray-500">Tags</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {tags.map((tag) => (
-              <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pl-2.5 pr-1 text-xs font-medium text-gray-700">
+              <span key={tag} className={cn('inline-flex items-center gap-1 rounded-full py-0.5 pl-2 pr-1 text-xs font-medium', getTagColor(tag))}>
+                <Tag className="h-3 w-3" />
                 {tag}
                 <button
                   type="button"
                   onClick={() => removeTag(tag)}
-                  className="rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                  className="rounded-full p-0.5 opacity-60 hover:opacity-100"
                   aria-label={`Remove tag ${tag}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
               </span>
             ))}
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
-              onBlur={addTag}
-              placeholder={tags.length ? 'Add tag…' : 'Add a tag…'}
-              className="min-w-[7rem] flex-1 rounded-md border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-700 focus:border-blue-400 focus:outline-none"
-            />
+            {showTagInput ? (
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } if (e.key === 'Escape') { setShowTagInput(false); setTagInput(''); } }}
+                onBlur={() => { addTag(); setShowTagInput(false); }}
+                placeholder="Tag name…"
+                autoFocus
+                className="min-w-[7rem] max-w-[10rem] rounded-full border border-gray-300 px-2.5 py-0.5 text-xs text-gray-700 focus:border-blue-400 focus:outline-none"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowTagInput(true)}
+                className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-500 hover:border-gray-400 hover:text-gray-700"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -398,6 +433,36 @@ export default function CompanyDetail() {
                 Not scored
               </span>
             )}
+            {/* Relationship Strength Meter */}
+            {(() => {
+              const now = new Date();
+              const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+              const recentEvents = (outreachEvents || []).filter(e => new Date(e.created_at) > thirtyDaysAgo);
+              const hasRecentInteractions = recentEvents.length > 0;
+              const hasEmailOpens = (emailSends || []).some(e => String(e.company_id) === String(id) && e.status === 'opened');
+              const hasDeal = (company.deal_value || 0) > 0;
+              const hasMultipleContacts = companyContacts.length > 1;
+              const hasRecentStageProgression = company.stage_changed_at && new Date(company.stage_changed_at) > thirtyDaysAgo;
+              const strength = [hasRecentInteractions, hasEmailOpens, hasDeal, hasMultipleContacts, hasRecentStageProgression].filter(Boolean).length;
+              const barColor = strength >= 4 ? 'bg-green-500' : strength >= 2 ? 'bg-yellow-500' : 'bg-red-500';
+              return (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500">Relationship</span>
+                  <div className="flex items-end gap-0.5">
+                    {[1, 2, 3, 4, 5].map(level => (
+                      <div
+                        key={level}
+                        className={cn(
+                          'w-1.5 rounded-sm',
+                          level <= strength ? barColor : 'bg-gray-200'
+                        )}
+                        style={{ height: `${8 + level * 3}px` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <button
               type="button"
               onClick={() => enrichCompany.mutate({ id: company.id, data: { find_contacts: true } })}
@@ -424,7 +489,85 @@ export default function CompanyDetail() {
               <CheckSquare className="h-4 w-4" />
               Add Task
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href).then(() => {
+                  toast.success('Company link copied to clipboard');
+                }).catch(() => {
+                  toast.error('Failed to copy link');
+                });
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Link2 className="h-4 w-4" />
+              Copy Link
+            </button>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Stats Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <div className="flex items-center gap-1.5">
+            <DollarSign className="h-4 w-4 text-green-600" />
+            <span className="text-xs text-green-700">Deal Value</span>
+          </div>
+          <p className="mt-1 text-lg font-bold text-green-900">
+            {company.deal_value ? `$${formatNumber(company.deal_value)}` : '--'}
+          </p>
+        </div>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <div className="flex items-center gap-1.5">
+            <Users className="h-4 w-4 text-blue-600" />
+            <span className="text-xs text-blue-700">Contacts</span>
+          </div>
+          <p className="mt-1 text-lg font-bold text-blue-900">{companyContacts.length}</p>
+        </div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-4 w-4 text-amber-600" />
+            <span className="text-xs text-amber-700">Last Activity</span>
+          </div>
+          <p className="mt-1 text-sm font-bold text-amber-900">
+            {(() => {
+              const events = outreachEvents || [];
+              const dates = events.map(e => new Date(e.created_at)).filter(d => !isNaN(d));
+              if (company.updated_at) dates.push(new Date(company.updated_at));
+              if (dates.length === 0) return '--';
+              const latest = new Date(Math.max(...dates));
+              return formatDate(latest.toISOString());
+            })()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <div className="flex items-center gap-1.5">
+            <Eye className="h-4 w-4 text-purple-600" />
+            <span className="text-xs text-purple-700">Email Open Rate</span>
+          </div>
+          <p className="mt-1 text-lg font-bold text-purple-900">
+            {(() => {
+              const sends = (emailSends || []).filter(e => String(e.company_id) === String(id));
+              if (sends.length === 0) return '--';
+              const opened = sends.filter(e => e.status === 'opened').length;
+              return `${Math.round((opened / sends.length) * 100)}%`;
+            })()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+          <div className="flex items-center gap-1.5">
+            <Activity className="h-4 w-4 text-orange-600" />
+            <span className="text-xs text-orange-700">Days in Stage</span>
+          </div>
+          <p className="mt-1 text-lg font-bold text-orange-900">
+            {(() => {
+              const ref = company.stage_changed_at || company.updated_at;
+              if (!ref) return '--';
+              const days = Math.floor((new Date() - new Date(ref)) / (1000 * 60 * 60 * 24));
+              return days;
+            })()}
+          </p>
         </div>
       </div>
 

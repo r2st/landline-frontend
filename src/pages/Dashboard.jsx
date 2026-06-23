@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -23,9 +23,11 @@ import {
   Calendar,
   TrendingUp,
   DollarSign,
+  Flame,
+  Building,
 } from 'lucide-react';
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,
+  BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,
 } from 'recharts';
 import MetricCard from '../components/MetricCard';
 import ScoreBadge from '../components/ScoreBadge';
@@ -94,24 +96,44 @@ function SkeletonCard() {
 
 // ─── Welcome Header ─────────────────────────────────────────────────────────
 
-function WelcomeHeader({ kpis }) {
+function WelcomeHeader({ kpis, trends }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
+  // Calculate productivity streak from recent trend data
+  const streakDays = useMemo(() => {
+    if (!trends || trends.length < 2) return 0;
+    const sorted = [...trends].sort((a, b) => b.date.localeCompare(a.date));
+    let count = 0;
+    for (const t of sorted) {
+      if ((t.sent || 0) > 0) count++;
+      else break;
+    }
+    return count;
+  }, [trends]);
+
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 px-8 py-6 text-white shadow-lg">
       <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }} />
-      <div className="relative">
-        <h1 className="text-2xl font-bold">{greeting}</h1>
-        <p className="mt-1 text-blue-100">{today}</p>
-        {kpis && (
-          <p className="mt-3 text-sm text-blue-200">
-            {kpis.emails_sent_today > 0
-              ? `You've sent ${kpis.emails_sent_today} email${kpis.emails_sent_today === 1 ? '' : 's'} today`
-              : 'Ready to start your day'}
-            {kpis.deals_won_this_month > 0 && ` · ${kpis.deals_won_this_month} deal${kpis.deals_won_this_month === 1 ? '' : 's'} won this month`}
-          </p>
+      <div className="relative flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{greeting}</h1>
+          <p className="mt-1 text-blue-100">{today}</p>
+          {kpis && (
+            <p className="mt-3 text-sm text-blue-200">
+              {kpis.emails_sent_today > 0
+                ? `You've sent ${kpis.emails_sent_today} email${kpis.emails_sent_today === 1 ? '' : 's'} today`
+                : 'Ready to start your day'}
+              {kpis.deals_won_this_month > 0 && ` · ${kpis.deals_won_this_month} deal${kpis.deals_won_this_month === 1 ? '' : 's'} won this month`}
+            </p>
+          )}
+        </div>
+        {streakDays >= 3 && (
+          <div className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium backdrop-blur-sm">
+            <Flame className="h-4 w-4 text-orange-300" />
+            <span>{streakDays}-day email streak</span>
+          </div>
         )}
       </div>
     </div>
@@ -135,18 +157,19 @@ function QuickStatsRow({ kpis, metricsLoading }) {
   }
 
   const stats = [
-    { label: 'Emails Sent Today', value: kpis.emails_sent_today || 0, color: 'text-blue-600', bgAccent: 'bg-blue-50 border-blue-100' },
-    { label: 'Open Rate', value: `${kpis.open_rate || 0}%`, color: 'text-emerald-600', bgAccent: 'bg-emerald-50 border-emerald-100' },
-    { label: 'Replies This Week', value: kpis.replies_this_week || 0, color: 'text-purple-600', bgAccent: 'bg-purple-50 border-purple-100' },
-    { label: 'Deals Won This Month', value: kpis.deals_won_this_month || 0, color: 'text-amber-600', bgAccent: 'bg-amber-50 border-amber-100' },
+    { label: 'Emails Sent Today', value: kpis.emails_sent_today || 0, color: 'text-blue-600', bgAccent: 'bg-blue-50 border-blue-100', trend: 'Daily outreach activity' },
+    { label: 'Open Rate', value: `${kpis.open_rate || 0}%`, color: 'text-emerald-600', bgAccent: 'bg-emerald-50 border-emerald-100', trend: `${(kpis.open_rate || 0) >= 25 ? 'Above' : 'Below'} 25% industry avg` },
+    { label: 'Replies This Week', value: kpis.replies_this_week || 0, color: 'text-purple-600', bgAccent: 'bg-purple-50 border-purple-100', trend: 'Engagement from prospects' },
+    { label: 'Deals Won This Month', value: kpis.deals_won_this_month || 0, color: 'text-amber-600', bgAccent: 'bg-amber-50 border-amber-100', trend: 'Closed-won deals this month' },
   ];
 
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {stats.map((s) => (
-        <div key={s.label} className={`rounded-xl border p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${s.bgAccent}`}>
+        <div key={s.label} className={`rounded-xl border p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${s.bgAccent}`} title={s.trend}>
           <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{s.label}</p>
           <p className={`mt-2 text-3xl font-bold ${s.color}`}>{s.value}</p>
+          <p className="mt-1 text-xs text-gray-400">{s.trend}</p>
         </div>
       ))}
     </div>
@@ -176,6 +199,74 @@ function QuickActions({ navigate }) {
             <a.icon className="h-[18px] w-[18px]" />
           </span>
           <span className="leading-tight">{a.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Goal Tracker ──────────────────────────────────────────────────────────
+
+function GoalTracker({ kpis }) {
+  const weeklyGoal = kpis?.weekly_email_goal || 25;
+  // Use emails_sent_this_week if available, else approximate from emails_sent_today * days elapsed
+  const sent = kpis?.emails_sent_this_week || kpis?.emails_sent_today || 0;
+  const pct = Math.min(100, Math.round((sent / weeklyGoal) * 100));
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-900">Weekly Email Goal</h3>
+        <span className="text-xs font-medium text-gray-500">{sent} of {weeklyGoal}</span>
+      </div>
+      <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-100">
+        <div
+          className={cn(
+            'h-full rounded-full transition-all duration-700 ease-out',
+            pct >= 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-blue-500' : 'bg-amber-500'
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs text-gray-500">
+        {pct >= 100
+          ? 'Goal reached! Keep up the momentum.'
+          : `${weeklyGoal - sent} more email${weeklyGoal - sent === 1 ? '' : 's'} to hit your weekly target.`}
+      </p>
+    </div>
+  );
+}
+
+// ─── Recently Viewed ───────────────────────────────────────────────────────
+
+function RecentlyViewed({ navigate }) {
+  const recentCompanies = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('landline.recent_companies');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  if (recentCompanies.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+        <Building className="h-3.5 w-3.5" />
+        Recently viewed
+      </span>
+      {recentCompanies.map((company) => (
+        <button
+          key={company.id}
+          type="button"
+          onClick={() => navigate(`/companies/${company.id}`)}
+          className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-blue-600 shadow-sm transition-all hover:bg-blue-50 hover:border-blue-200"
+        >
+          {company.name}
         </button>
       ))}
     </div>
@@ -407,7 +498,7 @@ function Dashboard() {
     count: i.count,
   }));
 
-  const trendData = (trends || []).map((t) => ({ date: shortDate(t.date), sent: t.sent }));
+  const trendData = (trends || []).map((t) => ({ date: shortDate(t.date), sent: t.sent, opens: t.opens || t.opened || 0 }));
 
   const recentItems = (activity || []).slice(0, 8);
 
@@ -417,13 +508,19 @@ function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
-      <WelcomeHeader kpis={kpis} />
+      <WelcomeHeader kpis={kpis} trends={trends} />
 
       {/* Quick Stats Row (KPIs) */}
       <QuickStatsRow kpis={kpis} metricsLoading={metricsLoading} />
 
+      {/* Goal Tracker */}
+      {kpis && <GoalTracker kpis={kpis} />}
+
       {/* Quick Actions */}
       <QuickActions navigate={navigate} />
+
+      {/* Recently Viewed */}
+      <RecentlyViewed navigate={navigate} />
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -651,13 +748,24 @@ function Dashboard() {
             <EmptyState icon={Mail} title="No emails sent yet" description="Compose outreach from the Email Campaigns page to see activity here." />
           ) : (
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={trendData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
+              <AreaChart data={trendData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="sentFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="opensFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                 <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
-                <Line type="monotone" dataKey="sent" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
+                <Area type="monotone" dataKey="sent" stroke="#8b5cf6" strokeWidth={2} fill="url(#sentFill)" dot={{ r: 3 }} name="Sent" />
+                <Area type="monotone" dataKey="opens" stroke="#10b981" strokeWidth={2} fill="url(#opensFill)" dot={{ r: 2 }} name="Opens" />
+              </AreaChart>
             </ResponsiveContainer>
           )}
         </ChartCard>

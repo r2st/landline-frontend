@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   Filter, Search, Plus, X, LayoutGrid, List, DollarSign, TrendingUp,
-  Target, Clock, Award, BarChart3, ChevronDown,
+  Target, Clock, Award, BarChart3, ChevronDown, AlertCircle, CalendarClock,
 } from 'lucide-react';
 import DealPipelineColumn from '../components/DealPipelineColumn';
 import DealDetailModal from '../components/DealDetailModal';
@@ -48,6 +48,81 @@ function MetricCard({ icon: Icon, label, value, sub, color }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// --- Pipeline Forecast ---
+function PipelineForecast({ deals, metrics }) {
+  const forecast = useMemo(() => {
+    const now = new Date();
+    const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+
+    let thisMonthWeighted = 0;
+    let nextMonthWeighted = 0;
+
+    for (const d of deals) {
+      if (d.status !== 'pending') continue;
+      const val = Number(d.value) || 0;
+      const prob = (DEAL_STAGE_PROBABILITIES[d.deal_stage] || 0) / 100;
+      const closeDate = d.close_date ? new Date(d.close_date) : null;
+
+      if (closeDate && closeDate <= thisMonthEnd) {
+        thisMonthWeighted += val * prob;
+      } else if (closeDate && closeDate <= nextMonthEnd) {
+        nextMonthWeighted += val * prob;
+      } else {
+        // No close date — attribute to this month
+        thisMonthWeighted += val * prob;
+      }
+    }
+
+    return { thisMonthWeighted, nextMonthWeighted };
+  }, [deals]);
+
+  return (
+    <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
+      <div className="flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-4 w-4 text-indigo-500" />
+          <span className="text-sm font-semibold text-gray-900">Pipeline Forecast</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-gray-500">This month (weighted):</span>
+          <span className="text-sm font-bold text-indigo-700">{formatCurrency(forecast.thisMonthWeighted, { compact: true })}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-gray-500">Next month (weighted):</span>
+          <span className="text-sm font-bold text-gray-700">{formatCurrency(forecast.nextMonthWeighted, { compact: true })}</span>
+        </div>
+        {metrics?.win_rate > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-gray-500">Win rate:</span>
+            <span className="text-sm font-bold text-emerald-600">{metrics.win_rate}%</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Deal aging helper ---
+function DealAgingBadge({ updatedAt }) {
+  if (!updatedAt) return null;
+  const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24));
+  if (days < 14) return null;
+  const isRed = days >= 30;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+        isRed ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+      )}
+      title={`Last updated ${days} days ago`}
+    >
+      <AlertCircle className="h-3 w-3" />
+      {days}d
+    </span>
   );
 }
 
@@ -101,12 +176,13 @@ function DealTableView({ deals, onCardClick }) {
             <SortHeader field="status">Status</SortHeader>
             <SortHeader field="created_at">Created</SortHeader>
             <SortHeader field="updated_at">Updated</SortHeader>
+            <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Age</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {sorted.length === 0 ? (
             <tr>
-              <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">No deals match your filters.</td>
+              <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">No deals match your filters.</td>
             </tr>
           ) : (
             sorted.map((d) => {
@@ -132,6 +208,7 @@ function DealTableView({ deals, onCardClick }) {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{formatDate(d.created_at)}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{formatDate(d.updated_at)}</td>
+                  <td className="px-4 py-3"><DealAgingBadge updatedAt={d.updated_at} /></td>
                 </tr>
               );
             })
@@ -305,6 +382,11 @@ export default function Pipeline() {
             color="bg-amber-500"
           />
         </div>
+      )}
+
+      {/* Pipeline Forecast */}
+      {!isLoading && allDeals.length > 0 && (
+        <PipelineForecast deals={allDeals} metrics={metrics} />
       )}
 
       {/* Top Bar */}

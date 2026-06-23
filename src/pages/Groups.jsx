@@ -15,7 +15,15 @@ import {
   Building2,
   MapPin,
   GitBranch,
+  Download,
+  ArrowRightLeft,
+  Zap,
+  ToggleLeft,
+  ToggleRight,
+  Clock,
+  MessageSquare,
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import EmptyState from '../components/EmptyState';
 import {
   useGroups,
@@ -40,6 +48,91 @@ const PRESET_COLORS = [
   { value: '#14b8a6', label: 'Teal' },
 ];
 
+// ── Smart Group helpers ──────────────────────────────────────────────────────
+
+const SMART_FILTER_OPTIONS = [
+  { value: 'industry', label: 'Industry' },
+  { value: 'country', label: 'Country' },
+  { value: 'stage', label: 'Stage' },
+];
+
+function parseSmartPrefix(description) {
+  if (!description) return null;
+  const match = description.match(/^\[SMART:(\w+)=([^\]]+)\]\s*/);
+  if (!match) return null;
+  return { field: match[1], value: match[2], rest: description.slice(match[0].length) };
+}
+
+function buildSmartDescription(isSmartGroup, smartField, smartValue, rawDescription) {
+  if (!isSmartGroup) return rawDescription;
+  return `[SMART:${smartField}=${smartValue}] ${rawDescription}`;
+}
+
+// ── CSV Export helper ────────────────────────────────────────────────────────
+
+function exportGroupCSV(group) {
+  const rows = [['Name', 'Domain', 'Industry', 'Stage']];
+  (group.companies || []).forEach((c) => {
+    rows.push([c.name || '', c.domain || '', c.industry || '', c.stage || '']);
+  });
+  const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${group.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_members.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Group Comparison Chart ───────────────────────────────────────────────────
+
+function GroupComparisonChart({ groups }) {
+  const [open, setOpen] = useState(true);
+
+  const data = useMemo(
+    () => groups.map((g) => ({ name: g.name, members: g.member_count || 0, color: g.color || '#3b82f6' })),
+    [groups]
+  );
+
+  if (groups.length < 2) return null;
+
+  return (
+    <div className="mb-6 rounded-xl border border-gray-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between px-5 py-3 text-left"
+      >
+        <span className="text-sm font-semibold text-gray-700">Group Comparison</span>
+        {open ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+      </button>
+      {open && (
+        <div className="px-5 pb-4" style={{ height: Math.max(groups.length * 40 + 40, 120) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+              <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+              <Tooltip
+                formatter={(value) => [`${value} members`, 'Members']}
+                contentStyle={{ borderRadius: '8px', fontSize: '12px' }}
+              />
+              <Bar dataKey="members" radius={[0, 4, 4, 0]} barSize={20}>
+                {data.map((entry, idx) => (
+                  <Cell key={idx} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SkeletonCards({ count = 3 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -60,18 +153,23 @@ function SkeletonCards({ count = 3 }) {
 // ── New / Edit Group Modal ────────────────────────────────────────────────────
 
 function GroupFormModal({ group, onClose, onCreate, onUpdate }) {
+  const existingSmart = group ? parseSmartPrefix(group.description) : null;
   const [name, setName] = useState(group?.name || '');
-  const [description, setDescription] = useState(group?.description || '');
+  const [description, setDescription] = useState(existingSmart ? existingSmart.rest : (group?.description || ''));
   const [color, setColor] = useState(group?.color || '#3b82f6');
+  const [isSmartGroup, setIsSmartGroup] = useState(!!existingSmart);
+  const [smartField, setSmartField] = useState(existingSmart?.field || 'industry');
+  const [smartValue, setSmartValue] = useState(existingSmart?.value || '');
   const isEdit = !!group;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
+    const finalDescription = buildSmartDescription(isSmartGroup && smartValue.trim(), smartField, smartValue.trim(), description);
     if (isEdit) {
-      onUpdate({ id: group.id, data: { name: name.trim(), description, color } });
+      onUpdate({ id: group.id, data: { name: name.trim(), description: finalDescription, color } });
     } else {
-      onCreate({ name: name.trim(), description, color });
+      onCreate({ name: name.trim(), description: finalDescription, color });
     }
     onClose();
   };
@@ -125,6 +223,43 @@ function GroupFormModal({ group, onClose, onCreate, onUpdate }) {
                 />
               ))}
             </div>
+          </div>
+          {/* Smart Group toggle */}
+          <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+            <button
+              type="button"
+              onClick={() => setIsSmartGroup(!isSmartGroup)}
+              className="flex items-center gap-2 text-sm font-medium text-gray-700 w-full text-left"
+            >
+              {isSmartGroup ? (
+                <ToggleRight className="h-5 w-5 text-blue-500" />
+              ) : (
+                <ToggleLeft className="h-5 w-5 text-gray-400" />
+              )}
+              <Zap className={cn('h-4 w-4', isSmartGroup ? 'text-amber-500' : 'text-gray-400')} />
+              Smart Group
+              <span className="text-xs font-normal text-gray-400 ml-auto">Auto-filter members</span>
+            </button>
+            {isSmartGroup && (
+              <div className="flex gap-2">
+                <select
+                  value={smartField}
+                  onChange={(e) => setSmartField(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {SMART_FILTER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={smartValue}
+                  onChange={(e) => setSmartValue(e.target.value)}
+                  placeholder={`e.g. ${smartField === 'industry' ? 'Manufacturing' : smartField === 'country' ? 'US' : 'Lead'}`}
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
@@ -264,9 +399,51 @@ function AddCompaniesModal({ group, onClose, onAdd }) {
 
 // ── Group Card ────────────────────────────────────────────────────────────────
 
-function GroupCard({ group, onEdit, onDelete, onAddCompanies, onRemoveMember }) {
+function MoveToGroupDropdown({ company, currentGroupId, allGroups, onMove }) {
+  const [open, setOpen] = useState(false);
+  const otherGroups = (allGroups || []).filter((g) => g.id !== currentGroupId);
+
+  if (otherGroups.length === 0) return null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className="rounded p-1 text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all"
+        title="Move to another group"
+      >
+        <ArrowRightLeft className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+          <div className="px-2 py-1 text-[10px] font-medium text-gray-400 uppercase tracking-wide">Move to...</div>
+          {otherGroups.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMove(company, currentGroupId, g.id);
+                setOpen(false);
+              }}
+              className="flex items-center gap-2 w-full px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <span className="inline-block h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: g.color || '#3b82f6' }} />
+              <span className="truncate">{g.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GroupCard({ group, onEdit, onDelete, onAddCompanies, onRemoveMember, allGroups, onMoveMember }) {
   const [expanded, setExpanded] = useState(false);
   const navigate = useNavigate();
+  const smartInfo = parseSmartPrefix(group.description);
+  const displayDescription = smartInfo ? smartInfo.rest : group.description;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
@@ -280,8 +457,22 @@ function GroupCard({ group, onEdit, onDelete, onAddCompanies, onRemoveMember }) 
               <Users className="h-3 w-3" />
               {group.member_count}
             </span>
+            {smartInfo && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-medium text-amber-700" title={`Smart filter: ${smartInfo.field}=${smartInfo.value}`}>
+                <Zap className="h-3 w-3" />
+                Smart
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => exportGroupCSV(group)}
+              className="rounded-md p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+              title="Export CSV"
+            >
+              <Download className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={() => onEdit(group)}
@@ -302,8 +493,8 @@ function GroupCard({ group, onEdit, onDelete, onAddCompanies, onRemoveMember }) 
         </div>
 
         {/* Description */}
-        {group.description && (
-          <p className="mt-1.5 text-sm text-gray-500 line-clamp-2">{group.description}</p>
+        {displayDescription && (
+          <p className="mt-1.5 text-sm text-gray-500 line-clamp-2">{displayDescription}</p>
         )}
 
         {/* Actions */}
@@ -346,17 +537,39 @@ function GroupCard({ group, onEdit, onDelete, onAddCompanies, onRemoveMember }) 
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 flex-shrink-0">{c.stage}</span>
                   )}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onRemoveMember({ groupId: group.id, companyIds: [c.id] })}
-                  className="rounded p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                  title="Remove from group"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5">
+                  <MoveToGroupDropdown
+                    company={c}
+                    currentGroupId={group.id}
+                    allGroups={allGroups}
+                    onMove={onMoveMember}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onRemoveMember({ groupId: group.id, companyIds: [c.id] })}
+                    className="rounded p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                    title="Remove from group"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Recent Activity placeholder */}
+      {expanded && (
+        <div className="border-t border-gray-100 px-5 py-3">
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <Clock className="h-3.5 w-3.5" />
+            <span className="font-medium text-gray-500">Recent Activity</span>
+          </div>
+          <p className="mt-1.5 text-xs text-gray-400 flex items-center gap-1.5">
+            <MessageSquare className="h-3 w-3" />
+            No recent activity tracked
+          </p>
         </div>
       )}
     </div>
@@ -482,18 +695,26 @@ export default function Groups() {
           <p className="text-sm text-gray-500">No groups match "{searchFilter}"</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredGroups.map((group) => (
-            <GroupCard
-              key={group.id}
-              group={group}
-              onEdit={(g) => setEditingGroup(g)}
-              onDelete={handleDelete}
-              onAddCompanies={(g) => setAddCompaniesGroup(g)}
-              onRemoveMember={({ groupId, companyIds }) => removeMembers.mutate({ groupId, companyIds })}
-            />
-          ))}
-        </div>
+        <>
+          <GroupComparisonChart groups={filteredGroups} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredGroups.map((group) => (
+              <GroupCard
+                key={group.id}
+                group={group}
+                allGroups={groups}
+                onEdit={(g) => setEditingGroup(g)}
+                onDelete={handleDelete}
+                onAddCompanies={(g) => setAddCompaniesGroup(g)}
+                onRemoveMember={({ groupId, companyIds }) => removeMembers.mutate({ groupId, companyIds })}
+                onMoveMember={(company, fromGroupId, toGroupId) => {
+                  removeMembers.mutate({ groupId: fromGroupId, companyIds: [company.id] });
+                  addMembers.mutate({ groupId: toGroupId, companyIds: [company.id] });
+                }}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Modals */}

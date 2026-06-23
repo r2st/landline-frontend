@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Plus,
   CheckCircle2,
+  ChevronDown,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import {
@@ -44,6 +45,54 @@ function daysUntilNextMonday() {
   // If today is Sunday (0), next Monday is 1 day away
   const daysAway = day === 0 ? 1 : 8 - day;
   return daysAway;
+}
+
+function computePriorityScore(followUp) {
+  let score = 0;
+
+  // Days overdue factor (higher = more urgent)
+  if (followUp.is_overdue && followUp.due_date) {
+    const daysOver = Math.max(0, Math.floor((new Date() - new Date(followUp.due_date)) / (1000 * 60 * 60 * 24)));
+    score += Math.min(daysOver * 10, 50); // Max 50 from overdue
+  } else if (followUp.due_date) {
+    const days = daysUntil(followUp.due_date);
+    if (days === 0) score += 30; // Due today
+    else if (days <= 2) score += 15; // Due soon
+  }
+
+  // Deal value factor
+  if (followUp.deal_value) {
+    score += Math.min(Math.floor(followUp.deal_value / 1000) * 5, 30);
+  }
+
+  // Company score factor
+  if (followUp.company_score) {
+    score += Math.min(Math.floor(followUp.company_score / 10) * 5, 20);
+  }
+
+  return Math.min(score, 100);
+}
+
+function PriorityBadge({ score }) {
+  if (score === 0) return null;
+
+  let color, label;
+  if (score >= 70) {
+    color = 'bg-red-100 text-red-700';
+    label = 'High';
+  } else if (score >= 40) {
+    color = 'bg-amber-100 text-amber-700';
+    label = 'Medium';
+  } else {
+    color = 'bg-blue-100 text-blue-700';
+    label = 'Low';
+  }
+
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium', color)}>
+      <span className="font-bold">{score}</span> {label}
+    </span>
+  );
 }
 
 function SkeletonRows({ rows = 4 }) {
@@ -421,6 +470,154 @@ function TodayMarker() {
   );
 }
 
+// ─── Mini calendar heatmap ───────────────────────────────────────────────────
+
+function MiniCalendarHeatmap({ followUps }) {
+  const heatmap = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = [];
+
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      const count = (followUps || []).filter(f => {
+        if (f.status !== 'pending') return false;
+        const fDate = new Date(f.due_date);
+        fDate.setHours(0, 0, 0, 0);
+        return fDate.toISOString().split('T')[0] === dateStr;
+      }).length;
+
+      days.push({
+        date,
+        dateStr,
+        dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayNum: date.getDate(),
+        count,
+        isToday: i === 0,
+      });
+    }
+    return days;
+  }, [followUps]);
+
+  const maxCount = Math.max(1, ...heatmap.map(d => d.count));
+
+  function cellColor(count, isToday) {
+    if (count === 0) return isToday ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200';
+    const intensity = count / maxCount;
+    if (intensity > 0.75) return 'bg-blue-500 border-blue-600 text-white';
+    if (intensity > 0.5) return 'bg-blue-400 border-blue-500 text-white';
+    if (intensity > 0.25) return 'bg-blue-200 border-blue-300 text-blue-800';
+    return 'bg-blue-100 border-blue-200 text-blue-700';
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-3 text-sm font-semibold text-gray-700">Next 14 Days</h3>
+      <div className="flex gap-1.5 overflow-x-auto">
+        {heatmap.map((day) => (
+          <div key={day.dateStr} className="flex flex-col items-center gap-1">
+            <span className="text-[10px] text-gray-400">{day.dayLabel}</span>
+            <div
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-md border text-xs font-medium',
+                cellColor(day.count, day.isToday),
+                day.isToday && 'ring-2 ring-amber-400 ring-offset-1'
+              )}
+              title={`${day.dateStr}: ${day.count} follow-up${day.count !== 1 ? 's' : ''}`}
+            >
+              {day.count > 0 ? day.count : day.dayNum}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-gray-400">
+        <span>Less</span>
+        <div className="flex gap-0.5">
+          <div className="h-2.5 w-4 rounded-sm bg-gray-50 border border-gray-200" />
+          <div className="h-2.5 w-4 rounded-sm bg-blue-100" />
+          <div className="h-2.5 w-4 rounded-sm bg-blue-200" />
+          <div className="h-2.5 w-4 rounded-sm bg-blue-400" />
+          <div className="h-2.5 w-4 rounded-sm bg-blue-500" />
+        </div>
+        <span>More</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Follow-up templates ────────────────────────────────────────────────────
+
+const FOLLOW_UP_TEMPLATES = [
+  { label: 'Check-in call', reason: 'Check-in call', days: 3 },
+  { label: 'Proposal follow-up', reason: 'Follow up on proposal', days: 2 },
+  { label: 'Quarterly review', reason: 'Quarterly review meeting', days: 7 },
+  { label: 'Demo follow-up', reason: 'Follow up after demo', days: 1 },
+  { label: 'Contract review', reason: 'Review contract status', days: 5 },
+];
+
+function TemplateQuickAdd() {
+  const createFollowUp = useCreateFollowUp();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleTemplate = (template) => {
+    createFollowUp.mutate(
+      {
+        due_date: daysFromNowISO(template.days),
+        reason: template.reason,
+        notes: `Created from template: ${template.label}`,
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Follow-up created: ${template.label}`);
+          setOpen(false);
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+      >
+        <CalendarPlus className="h-4 w-4" />
+        Templates
+        <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {FOLLOW_UP_TEMPLATES.map((t) => (
+            <button
+              key={t.label}
+              type="button"
+              onClick={() => handleTemplate(t)}
+              disabled={createFollowUp.isPending}
+              className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <span>{t.label}</span>
+              <span className="text-xs text-gray-400">in {t.days}d</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Reminders tab ────────────────────────────────────────────────────────────
 
 function RemindersTab() {
@@ -433,8 +630,80 @@ function RemindersTab() {
   const updateFollowUp = useUpdateFollowUp();
   const deleteFollowUp = useDeleteFollowUp();
   const [bulkCompleting, setBulkCompleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    const pendingIds = (followUps || []).filter(f => f.status === 'pending').map(f => f.id);
+    setSelectedIds(new Set(pendingIds));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkAction = async (action) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    try {
+      if (action === 'complete') {
+        await Promise.all(ids.map(id =>
+          new Promise((resolve, reject) => {
+            updateFollowUp.mutate({ id, data: { status: 'completed' } }, { onSuccess: resolve, onError: reject });
+          })
+        ));
+        toast.success(`Completed ${ids.length} follow-up${ids.length !== 1 ? 's' : ''}`);
+      } else if (action === 'snooze') {
+        await Promise.all(ids.map(id =>
+          new Promise((resolve, reject) => {
+            updateFollowUp.mutate({ id, data: { due_date: daysFromNowISO(3) } }, { onSuccess: resolve, onError: reject });
+          })
+        ));
+        toast.success(`Snoozed ${ids.length} follow-up${ids.length !== 1 ? 's' : ''} by 3 days`);
+      } else if (action === 'dismiss') {
+        await Promise.all(ids.map(id =>
+          new Promise((resolve, reject) => {
+            updateFollowUp.mutate({ id, data: { status: 'dismissed' } }, { onSuccess: resolve, onError: reject });
+          })
+        ));
+        toast.success(`Dismissed ${ids.length} follow-up${ids.length !== 1 ? 's' : ''}`);
+      }
+      setSelectedIds(new Set());
+    } catch {
+      toast.error('Some bulk actions failed');
+    }
+  };
 
   const items = followUps || [];
+
+  const streakInfo = useMemo(() => {
+    // Count recent completed follow-ups and check for missed ones
+    const completed = items.filter(f => f.status === 'completed');
+    const overdueItems = items.filter(f => f.is_overdue);
+
+    // Simple streak: count of completed items with no current overdue
+    const streak = completed.length;
+    const hasOverdue = overdueItems.length > 0;
+
+    if (streak === 0) return null;
+
+    return {
+      count: streak,
+      hasOverdue,
+      message: hasOverdue
+        ? `${streak} completed, but ${overdueItems.length} overdue — time to catch up!`
+        : streak >= 5
+          ? `${streak} follow-ups completed — great consistency!`
+          : `${streak} follow-up${streak !== 1 ? 's' : ''} completed — keep it up!`,
+    };
+  }, [items]);
 
   // Filter by search query
   const filtered = useMemo(() => {
@@ -520,6 +789,7 @@ function RemindersTab() {
                 <span className="truncate text-xs text-gray-400">{f.company_name}</span>
               )}
               <StatusBadge followUp={f} />
+              <PriorityBadge score={computePriorityScore(f)} />
             </div>
             {f.reason && <p className="mt-0.5 truncate text-sm text-gray-600">{f.reason}</p>}
             <p className="mt-0.5 text-xs text-gray-400">Due {formatDate(f.due_date)}</p>

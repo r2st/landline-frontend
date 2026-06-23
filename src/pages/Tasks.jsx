@@ -5,6 +5,7 @@ import {
   CheckSquare, Plus, Search, List, Calendar as CalendarIcon, Check, Pencil, Trash2,
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   ArrowUpDown, MousePointerClick, X, Repeat, LayoutGrid, GripVertical, ArrowRight,
+  Timer, Play, Pause, Sun, ListChecks, CopyPlus,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import TaskFormModal from '../components/TaskFormModal';
@@ -17,6 +18,19 @@ import {
 import { formatDate, daysUntil, cn } from '../lib/utils';
 
 const isDone = (t) => t.status === 'completed' || t.status === 'done';
+
+// ─── Checklist parser ─────────────────────────────────────────────────────
+function parseChecklist(description) {
+  if (!description) return null;
+  const lines = description.split('\n');
+  let total = 0, checked = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- [x]') || trimmed.startsWith('- [X]')) { total++; checked++; }
+    else if (trimmed.startsWith('- [ ]')) { total++; }
+  }
+  return total > 0 ? { total, checked } : null;
+}
 
 const SORT_OPTIONS = [
   { value: 'due_date', label: 'Due Date' },
@@ -49,20 +63,66 @@ function ProgressBar({ total, completed }) {
   );
 }
 
+// ─── Subtask Progress ─────────────────────────────────────────────────────
+
+function SubtaskProgress({ description }) {
+  const info = parseChecklist(description);
+  if (!info) return null;
+  const pct = Math.round((info.checked / info.total) * 100);
+  return (
+    <div className="flex items-center gap-1.5 mt-1">
+      <ListChecks className="h-3 w-3 text-gray-400" />
+      <div className="h-1.5 w-16 rounded-full bg-gray-200 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-blue-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-[10px] text-gray-400">{info.checked}/{info.total}</span>
+    </div>
+  );
+}
+
+// ─── Time Tracker ─────────────────────────────────────────────────────────
+
+function TimeTracker({ taskId, timers, onToggle }) {
+  const entry = timers[taskId] || { elapsed: 0, running: false };
+  const mm = String(Math.floor(entry.elapsed / 60)).padStart(2, '0');
+  const ss = String(entry.elapsed % 60).padStart(2, '0');
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(taskId); }}
+      className="group inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-mono text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+      title={entry.running ? 'Pause timer' : 'Start timer'}
+    >
+      {entry.running ? <Pause className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />}
+      <Timer className="h-2.5 w-2.5 group-hover:hidden" />
+      {mm}:{ss}
+    </button>
+  );
+}
+
 // ─── Quick Add Form ─────────────────────────────────────────────────────────
 
 function QuickAddForm({ onAdd, isAdding }) {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState('medium');
   const [dueDate, setDueDate] = useState('');
+  const [recurringFreq, setRecurringFreq] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
+    const payload = { title: trimmed, priority, due_date: dueDate || null, status: 'open' };
+    if (recurringFreq) {
+      payload.recurring = true;
+      payload.recurring_frequency = recurringFreq;
+    }
     onAdd(
-      { title: trimmed, priority, due_date: dueDate || null, status: 'open' },
-      () => { setTitle(''); setPriority('medium'); setDueDate(''); }
+      payload,
+      () => { setTitle(''); setPriority('medium'); setDueDate(''); setRecurringFreq(''); }
     );
   };
 
@@ -90,6 +150,19 @@ function QuickAddForm({ onAdd, isAdding }) {
         onChange={(e) => setDueDate(e.target.value)}
         className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
+      <select
+        value={recurringFreq}
+        onChange={(e) => setRecurringFreq(e.target.value)}
+        className={cn(
+          'h-9 rounded-lg border bg-white px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
+          recurringFreq ? 'border-purple-400 text-purple-700' : 'border-gray-300 text-gray-700'
+        )}
+      >
+        <option value="">No repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
       <button
         type="submit"
         disabled={!title.trim() || isAdding}
@@ -146,6 +219,7 @@ function TaskCard({
   task, onToggle, onEdit, onDelete, onOpenCompany, onNotesUpdate,
   selectMode, isSelected, onSelectToggle,
   expandedId, onExpand,
+  timers = {}, onTimerToggle, onCompleteFollowUp,
 }) {
   const done = isDone(task);
   const days = daysUntil(task.due_date);
@@ -236,6 +310,7 @@ function TaskCard({
               <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
             )}
           </div>
+          <SubtaskProgress description={task.description} />
           {!isExpanded && task.description && (
             <p className="mt-0.5 truncate text-sm text-gray-600">{task.description}</p>
           )}
@@ -256,6 +331,7 @@ function TaskCard({
                 {task.company_name || 'Company'}
               </button>
             )}
+            {onTimerToggle && <TimeTracker taskId={task.id} timers={timers} onToggle={onTimerToggle} />}
           </div>
         </div>
 
@@ -347,6 +423,16 @@ function TaskCard({
               <Trash2 className="h-3.5 w-3.5" />
               Delete
             </button>
+            {!done && onCompleteFollowUp && (
+              <button
+                type="button"
+                onClick={() => onCompleteFollowUp(task)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100 ml-auto"
+              >
+                <CopyPlus className="h-3.5 w-3.5" />
+                Complete &amp; Follow Up
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -696,6 +782,63 @@ function KanbanView({ tasks, onToggle, onEdit, onDelete, onOpenCompany, onMove, 
   );
 }
 
+// ─── My Day Section ───────────────────────────────────────────────────────
+
+function MyDaySection({ tasks, onToggle, onEdit, onDelete, onOpenCompany, onNotesUpdate, expandedId, onExpand, timers, onTimerToggle, onCompleteFollowUp }) {
+  const myDayTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (isDone(t)) return false;
+      const d = daysUntil(t.due_date);
+      return d != null && d <= 0;
+    });
+  }, [tasks]);
+
+  if (myDayTasks.length === 0) return null;
+
+  const overdueCount = myDayTasks.filter(t => { const d = daysUntil(t.due_date); return d != null && d < 0; }).length;
+
+  const msg = `${myDayTasks.length} task${myDayTasks.length !== 1 ? 's' : ''} to tackle today`;
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-blue-100">
+        <Sun className="h-5 w-5 text-amber-500" />
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">My Day</h2>
+          <p className="text-xs text-gray-500">{msg}</p>
+        </div>
+        {overdueCount > 0 && (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+            <AlertTriangle className="h-3 w-3" />
+            {overdueCount} overdue
+          </span>
+        )}
+      </div>
+      <ul className="divide-y divide-blue-50">
+        {myDayTasks.map((t) => (
+          <TaskCard
+            key={`myday-${t.id}`}
+            task={t}
+            onToggle={onToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onOpenCompany={onOpenCompany}
+            onNotesUpdate={onNotesUpdate}
+            selectMode={false}
+            isSelected={false}
+            onSelectToggle={() => {}}
+            expandedId={expandedId}
+            onExpand={onExpand}
+            timers={timers}
+            onTimerToggle={onTimerToggle}
+            onCompleteFollowUp={onCompleteFollowUp}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function Tasks() {
@@ -712,6 +855,32 @@ export default function Tasks() {
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Task time tracking
+  const [taskTimers, setTaskTimers] = useState({});
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTaskTimers((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const id of Object.keys(next)) {
+          if (next[id].running) {
+            next[id] = { ...next[id], elapsed: next[id].elapsed + 1 };
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const toggleTimer = useCallback((taskId) => {
+    setTaskTimers((prev) => {
+      const entry = prev[taskId] || { elapsed: 0, running: false };
+      return { ...prev, [taskId]: { ...entry, running: !entry.running } };
+    });
+  }, []);
 
   const { data: tasks = [], isLoading } = useTasks();
   const { data: companiesData } = useCompanies();
@@ -825,6 +994,13 @@ export default function Tasks() {
 
   const handleNotesUpdate = useCallback((task, notes) => {
     updateTask.mutate({ id: task.id, data: { notes } });
+  }, [updateTask]);
+
+  const handleCompleteAndFollowUp = useCallback((task) => {
+    updateTask.mutate({ id: task.id, data: { status: 'completed' } });
+    setEditing({ title: `Follow up: ${task.title}`, priority: task.priority, company_id: task.company_id, due_date: '' });
+    setModalOpen(true);
+    toast.success('Task completed! Create a follow-up.');
   }, [updateTask]);
 
   // ── Kanban move handler ──────────────────────────────────────────────

@@ -328,11 +328,29 @@ function ChartTooltip({ active, payload, label }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md">
       <p className="mb-1 text-xs font-medium text-gray-500">{label}</p>
-      {payload.map((entry, i) => (
-        <p key={i} className="text-sm" style={{ color: entry.color }}>
-          {entry.name}: {formatNumber(entry.value)}
-        </p>
-      ))}
+      {payload.map((entry, i) => {
+        // Calculate change from previous data point if available
+        const chartData = entry.payload;
+        const dataKey = entry.dataKey;
+        const prevKey = `prev_${dataKey}`;
+        const prevValue = chartData?.[prevKey];
+        const change = prevValue != null && prevValue > 0
+          ? Math.round(((entry.value - prevValue) / prevValue) * 100)
+          : null;
+
+        return (
+          <div key={i} className="flex items-center gap-2">
+            <p className="text-sm" style={{ color: entry.color }}>
+              {entry.name}: {formatNumber(entry.value)}
+            </p>
+            {change != null && (
+              <span className={cn('text-xs font-medium', change >= 0 ? 'text-green-600' : 'text-red-600')}>
+                {change >= 0 ? '+' : ''}{change}%
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -454,12 +472,18 @@ export default function Analytics() {
 
   // Email activity over time (line chart data)
   const trendData = useMemo(() => {
-    return (trends || []).map((t) => ({
-      date: shortDate(t.date),
-      Sent: t.sent || 0,
-      Opened: t.opened || t.opens || 0,
-      Replied: t.replied || t.replies || 0,
-    }));
+    return (trends || []).map((t, i) => {
+      const prev = (trends || [])[i - 1];
+      return {
+        date: shortDate(t.date),
+        Sent: t.sent || 0,
+        Opened: t.opened || t.opens || 0,
+        Replied: t.replied || t.replies || 0,
+        prev_Sent: prev ? (prev.sent || 0) : null,
+        prev_Opened: prev ? (prev.opened || prev.opens || 0) : null,
+        prev_Replied: prev ? (prev.replied || prev.replies || 0) : null,
+      };
+    });
   }, [trends]);
 
   // Comparison data: split the doubled-range data into previous and current periods
@@ -484,6 +508,34 @@ export default function Analytics() {
   }, [compareMode, comparisonTrends]);
 
   const chartData = compareMode && comparisonData ? comparisonData : trendData;
+
+  // Period comparison metrics for RateCard subtitles when compareMode is on
+  const periodComparison = useMemo(() => {
+    if (!compareMode || !comparisonTrends || comparisonTrends.length === 0) return null;
+    const all = comparisonTrends || [];
+    const midpoint = Math.floor(all.length / 2);
+    const previous = all.slice(0, midpoint);
+    const current = all.slice(midpoint);
+
+    const sum = (arr, key1, key2) => arr.reduce((s, t) => s + (t[key1] || t[key2] || 0), 0);
+    const prevSent = sum(previous, 'sent', 'sent');
+    const currSent = sum(current, 'sent', 'sent');
+    const prevOpened = sum(previous, 'opened', 'opens');
+    const currOpened = sum(current, 'opened', 'opens');
+    const prevReplied = sum(previous, 'replied', 'replies');
+    const currReplied = sum(current, 'replied', 'replies');
+
+    const prevOpenRate = prevSent > 0 ? (prevOpened / prevSent) * 100 : 0;
+    const currOpenRate = currSent > 0 ? (currOpened / currSent) * 100 : 0;
+    const prevReplyRate = prevSent > 0 ? (prevReplied / prevSent) * 100 : 0;
+    const currReplyRate = currSent > 0 ? (currReplied / currSent) * 100 : 0;
+
+    return {
+      openRate: pctChange(Math.round(currOpenRate * 10) / 10, Math.round(prevOpenRate * 10) / 10),
+      replyRate: pctChange(Math.round(currReplyRate * 10) / 10, Math.round(prevReplyRate * 10) / 10),
+      clickRate: 0, // click data not available in trends
+    };
+  }, [compareMode, comparisonTrends]);
 
   // Pipeline conversion funnel
   const funnelData = useMemo(() => {
@@ -600,19 +652,85 @@ export default function Analytics() {
     return items.slice(0, 4);
   }, [metrics, metricsLoading, emailTrend]);
 
+  // --- Deliverability rates ---
+  const bounceRate = useMemo(() => {
+    if (metrics?.bounce_rate != null) return Math.round(metrics.bounce_rate * 10) / 10;
+    if (metrics?.bounced && metrics?.emails_sent) return Math.round((metrics.bounced / metrics.emails_sent) * 1000) / 10;
+    return 0;
+  }, [metrics]);
+
+  const spamRate = useMemo(() => {
+    if (metrics?.spam_rate != null) return Math.round(metrics.spam_rate * 10) / 10;
+    return 0;
+  }, [metrics]);
+
+  const unsubRate = useMemo(() => {
+    if (metrics?.unsubscribe_rate != null) return Math.round(metrics.unsubscribe_rate * 10) / 10;
+    return 0;
+  }, [metrics]);
+
+  // --- Best day to send ---
+  const bestSendDay = useMemo(() => {
+    if (!trends || trends.length === 0) return null;
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayBuckets = {};
+    (trends || []).forEach((t) => {
+      const parts = String(t.date).split('-');
+      if (parts.length !== 3) return;
+      const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      if (isNaN(dt)) return;
+      const day = dayNames[dt.getDay()];
+      if (!dayBuckets[day]) dayBuckets[day] = { opens: 0, sent: 0 };
+      dayBuckets[day].opens += (t.opened || t.opens || 0);
+      dayBuckets[day].sent += (t.sent || 0);
+    });
+
+    let best = null;
+    Object.entries(dayBuckets).forEach(([day, data]) => {
+      if (data.sent === 0) return;
+      const rate = Math.round((data.opens / data.sent) * 1000) / 10;
+      if (!best || rate > best.rate) best = { day, rate };
+    });
+    return best;
+  }, [trends]);
+
   // --- Export handlers ---
 
   function handleExportCSV() {
-    const rows = [['Date', 'Sent', 'Opened', 'Replied']];
+    const rows = [['Section', 'Metric', 'Value']];
+    // Key metrics
+    rows.push(['Key Metrics', 'Total Emails Sent', metrics?.emails_sent || 0]);
+    rows.push(['Key Metrics', 'Open Rate', `${metrics?.open_rate || 0}%`]);
+    rows.push(['Key Metrics', 'Reply Rate', `${metrics?.reply_rate || 0}%`]);
+    rows.push(['Key Metrics', 'Click Rate', `${metrics?.click_rate || 0}%`]);
+    rows.push(['Key Metrics', 'Bounce Rate', `${bounceRate}%`]);
+    rows.push(['Key Metrics', 'Spam Rate', `${spamRate}%`]);
+    rows.push(['Key Metrics', 'Unsubscribe Rate', `${unsubRate}%`]);
+    rows.push([]);
+    // Trend data
+    rows.push(['Date', 'Sent', 'Opened', 'Replied']);
     (trends || []).forEach((t) => {
       rows.push([t.date, t.sent || 0, t.opened || t.opens || 0, t.replied || t.replies || 0]);
     });
+    rows.push([]);
+    // Pipeline
+    rows.push(['Pipeline Stage', 'Count', '']);
+    (funnelData || []).forEach((s) => {
+      rows.push([s.stage, s.count, '']);
+    });
+    rows.push([]);
+    // Top leads
+    rows.push(['Top Lead', 'Score', 'Interactions']);
+    (topLeads || []).forEach((l) => {
+      rows.push([l.name, l.score || '', l.total_interactions || 0]);
+    });
+
     const csv = rows.map((r) => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `analytics-${dateRange}d-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `analytics-full-${dateRange}d-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -725,18 +843,21 @@ export default function Analytics() {
               icon={Eye}
               color="green"
               colorCode={openRateColor}
+              subtitle={compareMode && periodComparison ? { trend: periodComparison.openRate, label: 'vs previous period' } : undefined}
             />
             <RateCard
               title="Reply Rate"
               value={`${metrics?.reply_rate || 0}%`}
               icon={MessageSquare}
               color="purple"
+              subtitle={compareMode && periodComparison ? { trend: periodComparison.replyRate, label: 'vs previous period' } : undefined}
             />
             <RateCard
               title="Click Rate"
               value={`${metrics?.click_rate || 0}%`}
               icon={MousePointerClick}
               color="teal"
+              subtitle={compareMode && periodComparison ? { trend: periodComparison.clickRate, label: 'vs previous period' } : undefined}
             />
           </>
         )}
@@ -760,6 +881,24 @@ export default function Analytics() {
         </div>
       )}
 
+      {/* Deliverability */}
+      {!metricsLoading && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-gray-900">Deliverability</h2>
+          <div className="flex items-center justify-center gap-12 flex-wrap">
+            <div className="relative flex flex-col items-center">
+              <GaugeCircle label="Bounce Rate" value={bounceRate} color="#ef4444" maxValue={20} />
+            </div>
+            <div className="relative flex flex-col items-center">
+              <GaugeCircle label="Spam Rate" value={spamRate} color="#f59e0b" maxValue={5} />
+            </div>
+            <div className="relative flex flex-col items-center">
+              <GaugeCircle label="Unsubscribe Rate" value={unsubRate} color="#6b7280" maxValue={10} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Key Insights Cards */}
       {insights.length > 0 && (
         <div>
@@ -768,6 +907,24 @@ export default function Analytics() {
             {insights.map((insight, i) => (
               <InsightCard key={i} text={insight.text} type={insight.type} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Best Day to Send Insight */}
+      {bestSendDay && (
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+              <Lightbulb className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Best Day to Send</p>
+              <p className="text-sm text-gray-600">
+                <span className="font-bold text-blue-600">{bestSendDay.day}</span> has your highest open rate at{' '}
+                <span className="font-bold text-blue-600">{bestSendDay.rate}%</span>
+              </p>
+            </div>
           </div>
         </div>
       )}

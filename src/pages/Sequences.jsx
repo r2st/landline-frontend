@@ -272,6 +272,38 @@ function StepTimeline({ steps, stats }) {
                   </span>
                 </div>
               )}
+
+              {/* A/B variant comparison */}
+              {step.ab_variants && step.ab_variants.length > 1 && (
+                <div className="mt-2 border-t border-gray-200 pt-2">
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">A/B Comparison</p>
+                  <div className="space-y-1">
+                    {step.ab_variants.map((variant, vi) => {
+                      const vSent = safeNum(variant.sent);
+                      const vOpenRate = safeRateNum(variant.opened, vSent);
+                      const vClickRate = safeRateNum(variant.clicked, vSent);
+                      return (
+                        <div key={vi} className="flex items-center gap-2">
+                          <span className="w-14 text-xs font-medium text-gray-600">
+                            {variant.name || `Var ${String.fromCharCode(65 + vi)}`}
+                          </span>
+                          <div className="flex-1">
+                            <div className="flex h-4 items-center gap-1">
+                              <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-gray-100">
+                                <div
+                                  className="absolute inset-y-0 left-0 rounded-full bg-indigo-400"
+                                  style={{ width: `${Math.min(vOpenRate, 100)}%` }}
+                                />
+                              </div>
+                              <span className="w-12 text-right text-[10px] text-indigo-600">{vOpenRate.toFixed(1)}% open</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -332,6 +364,107 @@ function EnrollmentSection({ enrolledCount }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SequenceFlowDiagram -- horizontal timeline of steps                       */
+/* -------------------------------------------------------------------------- */
+
+function SequenceFlowDiagram({ steps, stats }) {
+  if (!steps || steps.length === 0) return null;
+  const stepStats = stats?.step_stats;
+
+  return (
+    <div className="border-t border-gray-100 px-5 py-4">
+      <h4 className="mb-3 text-sm font-semibold text-gray-700">Sequence Flow</h4>
+      <div className="flex items-center gap-0 overflow-x-auto pb-2">
+        {steps.map((step, idx) => {
+          const ss = Array.isArray(stepStats) ? stepStats[idx] : null;
+          const openRate = ss ? safeRate(ss.opened, ss.sent) : null;
+          const isFirst = idx === 0;
+
+          return (
+            <div key={idx} className="flex items-center">
+              {/* Connector line with day label */}
+              {!isFirst && (
+                <div className="flex flex-col items-center mx-1">
+                  <span className="text-[10px] font-medium text-gray-400 mb-1">
+                    {step.delay_days}d
+                  </span>
+                  <div className="h-0.5 w-8 bg-gradient-to-r from-blue-300 to-blue-400" />
+                </div>
+              )}
+              {/* Node */}
+              <div className="flex flex-col items-center">
+                <div className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold shadow-sm',
+                  openRate && Number(openRate) > 20
+                    ? 'border-green-400 bg-green-50 text-green-700'
+                    : 'border-blue-400 bg-blue-50 text-blue-700'
+                )}>
+                  {idx + 1}
+                </div>
+                {openRate != null && (
+                  <span className={cn(
+                    'mt-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                    Number(openRate) > 20 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                  )}>
+                    {openRate}%
+                  </span>
+                )}
+                <span className="mt-0.5 text-[10px] text-gray-400 max-w-[60px] truncate text-center">
+                  {step.subject || `Step ${idx + 1}`}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SequenceHealth -- health indicator badge                                  */
+/* -------------------------------------------------------------------------- */
+
+function SequenceHealth({ stats }) {
+  const openRate = safeRateNum(stats?.opened, stats?.sent);
+  const replyRate = safeRateNum(stats?.replied, stats?.sent);
+  const sent = safeNum(stats?.sent);
+
+  if (sent === 0) return null;
+
+  let color, label, bg, textColor;
+  if (openRate < 10) {
+    color = 'red';
+    label = 'Needs attention';
+    bg = 'bg-red-100';
+    textColor = 'text-red-700';
+  } else if (openRate >= 20 && replyRate >= 2) {
+    color = 'green';
+    label = 'Healthy';
+    bg = 'bg-green-100';
+    textColor = 'text-green-700';
+  } else {
+    color = 'amber';
+    label = 'Fair';
+    bg = 'bg-amber-100';
+    textColor = 'text-amber-700';
+  }
+
+  const dotColor = {
+    green: 'bg-green-500',
+    amber: 'bg-amber-500',
+    red: 'bg-red-500',
+  }[color];
+
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', bg, textColor)}>
+      <span className={cn('h-1.5 w-1.5 rounded-full', dotColor)} />
+      {label}
+    </span>
   );
 }
 
@@ -410,6 +543,7 @@ function SequenceCard({ sequence, onDuplicate, onDelete, isBestPerformer }) {
                 )}>
                   {(sequence.status || 'active') === 'active' ? 'Active' : 'Paused'}
                 </span>
+                <SequenceHealth stats={stats} />
               </div>
             </div>
           </div>
@@ -521,6 +655,9 @@ function SequenceCard({ sequence, onDuplicate, onDelete, isBestPerformer }) {
       {/* Expanded sections */}
       {expanded && (
         <>
+          {/* Sequence flow diagram */}
+          <SequenceFlowDiagram steps={sequence.steps} stats={stats} />
+
           {/* Step timeline */}
           {sequence.steps && (
             <div className="border-t border-gray-100 px-5 py-4">
@@ -949,6 +1086,43 @@ export default function Sequences() {
           </button>
         )}
       </div>
+
+      {/* Quick Stats */}
+      {sequences && sequences.length > 0 && !showBuilder && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <Play className="h-5 w-5 text-green-500" />
+            <div>
+              <p className="text-lg font-bold text-gray-900">
+                {sequences.filter(s => (s.status || 'active') === 'active').length}
+              </p>
+              <p className="text-xs text-gray-500">Active Sequences</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <Users className="h-5 w-5 text-blue-500" />
+            <div>
+              <p className="text-lg font-bold text-gray-900">
+                {formatNumber(sequences.reduce((sum, s) => sum + safeNum(s.stats?.enrolled), 0))}
+              </p>
+              <p className="text-xs text-gray-500">Total Enrolled</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <Eye className="h-5 w-5 text-indigo-500" />
+            <div>
+              <p className="text-lg font-bold text-indigo-600">
+                {(() => {
+                  const totalSent = sequences.reduce((sum, s) => sum + safeNum(s.stats?.sent), 0);
+                  const totalOpened = sequences.reduce((sum, s) => sum + safeNum(s.stats?.opened), 0);
+                  return safeRate(totalOpened, totalSent);
+                })()}%
+              </p>
+              <p className="text-xs text-gray-500">Avg Open Rate</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Builder */}
       {showBuilder && (

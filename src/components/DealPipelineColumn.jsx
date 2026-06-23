@@ -44,8 +44,12 @@ export default function DealPipelineColumn({
       onDragLeave={() => setIsOver(false)}
       onDrop={handleDrop}
       className={cn(
-        'flex min-w-[260px] max-w-[320px] flex-shrink-0 flex-col rounded-lg border transition-colors sm:min-w-[280px]',
-        isOver && canDrop ? 'border-blue-400 ring-2 ring-blue-200' : 'border-gray-200'
+        'flex min-w-[260px] max-w-[320px] flex-shrink-0 flex-col rounded-lg border-2 transition-all duration-200 sm:min-w-[280px]',
+        isOver && canDrop
+          ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg shadow-blue-100 scale-[1.01]'
+          : canDrop
+            ? 'border-dashed border-blue-300 bg-blue-50/30'
+            : 'border-solid border-gray-200'
       )}
       style={{ backgroundColor: stageColor.light || '#fafafa' }}
     >
@@ -65,11 +69,17 @@ export default function DealPipelineColumn({
             {deals.length}
           </span>
         </div>
-        {/* Total value in stage */}
+        {/* Total value + weighted value in stage */}
         {deals.length > 0 && (
-          <p className="mt-1 text-xs font-semibold text-gray-500">
-            {formatCurrency(totalValue, { compact: true })}
-          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <p className="text-xs font-semibold text-gray-500">
+              {formatCurrency(totalValue, { compact: true })}
+            </p>
+            <span className="text-[10px] text-gray-400">|</span>
+            <p className="text-[11px] font-medium text-indigo-500" title="Weighted by stage probability">
+              Wtd: {formatCurrency(totalValue * probability / 100, { compact: true })}
+            </p>
+          </div>
         )}
       </div>
 

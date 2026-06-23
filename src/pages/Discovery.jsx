@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Globe,
@@ -10,9 +10,53 @@ import {
   Sparkles,
   ExternalLink,
   CheckCircle2,
+  Bookmark,
+  BookmarkCheck,
+  History,
+  LayoutGrid,
+  LayoutList,
+  Download,
+  X,
+  Clock,
 } from 'lucide-react';
 import { useSearchCompanies, useEnrichCompany } from '../hooks/useDiscovery';
 import { formatNumber, cn } from '../lib/utils';
+
+const MANUFACTURING_INDUSTRIES = [
+  'Injection Molding',
+  'CNC Machining',
+  'Metal Stamping',
+  'Die Casting',
+  'Sheet Metal Fabrication',
+  'Plastic Extrusion',
+  'Powder Coating',
+  '3D Printing / Additive Manufacturing',
+  'Welding & Assembly',
+  'Surface Finishing',
+  'Precision Machining',
+  'Tool & Die Making',
+  'Metal Forging',
+  'Wire EDM',
+  'Laser Cutting',
+  'Rubber & Silicone Molding',
+  'PCB Manufacturing',
+  'Packaging Manufacturing',
+  'Textile Manufacturing',
+  'Food Processing Equipment',
+];
+
+function getRelativeDate(dateStr) {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHrs = Math.floor(diffMins / 60);
+  if (diffHrs < 24) return `${diffHrs}h ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  return `${diffDays}d ago`;
+}
 
 export default function Discovery() {
   const navigate = useNavigate();
@@ -31,6 +75,99 @@ export default function Discovery() {
   const [results, setResults] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // View toggle
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'card'
+
+  // Saved searches
+  const [savedSearches, setSavedSearches] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('landline_saved_searches') || '[]');
+    } catch { return []; }
+  });
+  const [showSaveInput, setShowSaveInput] = useState(false);
+  const [saveSearchName, setSaveSearchName] = useState('');
+
+  // Search history
+  const [searchHistory, setSearchHistory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('landline_search_history') || '[]');
+    } catch { return []; }
+  });
+
+  // Industry autocomplete
+  const [showIndustrySuggestions, setShowIndustrySuggestions] = useState(false);
+  const industryInputRef = useRef(null);
+  const industryDropdownRef = useRef(null);
+
+  // Bulk enrich
+  const [bulkEnrichState, setBulkEnrichState] = useState({ running: false, current: 0, total: 0 });
+
+  // Persist saved searches
+  useEffect(() => {
+    localStorage.setItem('landline_saved_searches', JSON.stringify(savedSearches));
+  }, [savedSearches]);
+
+  // Persist search history
+  useEffect(() => {
+    localStorage.setItem('landline_search_history', JSON.stringify(searchHistory));
+  }, [searchHistory]);
+
+  // Close industry dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        industryInputRef.current && !industryInputRef.current.contains(e.target) &&
+        industryDropdownRef.current && !industryDropdownRef.current.contains(e.target)
+      ) {
+        setShowIndustrySuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredIndustries = form.industry_keyword.trim()
+    ? MANUFACTURING_INDUSTRIES.filter((ind) =>
+        ind.toLowerCase().includes(form.industry_keyword.toLowerCase())
+      ).slice(0, 6)
+    : [];
+
+  const handleSaveSearch = () => {
+    if (!saveSearchName.trim()) return;
+    const newSearch = { id: Date.now(), name: saveSearchName.trim(), criteria: { ...form } };
+    setSavedSearches((prev) => [...prev, newSearch]);
+    setSaveSearchName('');
+    setShowSaveInput(false);
+  };
+
+  const handleDeleteSavedSearch = (id) => {
+    setSavedSearches((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleLoadCriteria = (criteria) => {
+    setForm({ ...criteria });
+  };
+
+  const addToHistory = (formData) => {
+    const entry = { criteria: { ...formData }, date: new Date().toISOString() };
+    setSearchHistory((prev) => [entry, ...prev].slice(0, 5));
+  };
+
+  const handleBulkEnrich = async () => {
+    if (!results?.companies?.length || bulkEnrichState.running) return;
+    const companies = results.companies.filter((c) => c.id);
+    setBulkEnrichState({ running: true, current: 0, total: companies.length });
+    for (let i = 0; i < companies.length; i++) {
+      setBulkEnrichState((prev) => ({ ...prev, current: i + 1 }));
+      try {
+        await enrichCompany.mutateAsync({ id: companies[i].id, data: { find_contacts: true } });
+      } catch {
+        // continue with next
+      }
+    }
+    setBulkEnrichState({ running: false, current: 0, total: 0 });
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (!form.industry_keyword.trim() && !form.location.trim() && !form.keywords.trim()) return;
@@ -42,6 +179,7 @@ export default function Discovery() {
       keywords: form.keywords ? form.keywords.split(',').map((k) => k.trim()).filter(Boolean) : undefined,
       num_results: form.num_results,
     };
+    addToHistory(form);
     searchCompanies.mutate(payload, {
       onSuccess: (data) => {
         setResults(data);
@@ -67,6 +205,62 @@ export default function Discovery() {
         </p>
       </div>
 
+      {/* Saved Searches & History */}
+      {(savedSearches.length > 0 || searchHistory.length > 0) && (
+        <div className="space-y-3">
+          {savedSearches.length > 0 && (
+            <div>
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                <BookmarkCheck className="h-3.5 w-3.5" />
+                Saved Searches
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {savedSearches.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleLoadCriteria(s.criteria)}
+                    className="group inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  >
+                    <Bookmark className="h-3 w-3" />
+                    {s.name}
+                    <span
+                      role="button"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteSavedSearch(s.id); }}
+                      className="ml-0.5 rounded-full p-0.5 opacity-0 transition-opacity hover:bg-blue-200 group-hover:opacity-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {searchHistory.length > 0 && (
+            <div>
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                <History className="h-3.5 w-3.5" />
+                Recent Searches
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {searchHistory.map((h, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleLoadCriteria(h.criteria)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+                  >
+                    <Clock className="h-3 w-3 text-gray-400" />
+                    {[h.criteria.industry_keyword, h.criteria.location].filter(Boolean).join(' - ') || 'Search'}
+                    <span className="text-gray-400">{getRelativeDate(h.date)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Search Form */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <form onSubmit={handleSearch} className="space-y-4">
@@ -76,12 +270,38 @@ export default function Discovery() {
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
+                  ref={industryInputRef}
                   type="text"
                   value={form.industry_keyword}
-                  onChange={(e) => setForm({ ...form, industry_keyword: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, industry_keyword: e.target.value });
+                    setShowIndustrySuggestions(true);
+                  }}
+                  onFocus={() => setShowIndustrySuggestions(true)}
                   className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   placeholder="e.g., injection molding, CNC machining"
                 />
+                {showIndustrySuggestions && filteredIndustries.length > 0 && (
+                  <div
+                    ref={industryDropdownRef}
+                    className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+                  >
+                    {filteredIndustries.map((ind) => (
+                      <button
+                        key={ind}
+                        type="button"
+                        onClick={() => {
+                          setForm({ ...form, industry_keyword: ind });
+                          setShowIndustrySuggestions(false);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <Building2 className="h-3.5 w-3.5 text-gray-400" />
+                        {ind}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -150,7 +370,44 @@ export default function Discovery() {
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
+            {showSaveInput ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={saveSearchName}
+                  onChange={(e) => setSaveSearchName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveSearch(); } }}
+                  className="w-48 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Search name..."
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveSearch}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-500 px-3 py-2 text-sm font-medium text-white hover:bg-green-600"
+                >
+                  <BookmarkCheck className="h-4 w-4" />
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowSaveInput(false); setSaveSearchName(''); }}
+                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowSaveInput(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <Bookmark className="h-4 w-4" />
+                Save Search
+              </button>
+            )}
             <button
               type="submit"
               disabled={searchCompanies.isPending}
@@ -186,6 +443,48 @@ export default function Discovery() {
                 ({results.total || 0} found, {results.imported || 0} imported, {results.already_existed || 0} already existed)
               </span>
             </h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleBulkEnrich}
+                disabled={bulkEnrichState.running || !results?.companies?.length}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50"
+              >
+                {bulkEnrichState.running ? (
+                  <>
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+                    {bulkEnrichState.current} / {bulkEnrichState.total} enriched
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5" />
+                    Import All Results
+                  </>
+                )}
+              </button>
+              <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={cn(
+                    'rounded-md p-1.5 transition-colors',
+                    viewMode === 'table' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'
+                  )}
+                >
+                  <LayoutList className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('card')}
+                  className={cn(
+                    'rounded-md p-1.5 transition-colors',
+                    viewMode === 'card' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'
+                  )}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
           {results.companies && results.companies.length > 0 ? (

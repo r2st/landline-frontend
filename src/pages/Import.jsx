@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Upload,
   FileText,
@@ -71,6 +71,8 @@ const DUPLICATE_OPTIONS = [
   { value: 'new', label: 'Import as new', description: 'All rows will be imported as new records' },
 ];
 
+const IMPORT_HISTORY_KEY = 'landline.import_history';
+
 // ---------------------------------------------------------------------------
 // CSV Parsing (client-side, no dependencies)
 // ---------------------------------------------------------------------------
@@ -114,24 +116,43 @@ function autoMapHeader(header) {
     company: 'company_name',
     company_name: 'company_name',
     name: 'company_name',
+    business_name: 'company_name',
+    organization: 'company_name',
+    org: 'company_name',
+    firm: 'company_name',
     website: 'domain',
     url: 'domain',
     domain: 'domain',
+    site: 'domain',
+    homepage: 'domain',
+    web: 'domain',
     city: 'city',
+    location: 'city',
     state: 'state',
     province: 'state',
+    region: 'state',
     country: 'country',
     employees: 'employee_count',
     employee_count: 'employee_count',
     size: 'employee_count',
+    staff: 'employee_count',
+    headcount: 'employee_count',
+    num_employees: 'employee_count',
     contact: 'contact_name',
     contact_name: 'contact_name',
+    person: 'contact_name',
+    full_name: 'contact_name',
+    first_name: 'contact_name',
     email: 'contact_email',
     contact_email: 'contact_email',
+    email_address: 'contact_email',
+    mail: 'contact_email',
     title: 'contact_title',
     contact_title: 'contact_title',
     job_title: 'contact_title',
     role: 'contact_title',
+    position: 'contact_title',
+    designation: 'contact_title',
   };
   return aliases[normalized] || '';
 }

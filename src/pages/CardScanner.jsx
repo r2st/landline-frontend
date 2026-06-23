@@ -28,12 +28,13 @@ import {
   Send,
   ExternalLink,
   Loader2,
+  ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useScanCard } from '../hooks/useAI';
 import { useContacts } from '../hooks/useContacts';
 import { contactsApi, queryClient } from '../api/client';
-import { getInitials, timeAgo, formatDate, contactPhones, phonesToPayload } from '../lib/utils';
+import { cn, getInitials, timeAgo, formatDate, contactPhones, phonesToPayload } from '../lib/utils';
 import { compressImage } from '../lib/image';
 import ContactDetailModal from '../components/ContactDetailModal';
 import EnrollSequenceMenu from '../components/EnrollSequenceMenu';
