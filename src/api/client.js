@@ -178,9 +178,15 @@ export const clientsApi = {
 export const dealsApi = {
   list: (params) => api.get('/deals', { params }).then(r => r.data),
   getByCompany: (companyId) => api.get('/deals', { params: { company_id: companyId } }).then(r => r.data),
+  getById: (id) => api.get(`/deals/${id}`).then(r => r.data),
   create: (data) => api.post('/deals', data).then(r => r.data),
   update: (id, data) => api.patch(`/deals/${id}`, data).then(r => r.data),
   remove: (id) => api.delete(`/deals/${id}`).then(r => r.data),
+  metrics: () => api.get('/deals/metrics').then(r => r.data),
+  stages: () => api.get('/deals/stages').then(r => r.data),
+  addNote: (id, data) => api.post(`/deals/${id}/notes`, data).then(r => r.data),
+  listNotes: (id) => api.get(`/deals/${id}/notes`).then(r => r.data),
+  listActivity: (id) => api.get(`/deals/${id}/activity`).then(r => r.data),
 };
 
 export const tasksApi = {

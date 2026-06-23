@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   CheckSquare, Plus, Search, List, Calendar as CalendarIcon, Check, Pencil, Trash2,
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
-  ArrowUpDown, MousePointerClick, X,
+  ArrowUpDown, MousePointerClick, X, Repeat, LayoutGrid, GripVertical, ArrowRight,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import TaskFormModal from '../components/TaskFormModal';
@@ -30,6 +30,23 @@ const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 function PriorityDot({ priority }) {
   const c = TASK_PRIORITY_COLORS[priority] || TASK_PRIORITY_COLORS.medium;
   return <span className={cn('h-2 w-2 flex-shrink-0 rounded-full', c.dot)} />;
+}
+
+// ─── Progress Bar ──────────────────────────────────────────────────────────
+
+function ProgressBar({ total, completed }) {
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-green-500 transition-all duration-500 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{pct}% done</span>
+    </div>
+  );
 }
 
 // ─── Quick Add Form ─────────────────────────────────────────────────────────
@@ -101,21 +118,24 @@ function StatsBar({ tasks }) {
   }, [tasks]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-        Total <span className="font-bold">{stats.total}</span>
-      </span>
-      {stats.overdue > 0 && (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
-          Overdue <span className="font-bold">{stats.overdue}</span>
+    <div className="space-y-2">
+      <ProgressBar total={stats.total} completed={stats.completed} />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+          Total <span className="font-bold">{stats.total}</span>
         </span>
-      )}
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-        Due Today <span className="font-bold">{stats.dueToday}</span>
-      </span>
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
-        Completed <span className="font-bold">{stats.completed}</span>
-      </span>
+        {stats.overdue > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+            Overdue <span className="font-bold">{stats.overdue}</span>
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+          Due Today <span className="font-bold">{stats.dueToday}</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+          Completed <span className="font-bold">{stats.completed}</span>
+        </span>
+      </div>
     </div>
   );
 }
@@ -132,6 +152,7 @@ function TaskCard({
   const overdue = !done && days != null && days < 0;
   const palette = TASK_PRIORITY_COLORS[task.priority] || TASK_PRIORITY_COLORS.medium;
   const isExpanded = expandedId === task.id;
+  const isRecurring = task.recurring || task.task_type === 'recurring';
 
   const [notes, setNotes] = useState(task.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -197,6 +218,12 @@ function TaskCard({
               <PriorityDot priority={task.priority} />
               {TASK_PRIORITY_LABELS[task.priority] || task.priority}
             </span>
+            {isRecurring && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700" title="Recurring task">
+                <Repeat className="h-3 w-3" />
+                Recurring
+              </span>
+            )}
             {overdue && (
               <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
                 <AlertTriangle className="h-3 w-3" />
@@ -477,6 +504,198 @@ function CalendarView({ tasks, onOpenCompany }) {
   );
 }
 
+// ─── Kanban Board Card ──────────────────────────────────────────────────────
+
+function KanbanCard({ task, onToggle, onEdit, onDelete, onOpenCompany, onMove, expandedId, onExpand }) {
+  const done = isDone(task);
+  const days = daysUntil(task.due_date);
+  const overdue = !done && days != null && days < 0;
+  const palette = TASK_PRIORITY_COLORS[task.priority] || TASK_PRIORITY_COLORS.medium;
+  const isExpanded = expandedId === task.id;
+  const isRecurring = task.recurring || task.task_type === 'recurring';
+  const [moveOpen, setMoveOpen] = useState(false);
+
+  const statusColumn = done ? 'completed' : (task.status === 'in_progress' ? 'in_progress' : 'open');
+  const moveTargets = [
+    { value: 'open', label: 'To Do' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'completed', label: 'Done' },
+  ].filter((t) => t.value !== statusColumn);
+
+  return (
+    <div
+      className={cn(
+        'rounded-lg border bg-white shadow-sm transition-shadow hover:shadow-md',
+        overdue ? 'border-red-200' : 'border-gray-200',
+      )}
+    >
+      <div className="p-3">
+        <div className="flex items-start gap-2">
+          <GripVertical className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-300 cursor-grab" />
+          <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={() => onExpand(isExpanded ? null : task.id)}
+              className={cn(
+                'text-sm font-medium text-left hover:text-blue-600 transition-colors w-full',
+                done ? 'text-gray-400 line-through' : 'text-gray-900'
+              )}
+            >
+              {task.title}
+            </button>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', palette.bg, palette.text)}>
+                <PriorityDot priority={task.priority} />
+                {TASK_PRIORITY_LABELS[task.priority] || task.priority}
+              </span>
+              {isRecurring && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700" title="Recurring task">
+                  <Repeat className="h-2.5 w-2.5" />
+                </span>
+              )}
+              {overdue && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                  Overdue
+                </span>
+              )}
+            </div>
+            {task.due_date && (
+              <div className={cn('mt-1.5 text-xs', overdue ? 'font-medium text-red-600' : 'text-gray-400')}>
+                Due {formatDate(task.due_date)}
+              </div>
+            )}
+            {(task.company_name || task.company_id) && (
+              <button
+                type="button"
+                onClick={() => task.company_id && onOpenCompany(task.company_id)}
+                className="mt-1 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600"
+              >
+                <Building2 className="h-3 w-3" />
+                {task.company_name || 'Company'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Expanded detail */}
+        {isExpanded && (
+          <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+            {task.description && (
+              <p className="text-xs text-gray-600 whitespace-pre-wrap">{task.description}</p>
+            )}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-gray-400">
+              {task.created_at && <span>Created {formatDate(task.created_at)}</span>}
+              {task.updated_at && <span>Updated {formatDate(task.updated_at)}</span>}
+            </div>
+            <div className="flex items-center gap-1.5 pt-1">
+              <button type="button" onClick={() => onToggle(task)} className={cn('rounded px-2 py-1 text-[11px] font-medium', done ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-100 text-green-700 hover:bg-green-200')}>
+                {done ? 'Reopen' : 'Complete'}
+              </button>
+              <button type="button" onClick={() => onEdit(task)} className="rounded px-2 py-1 text-[11px] font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
+                Edit
+              </button>
+              <button type="button" onClick={() => onDelete(task)} className="rounded px-2 py-1 text-[11px] font-medium bg-red-50 text-red-600 hover:bg-red-100">
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Move-to dropdown */}
+        <div className="mt-2 flex items-center justify-end relative">
+          <button
+            type="button"
+            onClick={() => setMoveOpen(!moveOpen)}
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <ArrowRight className="h-3 w-3" />
+            Move to
+          </button>
+          {moveOpen && (
+            <div className="absolute right-0 top-full z-10 mt-1 min-w-[120px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              {moveTargets.map((target) => (
+                <button
+                  key={target.value}
+                  type="button"
+                  onClick={() => {
+                    onMove(task, target.value);
+                    setMoveOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                >
+                  <ArrowRight className="h-3 w-3 text-gray-400" />
+                  {target.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Kanban Board View ──────────────────────────────────────────────────────
+
+const KANBAN_COLUMNS = [
+  { key: 'open', title: 'To Do', headerColor: 'bg-gray-100 text-gray-700', countColor: 'bg-gray-200 text-gray-600' },
+  { key: 'in_progress', title: 'In Progress', headerColor: 'bg-blue-50 text-blue-700', countColor: 'bg-blue-200 text-blue-700' },
+  { key: 'completed', title: 'Done', headerColor: 'bg-green-50 text-green-700', countColor: 'bg-green-200 text-green-700' },
+];
+
+function KanbanView({ tasks, onToggle, onEdit, onDelete, onOpenCompany, onMove, expandedId, onExpand }) {
+  const columns = useMemo(() => {
+    const buckets = { open: [], in_progress: [], completed: [] };
+    for (const t of tasks) {
+      if (isDone(t)) {
+        buckets.completed.push(t);
+      } else if (t.status === 'in_progress') {
+        buckets.in_progress.push(t);
+      } else {
+        buckets.open.push(t);
+      }
+    }
+    return buckets;
+  }, [tasks]);
+
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {KANBAN_COLUMNS.map((col) => (
+        <div key={col.key} className="flex flex-col rounded-xl border border-gray-200 bg-gray-50/50">
+          <div className={cn('flex items-center justify-between rounded-t-xl px-4 py-2.5', col.headerColor)}>
+            <span className="text-sm font-semibold">{col.title}</span>
+            <span className={cn('inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold', col.countColor)}>
+              {columns[col.key].length}
+            </span>
+          </div>
+          <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ maxHeight: '70vh' }}>
+            {columns[col.key].length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-xs text-gray-400">
+                No tasks
+              </div>
+            ) : (
+              columns[col.key].map((task) => (
+                <KanbanCard
+                  key={task.id}
+                  task={task}
+                  onToggle={onToggle}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onOpenCompany={onOpenCompany}
+                  onMove={onMove}
+                  expandedId={expandedId}
+                  onExpand={onExpand}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function Tasks() {
@@ -500,6 +719,25 @@ export default function Tasks() {
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+
+  // ── Keyboard shortcut: 'n' opens add task modal ──────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignore when typing in an input, textarea, select, or contenteditable
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
+      // Ignore if modifier keys are held
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === 'n') {
+        e.preventDefault();
+        setEditing(null);
+        setModalOpen(true);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -587,6 +825,11 @@ export default function Tasks() {
 
   const handleNotesUpdate = useCallback((task, notes) => {
     updateTask.mutate({ id: task.id, data: { notes } });
+  }, [updateTask]);
+
+  // ── Kanban move handler ──────────────────────────────────────────────
+  const handleKanbanMove = useCallback((task, newStatus) => {
+    updateTask.mutate({ id: task.id, data: { status: newStatus } });
   }, [updateTask]);
 
   // ── Bulk selection handlers ────────────────────────────────────────────
@@ -713,6 +956,13 @@ export default function Tasks() {
             >
               <CalendarIcon className="h-4 w-4" /> Calendar
             </button>
+            <button
+              type="button"
+              onClick={() => setView('board')}
+              className={cn('inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium', view === 'board' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700')}
+            >
+              <LayoutGrid className="h-4 w-4" /> Board
+            </button>
           </div>
           {view === 'list' && (
             <button
@@ -733,6 +983,7 @@ export default function Tasks() {
             type="button"
             onClick={openAdd}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+            title="Add Task (N)"
           >
             <Plus className="h-4 w-4" />
             Add Task
@@ -775,18 +1026,20 @@ export default function Tasks() {
             <option key={s} value={s}>{TASK_STATUS_LABELS[s]}</option>
           ))}
         </select>
-        <div className="relative">
-          <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="h-10 rounded-lg border border-gray-300 bg-white pl-9 pr-8 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
-          >
-            {SORT_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-        </div>
+        {view !== 'board' && (
+          <div className="relative">
+            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="h-10 rounded-lg border border-gray-300 bg-white pl-9 pr-8 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
+            >
+              {SORT_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {hasFilters && (
           <button type="button" onClick={() => { setSearch(''); setPriorityFilter(''); setStatusFilter(''); }} className="text-sm text-gray-500 hover:text-gray-700">
             Clear
@@ -821,6 +1074,17 @@ export default function Tasks() {
         </div>
       ) : view === 'calendar' ? (
         <CalendarView tasks={filtered} onOpenCompany={(id) => navigate(`/companies/${id}`)} />
+      ) : view === 'board' ? (
+        <KanbanView
+          tasks={filtered}
+          onToggle={toggle}
+          onEdit={openEdit}
+          onDelete={remove}
+          onOpenCompany={(id) => navigate(`/companies/${id}`)}
+          onMove={handleKanbanMove}
+          expandedId={expandedId}
+          onExpand={setExpandedId}
+        />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={CheckSquare}

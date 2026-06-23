@@ -766,9 +766,10 @@ export default function Companies() {
       render: (val) => SOURCE_LABELS[val] || val || '—',
     },
     {
-      key: 'domain',
+      key: 'enriched',
       label: 'Enriched',
-      render: (val) => val ? (
+      sortable: false,
+      render: (val, row) => row.domain ? (
         <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
           <Sparkles className="h-3 w-3" />
           Enriched

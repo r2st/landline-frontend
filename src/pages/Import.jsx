@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import {
   Upload,
   FileText,
@@ -11,6 +11,9 @@ import {
   Table,
   Loader2,
   RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Clock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CSVUploader from '../components/CSVUploader';
@@ -56,8 +59,16 @@ const TEMPLATE_EXAMPLE_ROW = [
 
 const STEPS = [
   { key: 'upload', label: 'Upload' },
+  { key: 'map', label: 'Map Fields' },
   { key: 'preview', label: 'Preview' },
   { key: 'import', label: 'Import' },
+  { key: 'summary', label: 'Summary' },
+];
+
+const DUPLICATE_OPTIONS = [
+  { value: 'skip', label: 'Skip duplicates', description: 'Rows matching existing records will be skipped' },
+  { value: 'update', label: 'Update existing', description: 'Existing records will be updated with new data' },
+  { value: 'new', label: 'Import as new', description: 'All rows will be imported as new records' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -240,7 +251,7 @@ function StepIndicator({ currentStep }) {
             </div>
             {idx < STEPS.length - 1 && (
               <div
-                className={`mx-3 mb-5 h-0.5 w-16 sm:w-24 ${
+                className={`mx-2 mb-5 h-0.5 w-10 sm:w-16 ${
                   isCompleted ? 'bg-blue-500' : 'bg-gray-200'
                 }`}
               />
@@ -248,6 +259,135 @@ function StepIndicator({ currentStep }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Import Progress Bar Component
+// ---------------------------------------------------------------------------
+function ImportProgressBar({ isImporting, isComplete }) {
+  return (
+    <div className="w-full">
+      <div className="mb-2 flex items-center justify-between text-sm">
+        <span className="font-medium text-gray-700">
+          {isComplete ? 'Import complete' : 'Importing data...'}
+        </span>
+        <span className="text-gray-500">
+          {isComplete ? '100%' : 'Processing...'}
+        </span>
+      </div>
+      <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ease-out ${
+            isComplete
+              ? 'w-full bg-green-500'
+              : 'bg-blue-500'
+          }`}
+          style={
+            !isComplete
+              ? {
+                  width: '85%',
+                  animation: 'progress-pulse 2s ease-in-out infinite',
+                }
+              : undefined
+          }
+        />
+      </div>
+      <style>{`
+        @keyframes progress-pulse {
+          0% { width: 30%; }
+          50% { width: 85%; }
+          100% { width: 30%; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Import History Component
+// ---------------------------------------------------------------------------
+function ImportHistory({ history }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (history.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        className="flex w-full items-center justify-between px-5 py-3.5"
+      >
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-700">
+            Import History ({history.length})
+          </h3>
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="h-4 w-4 text-gray-400" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-gray-400" />
+        )}
+      </button>
+      {isExpanded && (
+        <div className="border-t border-gray-100 px-5 pb-4 pt-2">
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="whitespace-nowrap border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500">
+                    File
+                  </th>
+                  <th className="whitespace-nowrap border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500">
+                    Date / Time
+                  </th>
+                  <th className="whitespace-nowrap border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500 text-right">
+                    Companies
+                  </th>
+                  <th className="whitespace-nowrap border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500 text-right">
+                    Contacts
+                  </th>
+                  <th className="whitespace-nowrap border-b border-gray-200 px-3 py-2 text-xs font-semibold text-gray-500 text-right">
+                    Errors
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((entry, i) => (
+                  <tr
+                    key={i}
+                    className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+                  >
+                    <td className="whitespace-nowrap border-b border-gray-100 px-3 py-2 text-sm text-gray-700">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-3.5 w-3.5 text-gray-400" />
+                        {entry.filename}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap border-b border-gray-100 px-3 py-2 text-sm text-gray-500">
+                      {entry.datetime}
+                    </td>
+                    <td className="whitespace-nowrap border-b border-gray-100 px-3 py-2 text-sm text-green-600 text-right font-medium">
+                      {entry.companies}
+                    </td>
+                    <td className="whitespace-nowrap border-b border-gray-100 px-3 py-2 text-sm text-blue-600 text-right font-medium">
+                      {entry.contacts}
+                    </td>
+                    <td className="whitespace-nowrap border-b border-gray-100 px-3 py-2 text-sm text-right font-medium">
+                      <span className={entry.errors > 0 ? 'text-red-600' : 'text-gray-400'}>
+                        {entry.errors}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -265,9 +405,57 @@ export default function Import() {
   const [mappings, setMappings] = useState({}); // { colIndex: targetField }
   const [importResult, setImportResult] = useState(null);
   const [lastImportResult, setLastImportResult] = useState(null);
+  const [duplicateHandling, setDuplicateHandling] = useState('skip');
+  const [importHistory, setImportHistory] = useState([]);
+  const [isImportRunning, setIsImportRunning] = useState(false);
+
+  // Drag-and-drop state for the enhanced drop zone
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dropZoneRef = useRef(null);
 
   // -----------------------------------------------------------------------
-  // Step 1: File selected via CSVUploader
+  // Drag-and-drop handlers for enhanced drop zone
+  // -----------------------------------------------------------------------
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set to false if we're leaving the drop zone entirely
+    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast.error('Please drop a CSV file');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be under 10MB');
+      return;
+    }
+
+    // Process the dropped file the same way CSVUploader does
+    const formData = new FormData();
+    formData.append('file', file);
+    handleFileSelected(formData);
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Step 1: File selected via CSVUploader or drag-and-drop
   // -----------------------------------------------------------------------
   const handleFileSelected = useCallback((formData) => {
     const file = formData.get('file');
@@ -346,14 +534,17 @@ export default function Import() {
 
   const previewRows = useMemo(() => {
     if (!parsedData) return [];
-    return parsedData.rows.slice(0, 5);
+    return parsedData.rows.slice(0, 10);
   }, [parsedData]);
 
   // -----------------------------------------------------------------------
-  // Step 3: Run Import
+  // Step 4: Run Import
   // -----------------------------------------------------------------------
   const handleImport = useCallback(async () => {
     if (!selectedFile || !parsedData) return;
+
+    setIsImportRunning(true);
+    setCurrentStep(3); // Move to Import step with progress bar
 
     const formData = buildMappedFormData(
       selectedFile,
@@ -366,9 +557,26 @@ export default function Import() {
       const result = await importCSV.mutateAsync(formData);
       setImportResult(result);
       setLastImportResult(result);
-      setCurrentStep(2);
+      setIsImportRunning(false);
+
+      // Add to import history
+      const now = new Date();
+      setImportHistory((prev) => [
+        {
+          filename: selectedFile.name,
+          datetime: now.toLocaleString(),
+          companies: result.imported_companies ?? 0,
+          contacts: result.imported_contacts ?? 0,
+          errors: (result.errors || []).length,
+        },
+        ...prev,
+      ]);
+
+      setCurrentStep(4); // Move to Summary step
     } catch {
       // Error toast is shown by the mutation's onError handler
+      setIsImportRunning(false);
+      setCurrentStep(2); // Go back to Preview step on error
     }
   }, [selectedFile, parsedData, mappings, importCSV]);
 
@@ -398,6 +606,8 @@ export default function Import() {
     setParsedData(null);
     setMappings({});
     setImportResult(null);
+    setDuplicateHandling('skip');
+    setIsImportRunning(false);
   }, []);
 
   // -----------------------------------------------------------------------
@@ -436,6 +646,39 @@ export default function Import() {
               Download Template
             </button>
           </div>
+
+          {/* Enhanced drag-and-drop zone */}
+          <div
+            ref={dropZoneRef}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`relative mb-4 rounded-xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
+              isDragOver
+                ? 'border-blue-500 bg-blue-50 scale-[1.01] shadow-lg'
+                : 'border-gray-300 bg-gray-50'
+            }`}
+          >
+            <Upload
+              className={`mx-auto mb-3 h-12 w-12 transition-colors ${
+                isDragOver ? 'text-blue-500' : 'text-gray-300'
+              }`}
+            />
+            <p
+              className={`text-base font-medium transition-colors ${
+                isDragOver ? 'text-blue-600' : 'text-gray-600'
+              }`}
+            >
+              {isDragOver ? 'Drop your CSV file here' : 'Drag & drop your CSV file here'}
+            </p>
+            <p className="mt-1 text-sm text-gray-400">CSV format, UTF-8 encoding, max 10MB</p>
+            <div className="mt-4 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-medium uppercase text-gray-400">or</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+          </div>
+
           <CSVUploader onUpload={handleFileSelected} isLoading={false} />
 
           {/* Instructions */}
@@ -490,7 +733,7 @@ export default function Import() {
       )}
 
       {/* ================================================================= */}
-      {/* Step 2: Preview & Map                                              */}
+      {/* Step 2: Map Fields                                                 */}
       {/* ================================================================= */}
       {currentStep === 1 && parsedData && (
         <div className="space-y-5">
@@ -594,10 +837,97 @@ export default function Import() {
             </div>
           </div>
 
+          {/* Duplicate Handling Options */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-700">Duplicate Handling</h3>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Choose how to handle records that already exist in your database
+              </p>
+            </div>
+            <div className="space-y-2">
+              {DUPLICATE_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors ${
+                    duplicateHandling === option.value
+                      ? 'border-blue-300 bg-blue-50'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="duplicateHandling"
+                    value={option.value}
+                    checked={duplicateHandling === option.value}
+                    onChange={(e) => setDuplicateHandling(e.target.value)}
+                    className="mt-0.5 h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <p className={`text-sm font-medium ${
+                      duplicateHandling === option.value ? 'text-blue-700' : 'text-gray-700'
+                    }`}>
+                      {option.label}
+                    </p>
+                    <p className="text-xs text-gray-500">{option.description}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={resetWizard}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentStep(2)}
+              disabled={!isCompanyNameMapped}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Preview Data
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* Step 3: Preview                                                    */}
+      {/* ================================================================= */}
+      {currentStep === 2 && parsedData && (
+        <div className="space-y-5">
+          {/* File info bar */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-blue-500" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{selectedFile?.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {parsedData.rows.length} row{parsedData.rows.length !== 1 ? 's' : ''} detected
+                    {' / '}
+                    {parsedData.headers.length} column
+                    {parsedData.headers.length !== 1 ? 's' : ''}
+                    {' / '}
+                    Duplicate handling: {DUPLICATE_OPTIONS.find((o) => o.value === duplicateHandling)?.label}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Preview Table */}
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <h3 className="mb-3 text-sm font-semibold text-gray-700">
-              Preview (first {Math.min(previewRows.length, 5)} rows)
+              Preview (first {Math.min(previewRows.length, 10)} rows)
             </h3>
             <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="w-full text-left text-sm">
@@ -648,10 +978,10 @@ export default function Import() {
                 </tbody>
               </table>
             </div>
-            {parsedData.rows.length > 5 && (
+            {parsedData.rows.length > 10 && (
               <p className="mt-2 text-xs text-gray-400">
-                ...and {parsedData.rows.length - 5} more row
-                {parsedData.rows.length - 5 !== 1 ? 's' : ''}
+                ...and {parsedData.rows.length - 10} more row
+                {parsedData.rows.length - 10 !== 1 ? 's' : ''}
               </p>
             )}
           </div>
@@ -660,11 +990,11 @@ export default function Import() {
           <div className="flex items-center justify-between">
             <button
               type="button"
-              onClick={resetWizard}
+              onClick={() => setCurrentStep(1)}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              Back to Mapping
             </button>
             <button
               type="button"
@@ -675,7 +1005,7 @@ export default function Import() {
               {importCSV.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Importing...
+                  Starting Import...
                 </>
               ) : (
                 <>
@@ -689,9 +1019,34 @@ export default function Import() {
       )}
 
       {/* ================================================================= */}
-      {/* Step 3: Import Results                                             */}
+      {/* Step 4: Import Progress                                            */}
       {/* ================================================================= */}
-      {currentStep === 2 && importResult && (
+      {currentStep === 3 && (
+        <div className="space-y-5">
+          <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>
+              <h2 className="mb-2 text-xl font-semibold text-gray-900">Importing Your Data</h2>
+              <p className="mb-6 text-sm text-gray-500">
+                Processing {parsedData?.rows.length ?? 0} rows from {selectedFile?.name}...
+              </p>
+              <div className="w-full max-w-md">
+                <ImportProgressBar isImporting={isImportRunning} isComplete={false} />
+              </div>
+              <p className="mt-4 text-xs text-gray-400">
+                Please do not close this page while the import is in progress.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* Step 5: Summary                                                    */}
+      {/* ================================================================= */}
+      {currentStep === 4 && importResult && (
         <div className="space-y-5">
           {/* Success banner */}
           <div className="rounded-xl border border-green-200 bg-green-50 p-6">
@@ -844,6 +1199,11 @@ export default function Import() {
           </div>
         </div>
       )}
+
+      {/* ================================================================= */}
+      {/* Import History (visible in all steps)                              */}
+      {/* ================================================================= */}
+      <ImportHistory history={importHistory} />
     </div>
   );
 }

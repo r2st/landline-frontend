@@ -67,6 +67,32 @@ export const DEAL_STATUS_COLORS = {
   lost: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', hex: '#ef4444' },
 };
 
+// Deal pipeline stages (kanban columns).
+export const DEAL_STAGES = ['qualification', 'discovery', 'proposal', 'negotiation', 'closing'];
+export const DEAL_STAGE_LABELS = {
+  qualification: 'Qualification',
+  discovery: 'Discovery',
+  proposal: 'Proposal',
+  negotiation: 'Negotiation',
+  closing: 'Closing',
+};
+export const DEAL_STAGE_PROBABILITIES = {
+  qualification: 10,
+  discovery: 25,
+  proposal: 50,
+  negotiation: 75,
+  closing: 90,
+};
+export const DEAL_STAGE_COLORS = {
+  qualification: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-300', hex: '#0ea5e9', light: '#f0f9ff' },
+  discovery: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-300', hex: '#3b82f6', light: '#eff6ff' },
+  proposal: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-300', hex: '#8b5cf6', light: '#f5f3ff' },
+  negotiation: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-300', hex: '#f59e0b', light: '#fffbeb' },
+  closing: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-300', hex: '#10b981', light: '#ecfdf5' },
+};
+
+export const LOST_REASONS = ['Budget', 'Timing', 'Competition', 'No Response', 'Other'];
+
 // Task priority + status.
 export const TASK_PRIORITIES = ['high', 'medium', 'low'];
 export const TASK_PRIORITY_LABELS = {
