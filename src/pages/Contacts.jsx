@@ -700,7 +700,7 @@ export default function Contacts() {
     }
   }, [editingCell]);
 
-  // Build query params for server-side pagination/search/sort
+  // Build query params for server-side pagination/search/sort/filter
   const sortMeta = SORTS[sort] || SORTS.recent;
   const { data: contactsData, isLoading, isError } = useContacts({
     page,
@@ -708,6 +708,10 @@ export default function Contacts() {
     search,
     sortBy: sortMeta.sortBy,
     sortDir: sortMeta.sortDir,
+    status: filters.status !== 'all' ? filters.status : undefined,
+    source: filters.source !== 'all' ? filters.source : undefined,
+    city: filters.city.trim() || undefined,
+    companyName: filters.companyName.trim() || undefined,
   });
 
   const deleteContact = useDeleteContact();

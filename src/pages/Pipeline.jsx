@@ -1,11 +1,19 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Filter, Search, Plus, X } from 'lucide-react';
-import PipelineColumn from '../components/PipelineColumn';
-import { usePipeline, useTransitionStage } from '../hooks/usePipeline';
-import { useCreateCompany } from '../hooks/useCompanies';
-import { STAGES, STAGE_LABELS, COUNTRIES, SOURCES, SOURCE_LABELS } from '../lib/constants';
+import { useState, useMemo, useCallback } from 'react';
+import {
+  Filter, Search, Plus, X, LayoutGrid, List, DollarSign, TrendingUp,
+  Target, Clock, Award, BarChart3, ChevronDown,
+} from 'lucide-react';
+import DealPipelineColumn from '../components/DealPipelineColumn';
+import DealDetailModal from '../components/DealDetailModal';
+import DealModal from '../components/DealModal';
+import { useDeals, useCreateDeal, useUpdateDeal, useDeleteDeal, useDealMetrics } from '../hooks/useDeals';
+import {
+  DEAL_STAGES, DEAL_STAGE_LABELS, DEAL_STAGE_COLORS,
+  DEAL_STAGE_PROBABILITIES, DEAL_STATUS_LABELS, DEAL_STATUS_COLORS,
+} from '../lib/constants';
+import { cn, formatCurrency, formatDate } from '../lib/utils';
 
+// --- Skeleton for loading state ---
 function SkeletonColumn() {
   return (
     <div className="flex min-w-[280px] max-w-[320px] flex-shrink-0 animate-pulse flex-col rounded-lg border border-gray-200 bg-gray-50">
@@ -14,315 +22,507 @@ function SkeletonColumn() {
           <div className="h-4 w-20 rounded bg-gray-200" />
           <div className="h-5 w-5 rounded-full bg-gray-200" />
         </div>
+        <div className="mt-2 h-3 w-16 rounded bg-gray-100" />
       </div>
       <div className="space-y-2 p-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-28 rounded-lg bg-gray-200" />
+          <div key={i} className="h-24 rounded-lg bg-gray-200" />
         ))}
       </div>
     </div>
   );
 }
 
+// --- Metric card ---
+function MetricCard({ icon: Icon, label, value, sub, color }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <div className="flex items-center gap-2">
+        <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', color || 'bg-gray-100')}>
+          <Icon className="h-4 w-4 text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-gray-500 truncate">{label}</p>
+          <p className="text-lg font-bold text-gray-900">{value}</p>
+          {sub && <p className="text-xs text-gray-400">{sub}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Table view ---
+function DealTableView({ deals, onCardClick }) {
+  const [sortField, setSortField] = useState('created_at');
+  const [sortDir, setSortDir] = useState('desc');
+
+  const sorted = useMemo(() => {
+    const list = [...deals];
+    list.sort((a, b) => {
+      let av = a[sortField], bv = b[sortField];
+      if (sortField === 'value') { av = Number(av) || 0; bv = Number(bv) || 0; }
+      if (sortField === 'created_at' || sortField === 'updated_at') {
+        av = new Date(av).getTime(); bv = new Date(bv).getTime();
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [deals, sortField, sortDir]);
+
+  const toggleSort = (field) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('desc'); }
+  };
+
+  const SortHeader = ({ field, children, className }) => (
+    <th
+      className={cn('cursor-pointer select-none px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-700', className)}
+      onClick={() => toggleSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        {sortField === field && (
+          <ChevronDown className={cn('h-3 w-3 transition-transform', sortDir === 'asc' && 'rotate-180')} />
+        )}
+      </span>
+    </th>
+  );
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <SortHeader field="title">Title</SortHeader>
+            <SortHeader field="value" className="text-right">Value</SortHeader>
+            <SortHeader field="deal_stage">Stage</SortHeader>
+            <SortHeader field="status">Status</SortHeader>
+            <SortHeader field="created_at">Created</SortHeader>
+            <SortHeader field="updated_at">Updated</SortHeader>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {sorted.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">No deals match your filters.</td>
+            </tr>
+          ) : (
+            sorted.map((d) => {
+              const stageC = DEAL_STAGE_COLORS[d.deal_stage] || {};
+              const statusC = DEAL_STATUS_COLORS[d.status] || DEAL_STATUS_COLORS.pending;
+              return (
+                <tr
+                  key={d.id}
+                  className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => onCardClick(d)}
+                >
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{d.title}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">{formatCurrency(d.value)}</td>
+                  <td className="px-4 py-3">
+                    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', stageC.bg, stageC.text)}>
+                      {DEAL_STAGE_LABELS[d.deal_stage] || d.deal_stage}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', statusC.bg, statusC.text)}>
+                      {DEAL_STATUS_LABELS[d.status] || d.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{formatDate(d.created_at)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{formatDate(d.updated_at)}</td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+
 export default function Pipeline() {
-  const navigate = useNavigate();
-  const [filters, setFilters] = useState({
-    country: '',
-    source: '',
-    scoreMin: '',
-    scoreMax: '',
-  });
+  // View state
+  const [viewMode, setViewMode] = useState('kanban'); // 'kanban' | 'table'
   const [showFilters, setShowFilters] = useState(false);
-
-  const activeFilters = {};
-  if (filters.country) activeFilters.country = filters.country;
-  if (filters.source) activeFilters.source = filters.source;
-  if (filters.scoreMin) activeFilters.scoreMin = filters.scoreMin;
-  if (filters.scoreMax) activeFilters.scoreMax = filters.scoreMax;
-
-  const { data: pipeline, isLoading } = usePipeline(activeFilters);
-  const transitionMutation = useTransitionStage();
-  const createCompanyMutation = useCreateCompany();
-  const [draggingId, setDraggingId] = useState(null);
+  const [showWonLost, setShowWonLost] = useState(false);
   const [pipelineSearch, setPipelineSearch] = useState('');
-  const [quickAddStage, setQuickAddStage] = useState(null);
-  const [quickAddName, setQuickAddName] = useState('');
-  const [quickAddDomain, setQuickAddDomain] = useState('');
+  const [dateRange, setDateRange] = useState('all'); // 'all' | '7' | '30' | '90'
+  const [valueMin, setValueMin] = useState('');
+  const [valueMax, setValueMax] = useState('');
 
-  // Filter pipeline by search
-  const filteredPipeline = useMemo(() => {
-    if (!pipeline || !pipelineSearch.trim()) return pipeline;
-    const q = pipelineSearch.trim().toLowerCase();
-    const filtered = {};
-    for (const [stage, companies] of Object.entries(pipeline)) {
-      filtered[stage] = companies.filter(c =>
-        (c.name || '').toLowerCase().includes(q) ||
-        (c.domain || '').toLowerCase().includes(q)
+  // Drag state
+  const [draggingId, setDraggingId] = useState(null);
+
+  // Modal state
+  const [detailDeal, setDetailDeal] = useState(null);
+  const [quickAddStage, setQuickAddStage] = useState(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+
+  // Data
+  const listParams = showWonLost ? {} : { status: 'pending' };
+  const { data: allDeals = [], isLoading } = useDeals(listParams);
+  const { data: metrics } = useDealMetrics();
+  const createDeal = useCreateDeal();
+  const updateDeal = useUpdateDeal();
+  const deleteDeal = useDeleteDeal();
+
+  // Filter and search
+  const filteredDeals = useMemo(() => {
+    let list = allDeals;
+
+    // Search
+    if (pipelineSearch.trim()) {
+      const q = pipelineSearch.trim().toLowerCase();
+      list = list.filter(d =>
+        (d.title || '').toLowerCase().includes(q) ||
+        (d.company_name || '').toLowerCase().includes(q)
       );
     }
-    return filtered;
-  }, [pipeline, pipelineSearch]);
 
-  // Metrics from pipeline data
-  const totalCompanies = useMemo(() => {
-    if (!pipeline) return 0;
-    return Object.values(pipeline).reduce((sum, list) => sum + list.length, 0);
-  }, [pipeline]);
-
-  const activeStages = useMemo(() => {
-    if (!pipeline) return 0;
-    return Object.values(pipeline).filter((list) => list.length > 0).length;
-  }, [pipeline]);
-
-  const handleCardClick = (company) => {
-    navigate(`/companies/${company.id}`);
-  };
-
-  const handleTransition = (id, stage) => {
-    transitionMutation.mutate({ id, stage });
-  };
-
-  const handleDropCompany = (id, stage) => {
-    setDraggingId(null);
-    transitionMutation.mutate({ id, stage });
-  };
-
-  const handleQuickAdd = async (e) => {
-    e.preventDefault();
-    if (!quickAddName.trim()) return;
-    try {
-      await createCompanyMutation.mutateAsync({
-        name: quickAddName.trim(),
-        domain: quickAddDomain.trim() || undefined,
-        stage: quickAddStage,
-        source: 'manual',
-      });
-      setQuickAddStage(null);
-      setQuickAddName('');
-      setQuickAddDomain('');
-    } catch {
-      // Error toast is handled by useCreateCompany hook
+    // Date range
+    if (dateRange !== 'all') {
+      const days = Number(dateRange);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      list = list.filter(d => new Date(d.created_at) >= cutoff);
     }
-  };
 
-  const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
+    // Value range
+    if (valueMin !== '') {
+      const min = Number(valueMin);
+      list = list.filter(d => (Number(d.value) || 0) >= min);
+    }
+    if (valueMax !== '') {
+      const max = Number(valueMax);
+      list = list.filter(d => (Number(d.value) || 0) <= max);
+    }
 
-  const hasActiveFilters = Object.values(activeFilters).some(Boolean);
+    return list;
+  }, [allDeals, pipelineSearch, dateRange, valueMin, valueMax]);
+
+  // Group deals by stage for kanban
+  const dealsByStage = useMemo(() => {
+    const grouped = {};
+    for (const stage of DEAL_STAGES) grouped[stage] = [];
+    for (const deal of filteredDeals) {
+      if (deal.status !== 'pending') continue; // Only pending deals in kanban columns
+      if (grouped[deal.deal_stage]) grouped[deal.deal_stage].push(deal);
+    }
+    return grouped;
+  }, [filteredDeals]);
+
+  // Counts of won/lost (for the toggle label)
+  const wonLostCount = useMemo(() => {
+    if (!showWonLost) return 0;
+    return filteredDeals.filter(d => d.status === 'won' || d.status === 'lost').length;
+  }, [filteredDeals, showWonLost]);
+
+  const hasActiveFilters = dateRange !== 'all' || valueMin !== '' || valueMax !== '';
 
   const clearFilters = () => {
-    setFilters({ country: '', source: '', scoreMin: '', scoreMax: '' });
+    setDateRange('all');
+    setValueMin('');
+    setValueMax('');
+  };
+
+  const handleCardClick = useCallback((deal) => {
+    setDetailDeal(deal);
+  }, []);
+
+  const handleDealUpdate = useCallback(({ id, data }) => {
+    updateDeal.mutate({ id, data }, {
+      onSuccess: () => {
+        // Refresh the detail modal data if it's the same deal
+        if (detailDeal && String(detailDeal.id) === String(id)) {
+          // Re-fetch by refetching the list
+        }
+      },
+    });
+  }, [updateDeal, detailDeal]);
+
+  const handleDropDeal = (id, stage) => {
+    setDraggingId(null);
+    updateDeal.mutate({ id, data: { deal_stage: stage } });
+  };
+
+  const handleQuickAdd = (stage) => {
+    setQuickAddStage(stage);
+    setAddModalOpen(true);
+  };
+
+  const handleCreateDeal = (payload) => {
+    if (quickAddStage) payload.deal_stage = quickAddStage;
+    createDeal.mutate(payload, {
+      onSuccess: () => {
+        setAddModalOpen(false);
+        setQuickAddStage(null);
+      },
+    });
   };
 
   return (
     <div className="flex h-full flex-col">
+      {/* Pipeline Metrics Bar */}
+      {metrics && (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <MetricCard
+            icon={DollarSign}
+            label="Pipeline Value"
+            value={formatCurrency(metrics.total_pipeline_value, { compact: true })}
+            color="bg-blue-500"
+          />
+          <MetricCard
+            icon={TrendingUp}
+            label="Weighted Value"
+            value={formatCurrency(metrics.weighted_pipeline_value, { compact: true })}
+            color="bg-indigo-500"
+          />
+          <MetricCard
+            icon={Target}
+            label="Avg Deal Size"
+            value={formatCurrency(metrics.average_deal_size, { compact: true })}
+            color="bg-purple-500"
+          />
+          <MetricCard
+            icon={BarChart3}
+            label="Active Deals"
+            value={metrics.deal_count}
+            color="bg-teal-500"
+          />
+          <MetricCard
+            icon={Award}
+            label="Win Rate"
+            value={`${metrics.win_rate}%`}
+            color="bg-green-500"
+          />
+          <MetricCard
+            icon={Clock}
+            label="Avg Days to Close"
+            value={`${metrics.avg_days_to_close}d`}
+            color="bg-amber-500"
+          />
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
+        {/* View toggle */}
+        <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode('kanban')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              viewMode === 'kanban' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Board
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              viewMode === 'table' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900'
+            )}
+          >
+            <List className="h-3.5 w-3.5" />
+            Table
+          </button>
+        </div>
+
+        {/* Filters button */}
         <button
           type="button"
           onClick={() => setShowFilters(!showFilters)}
-          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+          className={cn(
+            'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
             showFilters || hasActiveFilters
               ? 'border-blue-300 bg-blue-50 text-blue-700'
               : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-          }`}
+          )}
         >
           <Filter className="h-4 w-4" />
           Filters
           {hasActiveFilters && (
             <span className="ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-bold text-white">
-              {Object.values(activeFilters).filter(Boolean).length}
+              {[dateRange !== 'all', valueMin !== '', valueMax !== ''].filter(Boolean).length}
             </span>
           )}
         </button>
 
         {hasActiveFilters && (
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
+          <button type="button" onClick={clearFilters} className="text-sm text-gray-500 hover:text-gray-700">
             Clear all
           </button>
         )}
 
-        {/* Pipeline Search */}
+        {/* Search */}
         <div className="relative" style={{ minWidth: '200px', maxWidth: '300px' }}>
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search pipeline..."
+            placeholder="Search deals..."
             value={pipelineSearch}
             onChange={(e) => setPipelineSearch(e.target.value)}
             className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
-        <span className="ml-auto hidden text-xs text-gray-400 sm:inline">
-          Drag cards between stages, or use the dropdown on each card
-        </span>
+        {/* Show Won/Lost toggle */}
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={showWonLost}
+            onChange={(e) => setShowWonLost(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          Show Won/Lost
+          {wonLostCount > 0 && <span className="text-xs text-gray-400">({wonLostCount})</span>}
+        </label>
+
+        {/* Add deal button */}
+        <button
+          type="button"
+          onClick={() => { setQuickAddStage(null); setAddModalOpen(true); }}
+          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600"
+        >
+          <Plus className="h-4 w-4" />
+          Add Deal
+        </button>
       </div>
 
       {/* Filter Row */}
       {showFilters && (
-        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <div className="mb-4 flex flex-wrap items-end gap-4 rounded-lg border border-gray-200 bg-white p-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Country</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Created</label>
             <select
-              value={filters.country}
-              onChange={(e) => handleFilterChange('country', e.target.value)}
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
               className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">All Countries</option>
-              {COUNTRIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
+              <option value="all">All Time</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
             </select>
           </div>
-
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Source</label>
-            <select
-              value={filters.source}
-              onChange={(e) => handleFilterChange('source', e.target.value)}
-              className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">All Sources</option>
-              {SOURCES.map((s) => (
-                <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Min Score</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Min Value ($)</label>
             <input
               type="number"
               min="0"
-              max="100"
               placeholder="0"
-              value={filters.scoreMin}
-              onChange={(e) => handleFilterChange('scoreMin', e.target.value)}
-              className="h-9 w-20 rounded-md border border-gray-300 px-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              value={valueMin}
+              onChange={(e) => setValueMin(e.target.value)}
+              className="h-9 w-28 rounded-md border border-gray-300 px-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
-
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Max Score</label>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Max Value ($)</label>
             <input
               type="number"
               min="0"
-              max="100"
-              placeholder="100"
-              value={filters.scoreMax}
-              onChange={(e) => handleFilterChange('scoreMax', e.target.value)}
-              className="h-9 w-20 rounded-md border border-gray-300 px-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="No limit"
+              value={valueMax}
+              onChange={(e) => setValueMax(e.target.value)}
+              className="h-9 w-28 rounded-md border border-gray-300 px-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
         </div>
       )}
 
-      {/* Metrics Bar */}
-      {!isLoading && pipeline && (
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-xs font-medium text-gray-500">Total Pipeline</p>
-            <p className="text-lg font-bold text-gray-900">{totalCompanies}</p>
+      {/* Main content */}
+      {viewMode === 'kanban' ? (
+        <div className="flex-1 overflow-x-auto pb-4">
+          <div className="inline-flex gap-4" style={{ minWidth: 'max-content' }}>
+            {isLoading ? (
+              DEAL_STAGES.map((stage) => <SkeletonColumn key={stage} />)
+            ) : (
+              DEAL_STAGES.map((stage) => (
+                <DealPipelineColumn
+                  key={stage}
+                  stage={stage}
+                  deals={dealsByStage[stage] || []}
+                  onCardClick={handleCardClick}
+                  draggingId={draggingId}
+                  onCardDragStart={(deal) => setDraggingId(deal.id)}
+                  onCardDragEnd={() => setDraggingId(null)}
+                  onDropDeal={handleDropDeal}
+                  onQuickAdd={handleQuickAdd}
+                />
+              ))
+            )}
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-xs font-medium text-gray-500">Active Stages</p>
-            <p className="text-lg font-bold text-gray-900">{activeStages}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-xs font-medium text-gray-500">Qualified</p>
-            <p className="text-lg font-bold text-green-600">{pipeline?.qualified?.length || 0}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-xs font-medium text-gray-500">Opportunities</p>
-            <p className="text-lg font-bold text-emerald-600">{pipeline?.opportunity?.length || 0}</p>
-          </div>
-        </div>
-      )}
 
-      {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto pb-4">
-        <div className="inline-flex gap-4" style={{ minWidth: 'max-content' }}>
-          {isLoading ? (
-            STAGES.map((stage) => <SkeletonColumn key={stage} />)
-          ) : (
-            STAGES.map((stage) => (
-              <PipelineColumn
-                key={stage}
-                stage={stage}
-                companies={filteredPipeline?.[stage] || []}
-                onCardClick={handleCardClick}
-                onTransition={handleTransition}
-                draggingId={draggingId}
-                onCardDragStart={(company) => setDraggingId(company.id)}
-                onCardDragEnd={() => setDraggingId(null)}
-                onDropCompany={handleDropCompany}
-                onQuickAdd={(s) => setQuickAddStage(s)}
-              />
-            ))
+          {/* Won/Lost sections below kanban when toggled */}
+          {showWonLost && !isLoading && (
+            <div className="mt-6 space-y-4">
+              {['won', 'lost'].map((status) => {
+                const statusDeals = filteredDeals.filter(d => d.status === status);
+                if (statusDeals.length === 0) return null;
+                const statusC = DEAL_STATUS_COLORS[status];
+                return (
+                  <div key={status} className={cn('rounded-lg border p-4', statusC.border, statusC.bg)}>
+                    <h3 className={cn('mb-3 text-sm font-semibold', statusC.text)}>
+                      {DEAL_STATUS_LABELS[status]} ({statusDeals.length}) - {formatCurrency(statusDeals.reduce((s, d) => s + (Number(d.value) || 0), 0), { compact: true })}
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                      {statusDeals.map((deal) => (
+                        <div
+                          key={deal.id}
+                          onClick={() => handleCardClick(deal)}
+                          className="cursor-pointer rounded-lg border border-white/60 bg-white p-3 shadow-sm transition hover:shadow-md"
+                          style={{ minWidth: '200px', maxWidth: '260px' }}
+                        >
+                          <p className="text-sm font-bold text-gray-900 truncate">{deal.title}</p>
+                          <p className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(deal.value)}</p>
+                          {deal.lost_reason && (
+                            <p className="mt-1 text-xs text-red-600">Reason: {deal.lost_reason}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Quick-Add Company Modal */}
-      {quickAddStage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setQuickAddStage(null)} />
-          <div className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Add to {STAGE_LABELS[quickAddStage]}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setQuickAddStage(null)}
-                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
+      ) : (
+        <div className="flex-1 overflow-y-auto pb-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
             </div>
-            <form onSubmit={handleQuickAdd} className="mt-4 space-y-3">
-              <input
-                type="text"
-                required
-                placeholder="Company name"
-                value={quickAddName}
-                onChange={(e) => setQuickAddName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                autoFocus
-              />
-              <input
-                type="text"
-                placeholder="Domain (optional)"
-                value={quickAddDomain}
-                onChange={(e) => setQuickAddDomain(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setQuickAddStage(null)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createCompanyMutation.isPending}
-                  className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
-                >
-                  {createCompanyMutation.isPending ? 'Adding...' : 'Add'}
-                </button>
-              </div>
-            </form>
-          </div>
+          ) : (
+            <DealTableView deals={filteredDeals} onCardClick={handleCardClick} />
+          )}
         </div>
       )}
+
+      {/* Deal Detail Modal */}
+      <DealDetailModal
+        open={!!detailDeal}
+        onClose={() => setDetailDeal(null)}
+        deal={detailDeal}
+        onUpdate={handleDealUpdate}
+        onDelete={(id) => { deleteDeal.mutate(id); setDetailDeal(null); }}
+        updating={updateDeal.isPending}
+      />
+
+      {/* Add Deal Modal */}
+      <DealModal
+        open={addModalOpen}
+        onClose={() => { setAddModalOpen(false); setQuickAddStage(null); }}
+        onSubmit={handleCreateDeal}
+        saving={createDeal.isPending}
+      />
     </div>
   );
 }
