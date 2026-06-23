@@ -495,7 +495,8 @@ export default function Tasks() {
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   const { data: tasks = [], isLoading } = useTasks();
-  const { data: companies = [] } = useCompanies();
+  const { data: companiesData } = useCompanies();
+  const companies = companiesData?.items || [];
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();

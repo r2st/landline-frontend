@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Mail,
   Plus,
@@ -13,10 +13,48 @@ import {
   BarChart3,
   Pause,
   Play,
+  Copy,
+  ArrowUp,
+  ArrowDown,
+  FileText,
+  TrendingUp,
+  Award,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import { useSequences, useCreateSequence, useUpdateSequenceStatus } from '../hooks/useOutreach';
 import { formatNumber, cn } from '../lib/utils';
+
+/* -------------------------------------------------------------------------- */
+/*  Helpers                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Safely coerce to a finite number, falling back to 0. */
+function safeNum(val) {
+  const n = Number(val);
+  return isFinite(n) ? n : 0;
+}
+
+/** Compute a percentage safely — returns "0.0" when denominator is 0 or result is NaN. */
+function safeRate(numerator, denominator) {
+  const num = safeNum(numerator);
+  const den = safeNum(denominator);
+  if (den <= 0) return '0.0';
+  const rate = (num / den) * 100;
+  return isNaN(rate) || !isFinite(rate) ? '0.0' : rate.toFixed(1);
+}
+
+/** Render a template body with placeholder styling for preview. */
+function renderPreview(body) {
+  if (!body) return 'No content';
+  return body.replace(
+    /\{\{(\w+)\}\}/g,
+    (_, name) => `[${name.replace(/_/g, ' ')}]`,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SequenceStats                                                             */
+/* -------------------------------------------------------------------------- */
 
 function SequenceStats({ stats = {} }) {
   return (
@@ -24,28 +62,28 @@ function SequenceStats({ stats = {} }) {
       <div className="rounded-lg bg-blue-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-blue-600">
           <Users className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.enrolled || 0)}</span>
+          <span className="text-lg font-bold">{formatNumber(safeNum(stats.enrolled))}</span>
         </div>
         <p className="text-xs text-blue-600/70">Enrolled</p>
       </div>
       <div className="rounded-lg bg-purple-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-purple-600">
           <Send className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.sent || 0)}</span>
+          <span className="text-lg font-bold">{formatNumber(safeNum(stats.sent))}</span>
         </div>
         <p className="text-xs text-purple-600/70">Sent</p>
       </div>
       <div className="rounded-lg bg-indigo-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-indigo-600">
           <Eye className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.opened || 0)}</span>
+          <span className="text-lg font-bold">{formatNumber(safeNum(stats.opened))}</span>
         </div>
         <p className="text-xs text-indigo-600/70">Opened</p>
       </div>
       <div className="rounded-lg bg-green-50 p-2.5 text-center">
         <div className="flex items-center justify-center gap-1 text-green-600">
           <Mail className="h-3.5 w-3.5" />
-          <span className="text-lg font-bold">{formatNumber(stats.replied || 0)}</span>
+          <span className="text-lg font-bold">{formatNumber(safeNum(stats.replied))}</span>
         </div>
         <p className="text-xs text-green-600/70">Replied</p>
       </div>
@@ -53,109 +91,212 @@ function SequenceStats({ stats = {} }) {
   );
 }
 
-function SequenceCard({ sequence }) {
+/* -------------------------------------------------------------------------- */
+/*  StepTimeline — visual timeline in expanded card                           */
+/* -------------------------------------------------------------------------- */
+
+function StepTimeline({ steps, stats }) {
+  if (!steps || steps.length === 0) return null;
+  const stepStats = stats?.step_stats; // may be undefined
+
+  return (
+    <div className="relative ml-5">
+      {steps.map((step, idx) => {
+        const isLast = idx === steps.length - 1;
+        const ss = Array.isArray(stepStats) ? stepStats[idx] : null;
+        const stepOpen = ss ? safeRate(ss.opened, ss.sent) : null;
+        const stepReply = ss ? safeRate(ss.replied, ss.sent) : null;
+
+        return (
+          <div key={idx} className="relative flex gap-4 pb-6 last:pb-0">
+            {/* Vertical connector line */}
+            {!isLast && (
+              <div className="absolute left-[15px] top-[32px] h-[calc(100%-20px)] w-0.5 bg-gradient-to-b from-blue-300 to-gray-200" />
+            )}
+
+            {/* Step circle */}
+            <div className="relative z-10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-blue-400 bg-white text-xs font-bold text-blue-600 shadow-sm">
+              {step.order}
+            </div>
+
+            {/* Step content */}
+            <div className="flex-1 rounded-lg border border-gray-100 bg-gray-50 p-3 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-medium text-gray-900">{step.subject || 'Untitled'}</p>
+                <div className="flex flex-shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
+                  <Clock className="h-3 w-3" />
+                  {step.delay_days === 0 ? 'Immediately' : `Day ${step.delay_days}`}
+                </div>
+              </div>
+
+              <p className="mt-1.5 whitespace-pre-wrap text-xs text-gray-600 line-clamp-3">
+                {step.body}
+              </p>
+
+              {/* Per-step metrics */}
+              {ss && (
+                <div className="mt-2 flex items-center gap-3 border-t border-gray-200 pt-2">
+                  <span className="flex items-center gap-1 text-xs text-gray-500">
+                    <Send className="h-3 w-3" /> {safeNum(ss.sent)} sent
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-indigo-600">
+                    <Eye className="h-3 w-3" /> {stepOpen}% opened
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-green-600">
+                    <Mail className="h-3 w-3" /> {stepReply}% replied
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SequenceCard                                                              */
+/* -------------------------------------------------------------------------- */
+
+function SequenceCard({ sequence, onDuplicate, isBestPerformer }) {
   const [expanded, setExpanded] = useState(false);
   const updateStatus = useUpdateSequenceStatus();
 
-  // The API may omit stats for a brand-new sequence — default to zeros so the
-  // card renders instead of crashing on `stats.sent`.
   const stats = sequence.stats || {};
-  const openRate = stats.sent > 0
-    ? ((stats.opened / stats.sent) * 100).toFixed(1)
-    : 0;
-  const replyRate = stats.sent > 0
-    ? ((stats.replied / stats.sent) * 100).toFixed(1)
-    : 0;
+  const openRate = safeRate(stats.opened, stats.sent);
+  const replyRate = safeRate(stats.replied, stats.sent);
+  const enrolledCount = safeNum(stats.enrolled);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+    <div
+      className={cn(
+        'rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md',
+        isBestPerformer ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-200',
+      )}
+    >
+      {/* Best performer badge */}
+      {isBestPerformer && (
+        <div className="flex items-center gap-1.5 rounded-t-xl bg-amber-50 px-4 py-1.5 text-xs font-medium text-amber-700">
+          <Award className="h-3.5 w-3.5" />
+          Best Performing Sequence
+        </div>
+      )}
+
       <div
         className="cursor-pointer p-5"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-              <Mail className="h-5 w-5 text-blue-600" />
+            <div className={cn(
+              'flex h-10 w-10 items-center justify-center rounded-full',
+              isBestPerformer ? 'bg-amber-100' : 'bg-blue-100',
+            )}>
+              <Mail className={cn('h-5 w-5', isBestPerformer ? 'text-amber-600' : 'text-blue-600')} />
             </div>
             <div>
               <h3 className="text-base font-semibold text-gray-900">{sequence.name}</h3>
-              <div className="mt-0.5 flex items-center gap-3 text-sm text-gray-500">
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                 <span>{sequence.steps?.length || 0} steps</span>
                 <span className="text-gray-300">|</span>
-                <span>{openRate}% open rate</span>
+                <span className="flex items-center gap-0.5">
+                  <Eye className="h-3 w-3" /> {openRate}% open
+                </span>
                 <span className="text-gray-300">|</span>
-                <span>{replyRate}% reply rate</span>
+                <span className="flex items-center gap-0.5">
+                  <Mail className="h-3 w-3" /> {replyRate}% reply
+                </span>
+                <span className="text-gray-300">|</span>
+                <span className="flex items-center gap-0.5">
+                  <Users className="h-3 w-3" /> {formatNumber(enrolledCount)} enrolled
+                </span>
                 <span className="text-gray-300">|</span>
                 <span className={cn(
                   'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-                  (sequence.status || 'active') === 'active' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+                  (sequence.status || 'active') === 'active' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700',
                 )}>
                   {(sequence.status || 'active') === 'active' ? 'Active' : 'Paused'}
                 </span>
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const newStatus = (sequence.status || 'active') === 'active' ? 'paused' : 'active';
-              updateStatus.mutate({ id: sequence.id, status: newStatus });
-            }}
-            disabled={updateStatus.isPending}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-              (sequence.status || 'active') === 'active'
-                ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
-                : 'bg-green-50 text-green-700 hover:bg-green-100'
-            )}
-          >
-            {(sequence.status || 'active') === 'active' ? (
-              <><Pause className="h-3.5 w-3.5" /> Pause</>
-            ) : (
-              <><Play className="h-3.5 w-3.5" /> Resume</>
-            )}
-          </button>
-          <button
-            type="button"
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100"
-          >
-            {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-          </button>
+
+          <div className="flex items-center gap-1.5">
+            {/* Duplicate */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate(sequence);
+              }}
+              title="Duplicate sequence"
+              className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+
+            {/* Pause / Resume */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const newStatus = (sequence.status || 'active') === 'active' ? 'paused' : 'active';
+                updateStatus.mutate({ id: sequence.id, status: newStatus });
+              }}
+              disabled={updateStatus.isPending}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                (sequence.status || 'active') === 'active'
+                  ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
+                  : 'bg-green-50 text-green-700 hover:bg-green-100',
+              )}
+            >
+              {(sequence.status || 'active') === 'active' ? (
+                <><Pause className="h-3.5 w-3.5" /> Pause</>
+              ) : (
+                <><Play className="h-3.5 w-3.5" /> Resume</>
+              )}
+            </button>
+
+            {/* Expand chevron */}
+            <button
+              type="button"
+              className="rounded-md p-1 text-gray-400 hover:bg-gray-100"
+            >
+              {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
+
         <div className="mt-4">
           <SequenceStats stats={stats} />
         </div>
       </div>
 
+      {/* Expanded: visual timeline */}
       {expanded && sequence.steps && (
         <div className="border-t border-gray-100 px-5 py-4">
           <h4 className="mb-3 text-sm font-semibold text-gray-700">Sequence Steps</h4>
-          <div className="relative ml-3 border-l-2 border-gray-200 pl-6">
-            {sequence.steps.map((step, idx) => (
-              <div key={idx} className="relative mb-4 last:mb-0">
-                <div className="absolute -left-[29px] flex h-5 w-5 items-center justify-center rounded-full border-2 border-gray-200 bg-white text-xs font-bold text-gray-500">
-                  {step.order}
-                </div>
-                <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-900">{step.subject}</p>
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <Clock className="h-3 w-3" />
-                      {step.delay_days === 0 ? 'Immediately' : `After ${step.delay_days} day${step.delay_days > 1 ? 's' : ''}`}
-                    </div>
-                  </div>
-                  <p className="mt-1.5 whitespace-pre-wrap text-xs text-gray-600 line-clamp-3">{step.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <StepTimeline steps={sequence.steps} stats={stats} />
+
+          {/* Enrollment note */}
+          {enrolledCount > 0 && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+              <Users className="h-3.5 w-3.5" />
+              {formatNumber(enrolledCount)} contact{enrolledCount !== 1 ? 's' : ''} currently enrolled.
+              Manage enrollments from individual company pages.
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Template variables                                                        */
+/* -------------------------------------------------------------------------- */
 
 const templateVariables = [
   { label: 'Company', value: '{{company_name}}' },
@@ -164,11 +305,42 @@ const templateVariables = [
   { label: 'Industry', value: '{{industry}}' },
 ];
 
-function SequenceBuilder({ onSave, onCancel }) {
-  const [name, setName] = useState('');
-  const [steps, setSteps] = useState([
-    { order: 1, type: 'email', subject: '', body: '', delay_days: 0 },
-  ]);
+/* -------------------------------------------------------------------------- */
+/*  StepPreview — rendered preview of a single step                           */
+/* -------------------------------------------------------------------------- */
+
+function StepPreview({ step }) {
+  return (
+    <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-blue-700">
+        <FileText className="h-3 w-3" />
+        Preview
+      </div>
+      <div className="rounded-md bg-white p-3 shadow-sm">
+        <p className="text-sm font-medium text-gray-900">
+          Subject: {step.subject || '(no subject)'}
+        </p>
+        <hr className="my-2 border-gray-100" />
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+          {renderPreview(step.body) || '(no body)'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SequenceBuilder                                                           */
+/* -------------------------------------------------------------------------- */
+
+function SequenceBuilder({ onSave, onCancel, initialData }) {
+  const [name, setName] = useState(initialData?.name || '');
+  const [steps, setSteps] = useState(
+    initialData?.steps?.length
+      ? initialData.steps.map((s, i) => ({ ...s, order: i + 1 }))
+      : [{ order: 1, type: 'email', subject: '', body: '', delay_days: 0 }],
+  );
+  const [previewIndex, setPreviewIndex] = useState(null);
 
   const addStep = () => {
     setSteps([
@@ -187,6 +359,17 @@ function SequenceBuilder({ onSave, onCancel }) {
     if (steps.length <= 1) return;
     const updated = steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i + 1 }));
     setSteps(updated);
+    if (previewIndex === index) setPreviewIndex(null);
+  };
+
+  const moveStep = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= steps.length) return;
+    const updated = [...steps];
+    [updated[index], updated[target]] = [updated[target], updated[index]];
+    setSteps(updated.map((s, i) => ({ ...s, order: i + 1 })));
+    if (previewIndex === index) setPreviewIndex(target);
+    else if (previewIndex === target) setPreviewIndex(index);
   };
 
   const updateStep = (index, field, value) => {
@@ -217,7 +400,9 @@ function SequenceBuilder({ onSave, onCancel }) {
   return (
     <div className="rounded-xl border border-blue-200 bg-white p-6 shadow-sm">
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Create New Sequence</h2>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {initialData ? 'Duplicate Sequence' : 'Create New Sequence'}
+        </h2>
         <button
           type="button"
           onClick={onCancel}
@@ -251,7 +436,47 @@ function SequenceBuilder({ onSave, onCancel }) {
                   </span>
                   <span className="text-sm font-medium text-gray-700">Email Step</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  {/* Move up / down */}
+                  <button
+                    type="button"
+                    onClick={() => moveStep(idx, -1)}
+                    disabled={idx === 0}
+                    title="Move step up"
+                    className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveStep(idx, 1)}
+                    disabled={idx === steps.length - 1}
+                    title="Move step down"
+                    className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+
+                  <div className="mx-1 h-4 w-px bg-gray-200" />
+
+                  {/* Preview toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setPreviewIndex(previewIndex === idx ? null : idx)}
+                    title="Preview rendered email"
+                    className={cn(
+                      'rounded p-1 transition-colors',
+                      previewIndex === idx
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'text-gray-400 hover:bg-gray-200 hover:text-gray-600',
+                    )}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+
+                  <div className="mx-1 h-4 w-px bg-gray-200" />
+
+                  {/* Delay */}
                   <div className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-gray-400" />
                     <input
@@ -264,6 +489,8 @@ function SequenceBuilder({ onSave, onCancel }) {
                     />
                     <span className="text-xs text-gray-500">day delay</span>
                   </div>
+
+                  {/* Remove step */}
                   {steps.length > 1 && (
                     <button
                       type="button"
@@ -306,6 +533,9 @@ function SequenceBuilder({ onSave, onCancel }) {
                   </button>
                 ))}
               </div>
+
+              {/* Step preview */}
+              {previewIndex === idx && <StepPreview step={step} />}
             </div>
           ))}
         </div>
@@ -343,14 +573,59 @@ function SequenceBuilder({ onSave, onCancel }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Sequences (page)                                                          */
+/* -------------------------------------------------------------------------- */
+
 export default function Sequences() {
   const { data: sequences, isLoading, isError } = useSequences();
   const createSequence = useCreateSequence();
   const [showBuilder, setShowBuilder] = useState(false);
+  const [duplicateData, setDuplicateData] = useState(null);
+
+  /* Identify best-performing sequence (highest reply rate among those with > 0 sent) */
+  const bestPerformerId = useMemo(() => {
+    if (!sequences || sequences.length === 0) return null;
+    let bestId = null;
+    let bestRate = -1;
+    for (const seq of sequences) {
+      const s = seq.stats || {};
+      const sent = safeNum(s.sent);
+      if (sent <= 0) continue;
+      const rate = safeNum(s.replied) / sent;
+      if (rate > bestRate) {
+        bestRate = rate;
+        bestId = seq.id;
+      }
+    }
+    // Only highlight if there is a meaningful rate
+    return bestRate > 0 ? bestId : null;
+  }, [sequences]);
 
   const handleSave = (data) => {
     createSequence.mutate(data);
     setShowBuilder(false);
+    setDuplicateData(null);
+  };
+
+  const handleDuplicate = (sequence) => {
+    const clonedSteps = (sequence.steps || []).map((s) => ({
+      order: s.order,
+      type: s.type || 'email',
+      subject: s.subject || '',
+      body: s.body || '',
+      delay_days: s.delay_days ?? 3,
+    }));
+    setDuplicateData({
+      name: `${sequence.name} (Copy)`,
+      steps: clonedSteps,
+    });
+    setShowBuilder(true);
+  };
+
+  const handleCancel = () => {
+    setShowBuilder(false);
+    setDuplicateData(null);
   };
 
   if (isLoading) {
@@ -386,7 +661,8 @@ export default function Sequences() {
       {showBuilder && (
         <SequenceBuilder
           onSave={handleSave}
-          onCancel={() => setShowBuilder(false)}
+          onCancel={handleCancel}
+          initialData={duplicateData}
         />
       )}
 
@@ -407,7 +683,12 @@ export default function Sequences() {
       ) : (
         <div className="space-y-4">
           {(sequences || []).map((sequence) => (
-            <SequenceCard key={sequence.id} sequence={sequence} />
+            <SequenceCard
+              key={sequence.id}
+              sequence={sequence}
+              onDuplicate={handleDuplicate}
+              isBestPerformer={sequence.id === bestPerformerId}
+            />
           ))}
         </div>
       )}
@@ -422,22 +703,22 @@ export default function Sequences() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="text-center">
               <p className="text-2xl font-bold text-gray-900">
-                {formatNumber(sequences.reduce((sum, s) => sum + (s.stats?.enrolled || 0), 0))}
+                {formatNumber(sequences.reduce((sum, s) => sum + safeNum(s.stats?.enrolled), 0))}
               </p>
               <p className="text-sm text-gray-500">Total Enrolled</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-gray-900">
-                {formatNumber(sequences.reduce((sum, s) => sum + (s.stats?.sent || 0), 0))}
+                {formatNumber(sequences.reduce((sum, s) => sum + safeNum(s.stats?.sent), 0))}
               </p>
               <p className="text-sm text-gray-500">Emails Sent</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-blue-600">
                 {(() => {
-                  const totalSent = sequences.reduce((sum, s) => sum + (s.stats?.sent || 0), 0);
-                  const totalOpened = sequences.reduce((sum, s) => sum + (s.stats?.opened || 0), 0);
-                  return totalSent > 0 ? ((totalOpened / totalSent) * 100).toFixed(1) : 0;
+                  const totalSent = sequences.reduce((sum, s) => sum + safeNum(s.stats?.sent), 0);
+                  const totalOpened = sequences.reduce((sum, s) => sum + safeNum(s.stats?.opened), 0);
+                  return safeRate(totalOpened, totalSent);
                 })()}%
               </p>
               <p className="text-sm text-gray-500">Open Rate</p>
@@ -445,9 +726,9 @@ export default function Sequences() {
             <div className="text-center">
               <p className="text-2xl font-bold text-green-600">
                 {(() => {
-                  const totalSent = sequences.reduce((sum, s) => sum + (s.stats?.sent || 0), 0);
-                  const totalReplied = sequences.reduce((sum, s) => sum + (s.stats?.replied || 0), 0);
-                  return totalSent > 0 ? ((totalReplied / totalSent) * 100).toFixed(1) : 0;
+                  const totalSent = sequences.reduce((sum, s) => sum + safeNum(s.stats?.sent), 0);
+                  const totalReplied = sequences.reduce((sum, s) => sum + safeNum(s.stats?.replied), 0);
+                  return safeRate(totalReplied, totalSent);
                 })()}%
               </p>
               <p className="text-sm text-gray-500">Reply Rate</p>

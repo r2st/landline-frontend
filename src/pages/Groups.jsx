@@ -151,7 +151,8 @@ function GroupFormModal({ group, onClose, onCreate, onUpdate }) {
 // ── Add Companies Modal ───────────────────────────────────────────────────────
 
 function AddCompaniesModal({ group, onClose, onAdd }) {
-  const { data: companies = [] } = useCompanies({ page_size: 500 });
+  const { data: companiesData } = useCompanies({ page_size: 500 });
+  const companies = companiesData?.items || [];
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
 
