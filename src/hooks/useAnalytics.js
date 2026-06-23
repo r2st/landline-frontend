@@ -75,7 +75,7 @@ export function useRecentEmailActivity(limit = 20) {
   });
 }
 
-export function useEmailSends(limit = 20) {
+export function useAnalyticsEmailSends(limit = 20) {
   return useQuery({
     queryKey: ['analytics-email-sends', limit],
     queryFn: async () => {

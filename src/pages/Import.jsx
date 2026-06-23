@@ -26,8 +26,12 @@ export default function Import() {
   const [importResult, setImportResult] = useState(null);
 
   const handleUpload = async (formData) => {
-    const result = await importCSV.mutateAsync(formData);
-    setImportResult(result);
+    try {
+      const result = await importCSV.mutateAsync(formData);
+      setImportResult(result);
+    } catch {
+      // Error toast is shown by the mutation's onError handler
+    }
   };
 
   const errors = importResult?.errors || [];

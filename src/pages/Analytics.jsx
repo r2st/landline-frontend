@@ -31,7 +31,7 @@ import {
   useEmailTrendsAnalytics,
   useTopEngagedLeads,
   useRecentEmailActivity,
-  useEmailSends,
+  useAnalyticsEmailSends,
 } from '../hooks/useAnalytics';
 import { STAGES, STAGE_LABELS, STAGE_COLORS } from '../lib/constants';
 import { formatNumber, timeAgo, cn } from '../lib/utils';
@@ -258,8 +258,8 @@ export default function Analytics() {
   const { data: trends, isLoading: trendsLoading } = useEmailTrendsAnalytics(30);
   const { data: topLeads, isLoading: leadsLoading } = useTopEngagedLeads(10);
   const { data: recentEmails, isLoading: emailsLoading } = useRecentEmailActivity(20);
-  const { data: emailSends, isLoading: sendsLoading } = useEmailSends(20);
-  const { data: allEmailSends } = useEmailSends(500); // larger set for heatmap
+  const { data: emailSends, isLoading: sendsLoading } = useAnalyticsEmailSends(20);
+  const { data: allEmailSends } = useAnalyticsEmailSends(500); // larger set for heatmap
 
   // --- Derived data ---
 

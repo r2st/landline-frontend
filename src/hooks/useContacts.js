@@ -16,6 +16,7 @@ function normalize(data) {
 export function useContacts() {
   return useQuery({
     queryKey: ['contacts', 'all'],
+    staleTime: 60000,
     queryFn: async () => {
       const [contactsRaw, companiesRaw] = await Promise.all([
         contactsApi.getAll({ page_size: 200 }),
