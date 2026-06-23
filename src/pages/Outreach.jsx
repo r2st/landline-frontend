@@ -131,19 +131,29 @@ function FormatToolbar({ textareaRef, value, onChange }) {
 }
 
 const EMAIL_BODY_STYLES = `
-  .email-preview p { margin: 0.75rem 0; }
+  .email-preview p { margin: 0 0 16px 0; line-height: 1.6; }
+  .email-preview p:last-child { margin-bottom: 0; }
+  .email-preview strong, .email-preview b { font-weight: 700; color: #111827; }
+  .email-preview em, .email-preview i { font-style: italic; }
   .email-preview a { color: #2563eb; text-decoration: underline; }
   .email-preview a:hover { color: #1d4ed8; }
-  .email-preview ul { margin: 0.75rem 0; padding-left: 1.25rem; list-style-type: disc; }
-  .email-preview ol { margin: 0.75rem 0; padding-left: 1.25rem; list-style-type: decimal; }
-  .email-preview li { margin: 0.25rem 0; }
-  .email-preview strong { font-weight: 600; color: #111827; }
-  .email-preview em { font-style: italic; }
-  .email-preview h2 { font-size: 1rem; font-weight: 600; color: #111827; margin-top: 1rem; margin-bottom: 0.5rem; }
-  .email-preview h3 { font-size: 0.875rem; font-weight: 600; color: #111827; margin-top: 0.75rem; margin-bottom: 0.25rem; }
-  .email-preview blockquote { border-left: 4px solid #d1d5db; padding-left: 1rem; font-style: italic; color: #4b5563; margin: 0.75rem 0; }
-  .email-preview hr { margin: 1rem 0; border: none; border-top: 1px solid #e5e7eb; }
-  .email-preview br { display: block; content: ""; margin-top: 0.5rem; }
+  .email-preview ul { list-style-type: disc; margin: 0 0 16px 0; padding-left: 24px; }
+  .email-preview ol { list-style-type: decimal; margin: 0 0 16px 0; padding-left: 24px; }
+  .email-preview li { margin: 0 0 8px 0; line-height: 1.5; }
+  .email-preview li:last-child { margin-bottom: 0; }
+  .email-preview h1 { font-size: 1.5rem; font-weight: 700; color: #111827; margin: 24px 0 12px 0; line-height: 1.3; }
+  .email-preview h2 { font-size: 1.25rem; font-weight: 700; color: #111827; margin: 24px 0 12px 0; line-height: 1.3; }
+  .email-preview h3 { font-size: 1.1rem; font-weight: 600; color: #111827; margin: 20px 0 10px 0; line-height: 1.3; }
+  .email-preview h4 { font-size: 1rem; font-weight: 600; color: #111827; margin: 16px 0 8px 0; }
+  .email-preview blockquote { border-left: 3px solid #d1d5db; padding-left: 16px; margin: 0 0 16px 0; color: #6b7280; font-style: italic; }
+  .email-preview hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+  .email-preview br { display: block; content: ""; margin-top: 4px; }
+  .email-preview table { border-collapse: collapse; width: 100%; margin: 0 0 16px 0; }
+  .email-preview td, .email-preview th { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+  .email-preview th { background: #f9fafb; font-weight: 600; }
+  .email-preview img { max-width: 100%; height: auto; }
+  .email-preview pre { background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 0 0 16px 0; font-size: 0.85em; }
+  .email-preview code { background: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
 `;
 
 const EMAIL_BODY_CLASSES = `email-preview max-w-none text-sm leading-relaxed text-gray-700`;
