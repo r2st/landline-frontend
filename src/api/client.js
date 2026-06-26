@@ -62,6 +62,8 @@ export const dashboardApi = {
   getTopLeads: (params) => api.get('/dashboard/top-leads', { params }).then(r => r.data),
   getIndustry: (params) => api.get('/dashboard/industry', { params }).then(r => r.data),
   getEmailTrends: (params) => api.get('/dashboard/email-trends', { params }).then(r => r.data),
+  getContactGrowth: (params) => api.get('/dashboard/contact-growth', { params }).then(r => r.data),
+  getKPIs: () => api.get('/dashboard/kpis').then(r => r.data),
 };
 
 export const followUpsApi = {
@@ -75,9 +77,12 @@ export const followUpsApi = {
 export const outreachApi = {
   getSequences: () => api.get('/outreach/sequences').then(r => r.data),
   createSequence: (data) => api.post('/outreach/sequences', data).then(r => r.data),
+  deleteSequence: (id) => api.delete(`/outreach/sequences/${id}`).then(r => r.data),
   // The enrollment endpoint enrolls a single contact (contact_id + sequence_id).
   enrollContact: (data) => api.post('/outreach/enrollments', data).then(r => r.data),
   getEvents: (params) => api.get('/outreach/events', { params }).then(r => r.data),
+  updateSequenceStatus: (id, status) => api.patch(`/sequences/${id}/status`, { status }).then(r => r.data),
+  enrollBatch: (sequenceId, contactIds) => api.post(`/sequences/${sequenceId}/enroll`, { contact_ids: contactIds }).then(r => r.data),
 };
 
 export const contactsApi = {
@@ -102,6 +107,8 @@ export const emailApi = {
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
   sendTest: (data) => api.post('/email-templates/send-test', data).then(r => r.data),
+  getABStats: (templateId) => api.get(`/email-sends/ab-stats`, { params: { template_id: templateId } }).then(r => r.data),
+  getAnalytics: () => api.get('/email-sends/analytics').then(r => r.data),
 };
 
 export const discoveryApi = {
@@ -171,9 +178,15 @@ export const clientsApi = {
 export const dealsApi = {
   list: (params) => api.get('/deals', { params }).then(r => r.data),
   getByCompany: (companyId) => api.get('/deals', { params: { company_id: companyId } }).then(r => r.data),
+  getById: (id) => api.get(`/deals/${id}`).then(r => r.data),
   create: (data) => api.post('/deals', data).then(r => r.data),
   update: (id, data) => api.patch(`/deals/${id}`, data).then(r => r.data),
   remove: (id) => api.delete(`/deals/${id}`).then(r => r.data),
+  metrics: () => api.get('/deals/metrics').then(r => r.data),
+  stages: () => api.get('/deals/stages').then(r => r.data),
+  addNote: (id, data) => api.post(`/deals/${id}/notes`, data).then(r => r.data),
+  listNotes: (id) => api.get(`/deals/${id}/notes`).then(r => r.data),
+  listActivity: (id) => api.get(`/deals/${id}/activity`).then(r => r.data),
 };
 
 export const tasksApi = {
@@ -200,6 +213,17 @@ export const reportsApi = {
   revenueFunnel: (params) => api.get('/reports/revenue-funnel', { params }).then(r => r.data),
   activityHeatmap: (params) => api.get('/reports/activity-heatmap', { params }).then(r => r.data),
   topClients: (params) => api.get('/reports/top-clients', { params }).then(r => r.data),
+  emailPerformance: (params) => api.get('/reports/email-performance', { params }).then(r => r.data),
+  pipelineAnalytics: (params) => api.get('/reports/pipeline-analytics', { params }).then(r => r.data),
+};
+
+// Email communication — unified inbox, lead threads, reply sending
+export const emailHistoryApi = {
+  getLeadEmails: (companyId, params) => api.get(`/emails/lead/${companyId}`, { params }).then(r => r.data),
+  getInbox: (params) => api.get('/emails/inbox', { params }).then(r => r.data),
+  getThread: (threadId) => api.get(`/emails/thread/${encodeURIComponent(threadId)}`).then(r => r.data),
+  sendReply: (emailId, data) => api.post(`/emails/reply/${emailId}`, data).then(r => r.data),
+  triggerSync: () => api.post('/emails/sync').then(r => r.data),
 };
 
 // Gmail OAuth — connect a Google account so outreach sends from the user's own

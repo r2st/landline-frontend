@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, emailApi } from '../api/client';
+import { dashboardApi, emailApi, reportsApi } from '../api/client';
 
 /**
  * Reuses existing dashboard hooks and adds analytics-specific data fetching.
@@ -75,13 +75,55 @@ export function useRecentEmailActivity(limit = 20) {
   });
 }
 
-export function useEmailSends(limit = 20) {
+export function useAnalyticsEmailSends(limit = 20) {
   return useQuery({
     queryKey: ['analytics-email-sends', limit],
     queryFn: async () => {
       const data = await emailApi.getSends({ limit });
       const items = data?.items || data;
       return Array.isArray(items) ? items : [];
+    },
+  });
+}
+
+export function useContactGrowth(days = 90) {
+  return useQuery({
+    queryKey: ['analytics-contact-growth', days],
+    queryFn: async () => {
+      try {
+        const data = await dashboardApi.getContactGrowth({ days });
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    },
+  });
+}
+
+export function useEmailPerformance(days = 30) {
+  return useQuery({
+    queryKey: ['analytics-email-performance', days],
+    queryFn: async () => {
+      try {
+        const data = await reportsApi.emailPerformance({ days });
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    },
+  });
+}
+
+export function usePipelineAnalytics() {
+  return useQuery({
+    queryKey: ['analytics-pipeline'],
+    queryFn: async () => {
+      try {
+        const data = await reportsApi.pipelineAnalytics();
+        return data || {};
+      } catch {
+        return {};
+      }
     },
   });
 }

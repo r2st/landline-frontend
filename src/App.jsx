@@ -22,6 +22,7 @@ const Clients = lazy(() => import('./pages/Clients'));
 const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
 const Tasks = lazy(() => import('./pages/Tasks'));
 const Reports = lazy(() => import('./pages/Reports'));
+const Inbox = lazy(() => import('./pages/Inbox'));
 
 function NotFound() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/client-dashboard" element={<ClientDashboard />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/inbox" element={<Inbox />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

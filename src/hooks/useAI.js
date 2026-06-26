@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { aiApi, sendLimiterApi } from '../api/client';
+import { aiApi, sendLimiterApi, queryClient } from '../api/client';
 
 export function useGenerateEmail() {
   return useMutation({
@@ -19,6 +19,12 @@ export function useImproveEmail() {
 export function useAIScoreLead() {
   return useMutation({
     mutationFn: (data) => aiApi.scoreLead(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['top-leads'] });
+    },
     onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to score lead'),
   });
 }
@@ -26,6 +32,9 @@ export function useAIScoreLead() {
 export function useAnalyzeCompany() {
   return useMutation({
     mutationFn: (id) => aiApi.analyzeCompany(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+    },
     onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to analyze company'),
   });
 }

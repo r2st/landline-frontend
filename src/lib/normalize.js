@@ -56,6 +56,7 @@ export function companyFormToApi(form) {
     name: (form.name || '').trim(),
     source: form.source || 'manual',
   };
+  if (form.stage) out.stage = form.stage;
   if (form.domain) out.domain = form.domain.trim();
   if (form.city) out.city = form.city.trim();
   const state = form.state_province ?? form.state;

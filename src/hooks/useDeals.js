@@ -43,8 +43,72 @@ export function useDeals(params = {}) {
   });
 }
 
+// Pipeline metrics (total value, weighted, win rate, etc.)
+export function useDealMetrics() {
+  return useQuery({
+    queryKey: ['deal-metrics'],
+    queryFn: async () => {
+      try {
+        return await dealsApi.metrics();
+      } catch {
+        return null;
+      }
+    },
+    retry: false,
+  });
+}
+
+// Deal stages with probabilities
+export function useDealStages() {
+  return useQuery({
+    queryKey: ['deal-stages'],
+    queryFn: async () => {
+      try {
+        return await dealsApi.stages();
+      } catch {
+        return [];
+      }
+    },
+    retry: false,
+    staleTime: 60000,
+  });
+}
+
+// Notes for a single deal
+export function useDealNotes(dealId) {
+  return useQuery({
+    queryKey: ['deal-notes', dealId],
+    queryFn: async () => {
+      try {
+        return await dealsApi.listNotes(dealId);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!dealId,
+    retry: false,
+  });
+}
+
+// Activity timeline for a single deal
+export function useDealActivity(dealId) {
+  return useQuery({
+    queryKey: ['deal-activity', dealId],
+    queryFn: async () => {
+      try {
+        return await dealsApi.listActivity(dealId);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!dealId,
+    retry: false,
+  });
+}
+
 function invalidate() {
   queryClient.invalidateQueries({ queryKey: ['deals'] });
+  queryClient.invalidateQueries({ queryKey: ['deal-metrics'] });
   queryClient.invalidateQueries({ queryKey: ['client-overview'] });
   queryClient.invalidateQueries({ queryKey: ['clients'] });
 }
@@ -60,7 +124,12 @@ export function useCreateDeal() {
 export function useUpdateDeal() {
   return useMutation({
     mutationFn: async ({ id, data }) => await dealsApi.update(id, data),
-    onSuccess: () => { invalidate(); toast.success('Deal updated'); },
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['deal-notes'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-activity'] });
+      toast.success('Deal updated');
+    },
     onError: (e) => toast.error(errMsg(e, 'Failed to update deal')),
   });
 }
@@ -70,5 +139,17 @@ export function useDeleteDeal() {
     mutationFn: async (id) => await dealsApi.remove(id),
     onSuccess: () => { invalidate(); toast.success('Deal deleted'); },
     onError: (e) => toast.error(errMsg(e, 'Failed to delete deal')),
+  });
+}
+
+export function useAddDealNote() {
+  return useMutation({
+    mutationFn: async ({ dealId, content }) => await dealsApi.addNote(dealId, { content }),
+    onSuccess: (_data, { dealId }) => {
+      queryClient.invalidateQueries({ queryKey: ['deal-notes', dealId] });
+      queryClient.invalidateQueries({ queryKey: ['deal-activity', dealId] });
+      toast.success('Note added');
+    },
+    onError: (e) => toast.error(errMsg(e, 'Failed to add note')),
   });
 }

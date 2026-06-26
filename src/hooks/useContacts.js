@@ -12,19 +12,43 @@ function normalize(data) {
 /**
  * Fetch contacts enriched with their company's name, industry, and city so the
  * compose view can display and merge them.
+ *
+ * Accepts optional pagination / search / sort params that are forwarded to the
+ * backend.  When called without arguments the hook falls back to the original
+ * behaviour (fetch first page of 200).
  */
-export function useContacts() {
+export function useContacts(params = {}) {
+  const {
+    page = 1, pageSize = 50, search = '', sortBy = 'created_at', sortDir = 'desc',
+    status, source, city, companyName,
+  } = params;
   return useQuery({
-    queryKey: ['contacts', 'all'],
+    queryKey: ['contacts', 'all', { page, pageSize, search, sortBy, sortDir, status, source, city, companyName }],
+    staleTime: 60000,
     queryFn: async () => {
+      const apiParams = {
+        page, page_size: pageSize,
+        q: search || undefined,
+        sort_by: sortBy, sort_dir: sortDir,
+      };
+      // Pass supported filters to backend
+      if (status && status !== 'all') apiParams.status = status;
+      if (source && source !== 'all') {
+        // card_scan maps to 'card_scan' source on the backend
+        apiParams.source = source;
+      }
+      if (city) apiParams.city = city;
+      if (companyName) apiParams.company_name = companyName;
+
       const [contactsRaw, companiesRaw] = await Promise.all([
-        contactsApi.getAll({ page_size: 200 }),
-        companiesApi.getAll({}),
+        contactsApi.getAll(apiParams),
+        companiesApi.getAll({ page_size: 200 }),
       ]);
       const contacts = normalize(contactsRaw);
+      const total = contactsRaw?.total ?? contacts.length;
       const companies = normalize(companiesRaw);
       const byId = Object.fromEntries(companies.map((c) => [String(c.id), c]));
-      return contacts.map((ct) => {
+      const enriched = contacts.map((ct) => {
         const co = byId[String(ct.company_id)] || {};
         return {
           ...ct,
@@ -38,6 +62,7 @@ export function useContacts() {
           website: ct.website || co.website || '',
         };
       });
+      return { items: enriched, total, page, pageSize };
     },
   });
 }
