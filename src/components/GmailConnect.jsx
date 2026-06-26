@@ -8,6 +8,7 @@ import {
   useConnectGmail,
   useSetActiveGmail,
   useDisconnectGmail,
+  usePurgeGmail,
   useToggleSending,
 } from '../hooks/useGmail';
 import {
@@ -22,7 +23,7 @@ import SmtpAccountModal from './SmtpAccountModal';
 // One unified row that renders either a Gmail or an SMTP sender account.
 function AccountRow({
   account, kind, busy, testingId,
-  onSetActive, onDisconnect, onToggleSending, onTest, onEdit,
+  onSetActive, onDisconnect, onPurge, onToggleSending, onTest, onEdit,
 }) {
   const errored = account.status === 'error';
   const Icon = kind === 'smtp' ? Server : Mail;
@@ -93,20 +94,41 @@ function AccountRow({
               <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
-          <button
-            type="button"
-            disabled={busy}
-            aria-label={`Disconnect ${account.email}`}
-            title={`Remove ${account.email}`}
-            onClick={() => {
-              if (window.confirm(`Remove ${account.email}? Outreach will no longer send from this address.`)) {
-                onDisconnect(account.id);
-              }
-            }}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          {kind === 'gmail' && onPurge && (
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={`Delete all emails and remove ${account.email}`}
+              title="Delete all synced emails and remove account"
+              onClick={() => {
+                if (window.confirm(
+                  `⚠️ This will permanently delete ALL synced emails for ${account.email} and remove the account.\n\nThis cannot be undone. Continue?`
+                )) {
+                  onPurge(account.id);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clean & Remove
+            </button>
+          )}
+          {!(kind === 'gmail' && onPurge) && (
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={`Disconnect ${account.email}`}
+              title={`Remove ${account.email}`}
+              onClick={() => {
+                if (window.confirm(`Remove ${account.email}? Outreach will no longer send from this address.`)) {
+                  onDisconnect(account.id);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -155,6 +177,7 @@ export default function GmailConnect() {
   const connect = useConnectGmail();
   const setActiveGmail = useSetActiveGmail();
   const disconnectGmail = useDisconnectGmail();
+  const purgeGmail = usePurgeGmail();
   const toggleGmailSending = useToggleSending();
 
   const setActiveSmtp = useSetActiveSmtp();
@@ -177,7 +200,7 @@ export default function GmailConnect() {
     smtp.filter((a) => a.sending_enabled && a.status === 'connected').length;
 
   const busy =
-    connect.isPending || setActiveGmail.isPending || disconnectGmail.isPending || toggleGmailSending.isPending ||
+    connect.isPending || setActiveGmail.isPending || disconnectGmail.isPending || purgeGmail.isPending || toggleGmailSending.isPending ||
     setActiveSmtp.isPending || deleteSmtp.isPending || toggleSmtpSending.isPending;
 
   const testingId = testSend.isPending ? testSend.variables?.id : null;
@@ -250,6 +273,7 @@ export default function GmailConnect() {
               testingId={testingId}
               onSetActive={setActiveGmail.mutate}
               onDisconnect={disconnectGmail.mutate}
+              onPurge={purgeGmail.mutate}
               onToggleSending={(id, enabled) => toggleGmailSending.mutate({ id, enabled })}
               onTest={handleTest}
             />

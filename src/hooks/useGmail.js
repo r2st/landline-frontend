@@ -97,6 +97,20 @@ export function useDisconnectGmail() {
   });
 }
 
+export function usePurgeGmail() {
+  return useMutation({
+    mutationFn: async (id) => await gmailApi.purge(id),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-status'] });
+      queryClient.invalidateQueries({ queryKey: ['email-inbox'] });
+      toast.success(
+        `Removed ${data.email} and deleted ${data.total_deleted} emails`
+      );
+    },
+    onError: (e) => toast.error(errMsg(e, 'Failed to purge account')),
+  });
+}
+
 export function useToggleSending() {
   return useMutation({
     mutationFn: async ({ id, enabled }) => await gmailApi.toggleSending(id, enabled),

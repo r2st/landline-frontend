@@ -235,6 +235,7 @@ export const gmailApi = {
   setActive: (id) => api.post(`/gmail/accounts/${id}/set-active`).then(r => r.data),
   toggleSending: (id, enabled) => api.post(`/gmail/accounts/${id}/toggle-sending`, { sending_enabled: enabled }).then(r => r.data),
   disconnect: (id) => api.delete(`/gmail/accounts/${id}`).then(r => r.data),
+  purge: (id) => api.delete(`/gmail/accounts/${id}/purge`).then(r => r.data),
   testSend: (id, toEmail) => api.post(`/gmail/accounts/${id}/test`, { to_email: toEmail || null }).then(r => r.data),
 };
 
