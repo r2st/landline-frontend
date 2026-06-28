@@ -10,7 +10,6 @@ import {
   Send,
   Bell,
   Settings,
-  Phone,
   Menu,
   X,
   Sparkles,
@@ -29,6 +28,7 @@ import {
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
 import CommandPalette from './CommandPalette';
+import Logo, { LogoMark } from './Logo';
 
 const navSections = [
   {
@@ -147,13 +147,21 @@ export default function Layout({ children }) {
       <Link
         to={item.href}
         className={cn(
-          'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+          'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
           isActive
-            ? 'bg-blue-600/20 text-blue-400'
-            : 'text-gray-400 hover:bg-white/5 hover:text-white'
+            ? 'bg-indigo-50 text-indigo-700'
+            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
         )}
       >
-        <item.icon className="h-5 w-5 flex-shrink-0" />
+        {isActive && (
+          <span className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-indigo-600" />
+        )}
+        <item.icon
+          className={cn(
+            'h-[18px] w-[18px] flex-shrink-0 transition-colors',
+            isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'
+          )}
+        />
         {item.name}
         {showBadge && (
           <span className="ml-auto h-2 w-2 rounded-full bg-red-500 flex-shrink-0" />
@@ -164,25 +172,24 @@ export default function Layout({ children }) {
 
   const SidebarContent = (
     <>
-      <div className="flex items-center justify-between gap-2 px-5 py-4 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <Phone className="h-6 w-6 text-blue-400" />
-          <span className="text-lg font-bold tracking-tight">Landline</span>
-        </div>
+      <div className="flex items-center justify-between gap-2 border-b border-gray-200 px-5 py-4">
+        <Link to="/" className="flex items-center" aria-label="Landline home">
+          <Logo markSize={30} />
+        </Link>
         <button
           type="button"
           onClick={() => setMobileOpen(false)}
-          className="-mr-1 rounded-md p-1.5 text-gray-400 hover:bg-white/5 hover:text-white lg:hidden"
+          className="-mr-1 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
           aria-label="Close menu"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {navSections.map((section) => (
           <div key={section.label}>
-            <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
               {section.label}
             </p>
             <div className="space-y-0.5">
@@ -198,10 +205,10 @@ export default function Layout({ children }) {
         ))}
       </nav>
 
-      <div className="border-t border-white/10 px-3 py-2">
+      <div className="border-t border-gray-200 px-3 py-3">
         <NavLink item={{ name: 'Settings', href: '/settings', icon: Settings }} />
-        <div className="px-3 pt-2 pb-1">
-          <div className="text-[11px] text-gray-600">Landline v1.0 &middot; B2B Lead Gen</div>
+        <div className="px-3 pb-1 pt-2.5">
+          <div className="text-[11px] font-medium text-gray-400">Landline v1.0 &middot; B2B Lead Gen</div>
         </div>
       </div>
     </>
@@ -210,25 +217,25 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile top bar */}
-      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-navy-900 px-4 text-white lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white/90 px-4 text-gray-900 backdrop-blur lg:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
-          className="-ml-1 rounded-md p-2 text-gray-300 hover:bg-white/5 hover:text-white"
+          className="-ml-1 rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-2 min-w-0">
-          <Phone className="h-5 w-5 text-blue-400 flex-shrink-0" />
-          <span className="font-semibold tracking-tight truncate">
+        <div className="flex min-w-0 items-center gap-2">
+          <LogoMark size={24} />
+          <span className="truncate font-semibold tracking-tight">
             {currentPage ? currentPage.name : 'Landline'}
           </span>
         </div>
         <button
           type="button"
           onClick={() => setPaletteOpen(true)}
-          className="ml-auto -mr-1 rounded-md p-2 text-gray-300 hover:bg-white/5 hover:text-white"
+          className="-mr-1 ml-auto rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
           aria-label="Search"
         >
           <Search className="h-5 w-5" />
@@ -247,7 +254,7 @@ export default function Layout({ children }) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-60 flex-col bg-navy-900 text-white transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-gray-200 bg-white text-gray-700 transition-transform duration-200 ease-in-out lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
