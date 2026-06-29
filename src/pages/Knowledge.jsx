@@ -145,13 +145,15 @@ function ContactModal({ contact, industries, onClose }) {
 // ─── Contacts tab ─────────────────────────────────────────────────────────────
 function ContactsTab() {
   const [industry, setIndustry] = useState('all');
+  const [group, setGroup] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [modal, setModal] = useState(null); // { contact } | { contact: null } for add
   const { data: counts = [] } = useIndustryCounts();
   const { data: industriesData = [] } = useIndustries();
-  const { data, isLoading } = useKnowledgeContacts(
-    industry !== 'all' ? { industry } : {}
-  );
+  const { data, isLoading } = useKnowledgeContacts({
+    ...(industry !== 'all' ? { industry } : {}),
+    ...(group !== 'all' ? { group } : {}),
+  });
   const del = useDeleteKnowledgeContact();
   const items = data?.items || [];
 
@@ -189,6 +191,27 @@ function ContactsTab() {
           <Plus className="h-4 w-4" />
           Add Contact
         </button>
+      </div>
+
+      {/* Genuine vs test group chips */}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { value: 'all', label: 'All', active: 'bg-indigo-600 text-white' },
+          { value: 'genuine', label: 'Genuine', active: 'bg-emerald-600 text-white' },
+          { value: 'test', label: 'Test', active: 'bg-amber-500 text-white' },
+        ].map((g) => (
+          <button
+            key={g.value}
+            type="button"
+            onClick={() => setGroup(g.value)}
+            className={cn(
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              group === g.value ? g.active : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            )}
+          >
+            {g.label}
+          </button>
+        ))}
       </div>
 
       {/* Industry filter chips */}

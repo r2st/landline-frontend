@@ -20,10 +20,10 @@ function normalize(data) {
 export function useContacts(params = {}) {
   const {
     page = 1, pageSize = 50, search = '', sortBy = 'created_at', sortDir = 'desc',
-    status, source, city, companyName,
+    status, source, city, companyName, group,
   } = params;
   return useQuery({
-    queryKey: ['contacts', 'all', { page, pageSize, search, sortBy, sortDir, status, source, city, companyName }],
+    queryKey: ['contacts', 'all', { page, pageSize, search, sortBy, sortDir, status, source, city, companyName, group }],
     staleTime: 60000,
     queryFn: async () => {
       const apiParams = {
@@ -39,6 +39,8 @@ export function useContacts(params = {}) {
       }
       if (city) apiParams.city = city;
       if (companyName) apiParams.company_name = companyName;
+      // Genuine vs test contact group (server-side filter).
+      if (group && group !== 'all') apiParams.group = group;
 
       const [contactsRaw, companiesRaw] = await Promise.all([
         contactsApi.getAll(apiParams),

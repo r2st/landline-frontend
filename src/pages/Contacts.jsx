@@ -128,6 +128,13 @@ const SOURCE_OPTIONS = [
   { value: 'quick_add', label: 'Quick Add' },
 ];
 
+/** Genuine vs test contact-group chips shown above the toolbar. */
+const GROUP_CHIPS = [
+  { value: 'all', label: 'All Contacts', activeClass: 'border-blue-400 bg-blue-50 text-blue-700' },
+  { value: 'genuine', label: 'Genuine', activeClass: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
+  { value: 'test', label: 'Test', activeClass: 'border-amber-400 bg-amber-50 text-amber-700' },
+];
+
 /** Status filter options. */
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -678,6 +685,9 @@ export default function Contacts() {
     companyName: '',
   });
 
+  // Genuine vs test contact group — quick-access chips above the toolbar.
+  const [group, setGroup] = useState('all');
+
   // Inline editing state
   const [editingCell, setEditingCell] = useState(null); // { contactId, field }
   const [editValue, setEditValue] = useState('');
@@ -690,7 +700,7 @@ export default function Contacts() {
   }, [searchInput]);
 
   // Reset page to 1 when search/sort/filter changes
-  useEffect(() => { setPage(1); }, [search, sort, filters, pageSize]);
+  useEffect(() => { setPage(1); }, [search, sort, filters, pageSize, group]);
 
   // Focus input when inline editing starts
   useEffect(() => {
@@ -712,6 +722,7 @@ export default function Contacts() {
     source: filters.source !== 'all' ? filters.source : undefined,
     city: filters.city.trim() || undefined,
     companyName: filters.companyName.trim() || undefined,
+    group: group !== 'all' ? group : undefined,
   });
 
   const deleteContact = useDeleteContact();
@@ -950,6 +961,28 @@ export default function Contacts() {
         <MetricCard title="Total Contacts" value={stats.total} icon={Users} color="blue" />
         <MetricCard title="Scanned Cards" value={stats.scanned} icon={CreditCard} color="teal" />
         <MetricCard title="Companies" value={stats.companies} icon={Building2} color="indigo" />
+      </div>
+
+      {/* Group filter chips: genuine vs test contacts */}
+      <div className="flex flex-wrap items-center gap-2">
+        {GROUP_CHIPS.map((chip) => {
+          const active = group === chip.value;
+          return (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => setGroup(chip.value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                active
+                  ? chip.activeClass
+                  : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+              )}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Controls */}
