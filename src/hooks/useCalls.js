@@ -144,3 +144,28 @@ export function useMarkNotificationRead() {
     onError: () => {},
   });
 }
+
+// ─── AI custom scripts ──────────────────────────────────────────────────────
+// Fetch (and lazily generate + cache) a personalised AI script for a call task.
+// Only runs when `enabled` so opening the briefing doesn't trigger generation
+// until the rep switches to the Custom Script tab.
+export function useCustomScript(taskId, enabled = false) {
+  return useQuery({
+    queryKey: ['calls', 'custom-script', taskId],
+    queryFn: async () => callsApi.getCustomScript(taskId),
+    enabled: !!taskId && enabled,
+    staleTime: 600000,
+    retry: false,
+  });
+}
+
+export function useRegenerateScript() {
+  return useMutation({
+    mutationFn: async (taskId) => callsApi.getCustomScript(taskId, { regenerate: true }),
+    onSuccess: (data, taskId) => {
+      queryClient.setQueryData(['calls', 'custom-script', taskId], data);
+      toast.success(data?.source === 'ai' ? 'Script regenerated' : 'Script refreshed');
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to regenerate script'),
+  });
+}

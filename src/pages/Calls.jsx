@@ -18,6 +18,9 @@ import {
   CheckCircle2,
   FileText,
   Plus,
+  Wand2,
+  RefreshCw,
+  Lightbulb,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import Markdown from '../components/Markdown';
@@ -32,6 +35,8 @@ import {
   useCallScripts,
   useCallNotifications,
   useMarkNotificationRead,
+  useCustomScript,
+  useRegenerateScript,
 } from '../hooks/useCalls';
 
 // ─── Priority meta ────────────────────────────────────────────────────────────
@@ -174,6 +179,166 @@ function ScriptView({ script }) {
   );
 }
 
+// ─── AI custom script ─────────────────────────────────────────────────────────
+function CustomScriptView({ data }) {
+  if (!data) return null;
+  const s = data.script || {};
+  const objections = Array.isArray(s.objection_handling) ? s.objection_handling : [];
+  const talking = listOf(s.talking_points);
+  const questions = listOf(s.qualifying_questions);
+  const painPoints = listOf(s.pain_points);
+  const isAI = data.source === 'ai';
+
+  return (
+    <div className="space-y-4">
+      {/* Source banner */}
+      <div
+        className={cn(
+          'flex items-start gap-2 rounded-lg p-2.5 text-xs',
+          isAI ? 'bg-violet-50 text-violet-800' : 'bg-amber-50 text-amber-800'
+        )}
+      >
+        {isAI ? <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> : <FileText className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />}
+        <span>
+          {isAI
+            ? 'Personalized by AI for this contact.'
+            : (data.note || 'Showing the generic industry template.')}
+        </span>
+      </div>
+
+      {s.personalization_notes && isAI && (
+        <div className="flex items-start gap-2 rounded-lg border border-violet-100 bg-violet-50/40 p-2.5 text-sm text-violet-900">
+          <Lightbulb className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-violet-500" />
+          <span className="italic">{s.personalization_notes}</span>
+        </div>
+      )}
+
+      {s.opening_hook && (
+        <div>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><MessageSquare className="h-3.5 w-3.5" /> Opening</p>
+          <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700"><Markdown content={s.opening_hook} /></div>
+        </div>
+      )}
+
+      {talking.length > 0 && (
+        <div>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><MessageSquare className="h-3.5 w-3.5" /> Talking Points</p>
+          <ul className="space-y-1">
+            {talking.map((p, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-indigo-400" />
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {questions.length > 0 && (
+        <div>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><ListChecks className="h-3.5 w-3.5" /> Qualifying Questions</p>
+          <ul className="space-y-1.5">
+            {questions.map((q, i) => (
+              <li key={i} className="flex items-start gap-2 rounded-lg bg-gray-50 p-2.5 text-sm text-gray-700">
+                <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">{i + 1}</span>
+                {q}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {painPoints.length > 0 && (
+        <div>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><Target className="h-3.5 w-3.5" /> Pain Points</p>
+          <ul className="space-y-1">
+            {painPoints.map((p, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-red-400" />
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {objections.length > 0 && (
+        <div>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Objection Handling</p>
+          <div className="space-y-2">
+            {objections.map((o, i) => (
+              <div key={i} className="rounded-lg border border-gray-200 p-2.5 text-sm">
+                <p className="font-medium text-gray-900">{typeof o === 'string' ? o : o.objection}</p>
+                {typeof o === 'object' && o.rebuttal && <p className="mt-0.5 text-gray-600">{o.rebuttal}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {s.call_to_action && (
+        <div>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><Target className="h-3.5 w-3.5" /> Call to Action</p>
+          <div className="rounded-lg bg-indigo-50 p-3 text-sm text-indigo-900"><Markdown content={s.call_to_action} /></div>
+        </div>
+      )}
+
+      {s.voicemail && (
+        <div>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><Phone className="h-3.5 w-3.5" /> Voicemail</p>
+          <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700"><Markdown content={s.voicemail} /></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomScriptSection({ taskId, active }) {
+  const { data, isLoading, isError, refetch } = useCustomScript(taskId, active);
+  const regen = useRegenerateScript();
+
+  if (isLoading || regen.isPending) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+        <Spinner />
+        <p className="text-sm text-gray-500">Generating a personalized script…</p>
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+        <Wand2 className="h-8 w-8 text-indigo-300" />
+        <p className="text-sm text-gray-500">No custom script yet for this call.</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+        >
+          <Wand2 className="h-4 w-4" /> Generate Custom Script
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => regen.mutate(taskId)}
+          disabled={regen.isPending}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw className={cn('h-3.5 w-3.5', regen.isPending && 'animate-spin')} /> Regenerate Script
+        </button>
+      </div>
+      <CustomScriptView data={data} />
+    </div>
+  );
+}
+
 // ─── Briefing slide-over ──────────────────────────────────────────────────────
 function BriefingPanel({ task, onClose }) {
   const { data: briefing, isLoading } = useCallBriefing(task.id);
@@ -182,6 +347,7 @@ function BriefingPanel({ task, onClose }) {
   const [outcome, setOutcome] = useState(field(task, 'outcome') || '');
   const [duration, setDuration] = useState(field(task, 'duration') || '');
   const [notes, setNotes] = useState(field(task, 'notes') || '');
+  const [scriptTab, setScriptTab] = useState('custom');
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
   useEffect(() => {
@@ -301,16 +467,36 @@ function BriefingPanel({ task, onClose }) {
                 </section>
               )}
 
-              {script && (
-                <section>
-                  <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><FileText className="h-3.5 w-3.5" /> Call Script</h3>
-                  <ScriptView script={script} />
-                </section>
-              )}
+              <section>
+                <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400"><FileText className="h-3.5 w-3.5" /> Call Script</h3>
+                {/* Custom (AI) vs Template script tabs */}
+                <div className="mb-3 inline-flex rounded-lg bg-gray-100 p-0.5 text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setScriptTab('custom')}
+                    className={cn('inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition',
+                      scriptTab === 'custom' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700')}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" /> Custom Script
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScriptTab('template')}
+                    className={cn('inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition',
+                      scriptTab === 'template' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700')}
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Template Script
+                  </button>
+                </div>
 
-              {!background && !emailHistory.length && !painPoints.length && !talkingPoints.length && !script && (
-                <EmptyState icon={FileText} title="No briefing yet" description="There's no background brief for this call." />
-              )}
+                {scriptTab === 'custom' ? (
+                  <CustomScriptSection taskId={task.id} active={scriptTab === 'custom'} />
+                ) : script ? (
+                  <ScriptView script={script} />
+                ) : (
+                  <EmptyState icon={FileText} title="No template script" description="No industry template is available for this call." />
+                )}
+              </section>
             </>
           )}
         </div>

@@ -288,6 +288,11 @@ export const callsApi = {
   getScripts: () => api.get('/calls/scripts').then(r => r.data),
   getScript: (industry) => api.get(`/calls/scripts/${industry}`).then(r => r.data),
   saveScript: (data) => api.post('/calls/scripts', data).then(r => r.data),
+  // AI-generated custom script for a call task. GET caches + auto-generates;
+  // pass { regenerate: true } to force a fresh personalised script.
+  getCustomScript: (id, params) =>
+    api.get(`/calls/tasks/${id}/custom-script`, { params }).then(r => r.data),
+  generateCustomScript: (data) => api.post('/calls/scripts/generate', data).then(r => r.data),
   // Notifications
   getNotifications: () => api.get('/calls/notifications').then(r => r.data),
   markNotificationRead: (id) => api.put(`/calls/notifications/${id}/read`).then(r => r.data),
