@@ -249,3 +249,48 @@ export const smtpApi = {
   verify: (id) => api.post(`/smtp/accounts/${id}/verify`).then(r => r.data),
   testSend: (id, toEmail) => api.post(`/smtp/accounts/${id}/test`, { to_email: toEmail || null }).then(r => r.data),
 };
+
+// ─── Knowledge Base (migration 027) ─────────────────────────────────────────
+// Industry contacts, sales guideline docs, industry-vertical configs, and the
+// AI sales-guidelines config. Hooks wrap each call in try/catch with empty-state
+// fallbacks so the UI renders even before the backend ships.
+export const knowledgeApi = {
+  // Industry contacts
+  getContacts: (params) => api.get('/knowledge/contacts', { params }).then(r => r.data),
+  getContact: (id) => api.get(`/knowledge/contacts/${id}`).then(r => r.data),
+  getIndustryCounts: () => api.get('/knowledge/contacts/industries').then(r => r.data),
+  createContact: (data) => api.post('/knowledge/contacts', data).then(r => r.data),
+  updateContact: (id, data) => api.put(`/knowledge/contacts/${id}`, data).then(r => r.data),
+  deleteContact: (id) => api.delete(`/knowledge/contacts/${id}`).then(r => r.data),
+  // Knowledge documents
+  getDocuments: () => api.get('/knowledge/documents').then(r => r.data),
+  getDocument: (slug) => api.get(`/knowledge/documents/${slug}`).then(r => r.data),
+  getGuidelines: () => api.get('/knowledge/guidelines').then(r => r.data),
+  getStrategy: () => api.get('/knowledge/strategy').then(r => r.data),
+  // Industry verticals
+  getIndustries: () => api.get('/knowledge/industries').then(r => r.data),
+  getIndustry: (key) => api.get(`/knowledge/industries/${key}`).then(r => r.data),
+  // AI sales-guidelines config
+  getAiGuidelines: () => api.get('/knowledge/ai-guidelines').then(r => r.data),
+};
+
+// ─── Cold Calling (migration 028) ───────────────────────────────────────────
+// Call task queue, per-task briefings, industry scripts, notifications, and the
+// AI queue generator.
+export const callsApi = {
+  // Call tasks
+  getTasks: (params) => api.get('/calls/tasks', { params }).then(r => r.data),
+  getToday: () => api.get('/calls/tasks/today').then(r => r.data),
+  createTask: (data) => api.post('/calls/tasks', data).then(r => r.data),
+  updateTask: (id, data) => api.put(`/calls/tasks/${id}`, data).then(r => r.data),
+  getBriefing: (id) => api.get(`/calls/tasks/${id}/briefing`).then(r => r.data),
+  // Scripts
+  getScripts: () => api.get('/calls/scripts').then(r => r.data),
+  getScript: (industry) => api.get(`/calls/scripts/${industry}`).then(r => r.data),
+  saveScript: (data) => api.post('/calls/scripts', data).then(r => r.data),
+  // Notifications
+  getNotifications: () => api.get('/calls/notifications').then(r => r.data),
+  markNotificationRead: (id) => api.put(`/calls/notifications/${id}/read`).then(r => r.data),
+  // AI queue generation
+  generateQueue: () => api.post('/calls/queue/generate').then(r => r.data),
+};

@@ -24,6 +24,8 @@ import {
   CheckSquare,
   PieChart,
   Inbox,
+  BookOpen,
+  Phone,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -56,9 +58,16 @@ const navSections = [
     items: [
       { name: 'Inbox', href: '/inbox', icon: Inbox },
       { name: 'Campaigns', href: '/outreach', icon: Send },
+      { name: 'Calls', href: '/calls', icon: Phone },
       { name: 'Sequences', href: '/sequences', icon: ListOrdered },
       { name: 'Follow-ups', href: '/follow-ups', icon: Bell },
       { name: 'Demos', href: '/demos', icon: Rocket },
+    ],
+  },
+  {
+    label: 'Knowledge',
+    items: [
+      { name: 'Knowledge Base', href: '/knowledge', icon: BookOpen },
     ],
   },
   {
