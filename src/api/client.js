@@ -274,6 +274,33 @@ export const knowledgeApi = {
   getAiGuidelines: () => api.get('/knowledge/ai-guidelines').then(r => r.data),
 };
 
+// ─── Investor CRM (migration 029) ───────────────────────────────────────────
+// Investor pipeline: firms, contacts, interaction timeline, data-room documents,
+// pipeline funnel stats, and AI-drafted outreach. Hooks wrap each call in
+// try/catch with graceful empty states so the UI renders before the backend ships.
+export const investorsApi = {
+  // Investors
+  getAll: (params) => api.get('/investors/', { params }).then(r => r.data),
+  getById: (id) => api.get(`/investors/${id}`).then(r => r.data),
+  create: (data) => api.post('/investors/', data).then(r => r.data),
+  update: (id, data) => api.patch(`/investors/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/investors/${id}`).then(r => r.data),
+  // Move an investor along the outreach pipeline (status progression).
+  updateStatus: (id, status) => api.patch(`/investors/${id}/status`, { status }).then(r => r.data),
+  // Pipeline funnel counts by status (+ stage breakdown).
+  getPipeline: (params) => api.get('/investors/pipeline', { params }).then(r => r.data),
+  // Interaction timeline (emails, calls, meetings, LinkedIn messages).
+  getInteractions: (id) => api.get(`/investors/${id}/interactions`).then(r => r.data),
+  createInteraction: (id, data) => api.post(`/investors/${id}/interactions`, data).then(r => r.data),
+  removeInteraction: (id, interactionId) => api.delete(`/investors/${id}/interactions/${interactionId}`).then(r => r.data),
+  // Data-room documents (pitch deck, financials, etc.).
+  getDocuments: (id) => api.get(`/investors/${id}/documents`).then(r => r.data),
+  createDocument: (id, data) => api.post(`/investors/${id}/documents`, data).then(r => r.data),
+  removeDocument: (id, documentId) => api.delete(`/investors/${id}/documents/${documentId}`).then(r => r.data),
+  // AI-drafted personalised outreach email for this investor.
+  generateEmail: (id, data) => api.post(`/investors/${id}/generate-email`, data).then(r => r.data),
+};
+
 // ─── Cold Calling (migration 028) ───────────────────────────────────────────
 // Call task queue, per-task briefings, industry scripts, notifications, and the
 // AI queue generator.

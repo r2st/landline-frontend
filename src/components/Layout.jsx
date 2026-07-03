@@ -26,23 +26,31 @@ import {
   Inbox,
   BookOpen,
   Phone,
+  Landmark,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
 import CommandPalette from './CommandPalette';
 import Logo, { LogoMark } from './Logo';
 
+// Sidebar navigation, grouped to match a salesperson's daily flow:
+// plan the day (Workspace) → build the list (Leads) → reach out (Outreach)
+// → manage accounts (Clients) → look things up (Resources).
 const navSections = [
   {
-    label: 'Overview',
+    key: 'workspace',
+    label: 'Workspace',
     items: [
       { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-      { name: 'Analytics', href: '/analytics', icon: BarChart3 },
       { name: 'Pipeline', href: '/pipeline', icon: GitBranch },
+      { name: 'Tasks', href: '/tasks', icon: CheckSquare },
+      { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     ],
   },
   {
-    label: 'Leads',
+    key: 'leads',
+    label: 'Leads & Prospects',
     items: [
       { name: 'Companies', href: '/companies', icon: Building2 },
       { name: 'Contacts', href: '/contacts', icon: Users },
@@ -54,6 +62,7 @@ const navSections = [
     ],
   },
   {
+    key: 'outreach',
     label: 'Outreach',
     items: [
       { name: 'Inbox', href: '/inbox', icon: Inbox },
@@ -65,18 +74,26 @@ const navSections = [
     ],
   },
   {
-    label: 'Knowledge',
-    items: [
-      { name: 'Knowledge Base', href: '/knowledge', icon: BookOpen },
-    ],
-  },
-  {
+    key: 'clients',
     label: 'Clients',
     items: [
       { name: 'Clients', href: '/clients', icon: HeartPulse },
       { name: 'Client Dashboard', href: '/client-dashboard', icon: PieChart },
-      { name: 'Tasks', href: '/tasks', icon: CheckSquare },
       { name: 'Reports', href: '/reports', icon: BarChart3 },
+    ],
+  },
+  {
+    key: 'fundraising',
+    label: 'Fundraising',
+    items: [
+      { name: 'Investors', href: '/investors', icon: Landmark },
+    ],
+  },
+  {
+    key: 'resources',
+    label: 'Resources',
+    items: [
+      { name: 'Knowledge Base', href: '/knowledge', icon: BookOpen },
     ],
   },
 ];
@@ -87,10 +104,49 @@ const allNavItems = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
+const NAV_PREFS_KEY = 'landline.nav.collapsedSections';
+
 export default function Layout({ children }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const isActivePath = (href) =>
+    location.pathname === href ||
+    (href !== '/' && location.pathname.startsWith(href));
+
+  // Collapsible nav sections. Persist the user's collapsed/expanded choice so
+  // the sidebar feels stable across visits; default everything expanded.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(NAV_PREFS_KEY)) || {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_PREFS_KEY, JSON.stringify(collapsed));
+    } catch {
+      /* ignore quota / privacy-mode errors */
+    }
+  }, [collapsed]);
+
+  const toggleSection = (key) =>
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // Always reveal the section that owns the current route so the active page is
+  // never hidden inside a collapsed group (e.g. after a command-palette jump).
+  useEffect(() => {
+    const active = navSections.find((s) =>
+      s.items.some((it) => isActivePath(it.href))
+    );
+    if (active && collapsed[active.key]) {
+      setCollapsed((prev) => ({ ...prev, [active.key]: false }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // ⌘K / Ctrl+K opens the command palette from anywhere.
   useEffect(() => {
@@ -136,6 +192,31 @@ export default function Layout({ children }) {
     (item.href !== '/' && location.pathname.startsWith(item.href))
   );
 
+  // Section-aware breadcrumb trail. Non-final segments with an `href` render as
+  // links so related pages are one click away (e.g. back to the Companies list
+  // from a company detail view).
+  const breadcrumbs = useMemo(() => {
+    const path = location.pathname;
+    if (/^\/companies\/.+/.test(path)) {
+      return [
+        { label: 'Leads & Prospects' },
+        { label: 'Companies', href: '/companies' },
+        { label: 'Company detail' },
+      ];
+    }
+    if (path === '/settings') {
+      return [{ label: 'Workspace' }, { label: 'Settings', href: '/settings' }];
+    }
+    for (const section of navSections) {
+      const item = section.items.find((it) => isActivePath(it.href));
+      if (item) {
+        return [{ label: section.label }, { label: item.name, href: item.href }];
+      }
+    }
+    return [{ label: 'Workspace' }, { label: 'Dashboard', href: '/' }];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
@@ -150,8 +231,7 @@ export default function Layout({ children }) {
   }, [mobileOpen]);
 
   const NavLink = ({ item, showBadge }) => {
-    const isActive = location.pathname === item.href ||
-      (item.href !== '/' && location.pathname.startsWith(item.href));
+    const isActive = isActivePath(item.href);
     return (
       <Link
         to={item.href}
@@ -195,23 +275,52 @@ export default function Layout({ children }) {
         </button>
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {navSections.map((section) => (
-          <div key={section.label}>
-            <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-              {section.label}
-            </p>
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.name}
-                  item={item}
-                  showBadge={item.name === 'Campaigns' && hasNewReplies}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        {navSections.map((section) => {
+          const isCollapsed = !!collapsed[section.key];
+          const hasActive = section.items.some((it) => isActivePath(it.href));
+          const sectionHasBadge =
+            section.key === 'outreach' && hasNewReplies;
+          return (
+            <div key={section.key}>
+              <button
+                type="button"
+                onClick={() => toggleSection(section.key)}
+                aria-expanded={!isCollapsed}
+                className="group flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 transition-colors hover:text-gray-600"
+              >
+                <ChevronRight
+                  className={cn(
+                    'h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200',
+                    !isCollapsed && 'rotate-90'
+                  )}
                 />
-              ))}
+                <span>{section.label}</span>
+                {/* When collapsed, surface that the active page or a new reply
+                    lives inside this section. */}
+                {isCollapsed && (hasActive || sectionHasBadge) && (
+                  <span
+                    className={cn(
+                      'ml-auto h-1.5 w-1.5 rounded-full',
+                      sectionHasBadge ? 'bg-red-500' : 'bg-indigo-500'
+                    )}
+                  />
+                )}
+              </button>
+              {!isCollapsed && (
+                <div className="mt-0.5 space-y-0.5 pb-1">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={item.name}
+                      item={item}
+                      showBadge={item.name === 'Campaigns' && hasNewReplies}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="border-t border-gray-200 px-3 py-3">

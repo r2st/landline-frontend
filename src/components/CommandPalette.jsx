@@ -23,6 +23,7 @@ import {
   Inbox,
   BookOpen,
   Phone,
+  Landmark,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -48,6 +49,7 @@ const COMMANDS = [
   { id: 'reports', label: 'Go to Reports', hint: 'Retention, revenue & activity', icon: BarChart3, to: '/reports', keywords: 'analytics funnel heatmap export csv' },
   { id: 'calls', label: 'Cold Calling', hint: "Today's call queue & briefings", icon: Phone, to: '/calls', keywords: 'phone call queue dial briefing script cold' },
   { id: 'knowledge', label: 'Knowledge Base', hint: 'Contacts, guidelines & strategy', icon: BookOpen, to: '/knowledge', keywords: 'guidelines strategy industry playbook docs ai config contacts' },
+  { id: 'investors', label: 'Go to Investors', hint: 'Fundraising pipeline & investor CRM', icon: Landmark, to: '/investors', keywords: 'investor fundraise fundraising vc venture capital pipeline funnel seed series check raise' },
 ];
 
 function scoreMatch(text, q) {
