@@ -204,6 +204,13 @@ export default function Layout({ children }) {
         { label: 'Company detail' },
       ];
     }
+    if (/^\/investors\/.+/.test(path)) {
+      return [
+        { label: 'Fundraising' },
+        { label: 'Investors', href: '/investors' },
+        { label: 'Investor detail' },
+      ];
+    }
     if (path === '/settings') {
       return [{ label: 'Workspace' }, { label: 'Settings', href: '/settings' }];
     }
@@ -313,7 +320,7 @@ export default function Layout({ children }) {
                     <NavLink
                       key={item.name}
                       item={item}
-                      showBadge={item.name === 'Campaigns' && hasNewReplies}
+                      showBadge={item.name === 'Inbox' && hasNewReplies}
                     />
                   ))}
                 </div>
@@ -383,11 +390,36 @@ export default function Layout({ children }) {
       <main className="pt-14 lg:pt-0 lg:pl-60">
         {/* Desktop top utility bar */}
         <header className="sticky top-0 z-20 hidden h-14 items-center gap-4 border-b border-gray-200 bg-white/80 px-8 backdrop-blur lg:flex">
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <span>Landline</span>
-            <span className="text-gray-300">/</span>
-            <span className="font-medium text-gray-700">{currentPage ? currentPage.name : 'Dashboard'}</span>
-          </div>
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
+            <Link to="/" className="flex-shrink-0 text-gray-400 transition-colors hover:text-gray-700">
+              Landline
+            </Link>
+            {breadcrumbs.map((crumb, i) => {
+              const isLast = i === breadcrumbs.length - 1;
+              return (
+                <React.Fragment key={`${crumb.label}-${i}`}>
+                  <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300" />
+                  {crumb.href && !isLast ? (
+                    <Link
+                      to={crumb.href}
+                      className="truncate text-gray-500 transition-colors hover:text-gray-900"
+                    >
+                      {crumb.label}
+                    </Link>
+                  ) : (
+                    <span
+                      className={cn(
+                        'truncate',
+                        isLast ? 'font-medium text-gray-900' : 'text-gray-400'
+                      )}
+                    >
+                      {crumb.label}
+                    </span>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </nav>
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
@@ -399,10 +431,10 @@ export default function Layout({ children }) {
               <kbd className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-gray-400">⌘K</kbd>
             </button>
             <Link
-              to="/outreach"
+              to="/inbox"
               className="relative rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
               aria-label="Email replies"
-              title={hasNewReplies ? 'New replies in the last 24h' : 'Email campaigns'}
+              title={hasNewReplies ? 'New replies in the last 24h' : 'Email inbox'}
             >
               <Bell className="h-5 w-5" />
               {hasNewReplies && (
