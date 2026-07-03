@@ -28,6 +28,7 @@ import {
   Phone,
   Landmark,
   ChevronRight,
+  Brain,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -80,6 +81,7 @@ const navSections = [
       { name: 'Clients', href: '/clients', icon: HeartPulse },
       { name: 'Client Dashboard', href: '/client-dashboard', icon: PieChart },
       { name: 'Reports', href: '/reports', icon: BarChart3 },
+      { name: 'Sentiment', href: '/sentiment', icon: Brain },
     ],
   },
   {

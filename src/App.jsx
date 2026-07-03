@@ -27,6 +27,7 @@ const Knowledge = lazy(() => import('./pages/Knowledge'));
 const Calls = lazy(() => import('./pages/Calls'));
 const Investors = lazy(() => import('./pages/Investors'));
 const InvestorDetail = lazy(() => import('./pages/InvestorDetail'));
+const SentimentDashboard = lazy(() => import('./pages/SentimentDashboard'));
 
 function NotFound() {
   return (
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="/calls" element={<Calls />} />
           <Route path="/investors" element={<Investors />} />
           <Route path="/investors/:id" element={<InvestorDetail />} />
+          <Route path="/sentiment" element={<SentimentDashboard />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

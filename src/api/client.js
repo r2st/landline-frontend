@@ -317,6 +317,7 @@ export const callsApi = {
   saveScript: (data) => api.post('/calls/scripts', data).then(r => r.data),
   // AI-generated custom script for a call task. GET caches + auto-generates;
   // pass { regenerate: true } to force a fresh personalised script.
+  // pass { framework: 'challenger' } to request a specific sales methodology.
   getCustomScript: (id, params) =>
     api.get(`/calls/tasks/${id}/custom-script`, { params }).then(r => r.data),
   generateCustomScript: (data) => api.post('/calls/scripts/generate', data).then(r => r.data),
@@ -325,4 +326,26 @@ export const callsApi = {
   markNotificationRead: (id) => api.put(`/calls/notifications/${id}/read`).then(r => r.data),
   // AI queue generation
   generateQueue: () => api.post('/calls/queue/generate').then(r => r.data),
+  // Analytics — objection trends and framework effectiveness (sales-book enhancements)
+  getObjectionTrends: (params) => api.get('/calls/analytics/objections', { params }).then(r => r.data),
+  getFrameworkStats: (params) => api.get('/calls/analytics/frameworks', { params }).then(r => r.data),
+};
+
+// --- Sentiment Analysis ---
+export const sentimentApi = {
+  analyze: (data) => api.post('/sentiment/analyze', data),
+  analyzeReply: (replyId) => api.post(`/sentiment/analyze-reply/${replyId}`),
+  getScores: (params) => api.get('/sentiment/scores', { params }),
+  getSummary: (days = 30) => api.get('/sentiment/summary', { params: { days } }),
+};
+
+// --- Email Testing ---
+export const emailTestingApi = {
+  getScenarios: () => api.get('/email-testing/scenarios'),
+  getPersonas: () => api.get('/email-testing/personas'),
+  createExchange: (data) => api.post('/email-testing/exchanges', data),
+  continueExchange: (id, data) => api.post(`/email-testing/exchanges/${id}/continue`, data),
+  getExchanges: (params) => api.get('/email-testing/exchanges', { params }),
+  getExchange: (id) => api.get(`/email-testing/exchanges/${id}`),
+  deleteExchange: (id) => api.delete(`/email-testing/exchanges/${id}`),
 };
