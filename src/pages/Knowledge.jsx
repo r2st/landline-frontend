@@ -142,20 +142,120 @@ function ContactModal({ contact, industries, onClose }) {
   );
 }
 
+// ─── Group filter metadata (genuine / test) ───────────────────────────────────
+const GROUP_FILTERS = [
+  { value: 'all', label: 'All', active: 'bg-indigo-600 text-white', badge: null },
+  { value: 'genuine', label: 'Genuine', active: 'bg-emerald-600 text-white', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  { value: 'test', label: 'Test', active: 'bg-amber-500 text-white', badge: 'bg-amber-50 text-amber-700 ring-amber-200' },
+];
+
+function GroupBadge({ group }) {
+  const meta = GROUP_FILTERS.find((g) => g.value === group);
+  if (!meta || !meta.badge) return null;
+  return (
+    <span className={cn('inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1', meta.badge)}>
+      {meta.label}
+    </span>
+  );
+}
+
+// ─── Contact detail drawer (read-only, full details) ──────────────────────────
+function DetailRow({ icon: Icon, label, children }) {
+  if (!children) return null;
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+      <div className="min-w-0">
+        <div className="text-[11px] font-medium uppercase tracking-wider text-gray-400">{label}</div>
+        <div className="text-sm text-gray-800">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function ContactDetailModal({ contact, onClose, onEdit }) {
+  if (!contact) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-base font-semibold text-gray-900">{contact.name}</h2>
+              <GroupBadge group={contact.group} />
+            </div>
+            {contact.title && <p className="text-sm text-gray-500">{contact.title}</p>}
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="divide-y divide-gray-50 px-5 py-2">
+          <DetailRow icon={Building2} label="Company">{contact.company}</DetailRow>
+          <DetailRow icon={Layers} label="Industry">{contact.industry}</DetailRow>
+          <DetailRow icon={Mail} label="Email">
+            {contact.email && <a href={`mailto:${contact.email}`} className="text-indigo-600 hover:underline">{contact.email}</a>}
+          </DetailRow>
+          <DetailRow icon={Phone} label="Phone">
+            {contact.phone && <a href={`tel:${contact.phone}`} className="text-indigo-600 hover:underline">{contact.phone}</a>}
+          </DetailRow>
+          <DetailRow icon={Linkedin} label="LinkedIn">
+            {contact.linkedin_url && (
+              <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-600 hover:underline">
+                View profile <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </DetailRow>
+          <DetailRow icon={BookOpen} label="Notes">
+            {contact.notes && <span className="whitespace-pre-wrap">{contact.notes}</span>}
+          </DetailRow>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <Mail className="h-3.5 w-3.5" /> Email
+            </a>
+          )}
+          {contact.phone && (
+            <a href={`tel:${contact.phone}`} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <Phone className="h-3.5 w-3.5" /> Call
+            </a>
+          )}
+          <button type="button" onClick={() => onEdit(contact)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700">
+            <Pencil className="h-3.5 w-3.5" /> Edit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Contacts tab ─────────────────────────────────────────────────────────────
 function ContactsTab() {
   const [industry, setIndustry] = useState('all');
   const [group, setGroup] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [modal, setModal] = useState(null); // { contact } | { contact: null } for add
+  const [detail, setDetail] = useState(null); // contact being viewed (read-only)
   const { data: counts = [] } = useIndustryCounts();
   const { data: industriesData = [] } = useIndustries();
+  // Unfiltered set — used only to show per-group counts on the filter chips.
+  const { data: allData } = useKnowledgeContacts({});
   const { data, isLoading } = useKnowledgeContacts({
     ...(industry !== 'all' ? { industry } : {}),
     ...(group !== 'all' ? { group } : {}),
   });
   const del = useDeleteKnowledgeContact();
   const items = data?.items || [];
+
+  const groupCounts = useMemo(() => {
+    const all = allData?.items || [];
+    return {
+      all: all.length,
+      genuine: all.filter((c) => c.group === 'genuine').length,
+      test: all.filter((c) => c.group === 'test').length,
+    };
+  }, [allData]);
 
   const filtered = useMemo(() => {
     const q = searchInput.trim().toLowerCase();
@@ -194,22 +294,21 @@ function ContactsTab() {
       </div>
 
       {/* Genuine vs test group chips */}
-      <div className="flex flex-wrap gap-2">
-        {[
-          { value: 'all', label: 'All', active: 'bg-indigo-600 text-white' },
-          { value: 'genuine', label: 'Genuine', active: 'bg-emerald-600 text-white' },
-          { value: 'test', label: 'Test', active: 'bg-amber-500 text-white' },
-        ].map((g) => (
+      <div className="flex flex-wrap items-center gap-2">
+        {GROUP_FILTERS.map((g) => (
           <button
             key={g.value}
             type="button"
             onClick={() => setGroup(g.value)}
             className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
               group === g.value ? g.active : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             )}
           >
             {g.label}
+            <span className={cn('rounded-full px-1.5 text-[10px]', group === g.value ? 'bg-white/25' : 'bg-gray-200')}>
+              {groupCounts[g.value] ?? 0}
+            </span>
           </button>
         ))}
       </div>
@@ -261,6 +360,13 @@ function ContactsTab() {
         />
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+            <span className="text-xs font-medium text-gray-500">
+              {filtered.length} {filtered.length === 1 ? 'contact' : 'contacts'}
+              {group !== 'all' && <span className="ml-1 text-gray-400">· {GROUP_FILTERS.find((g) => g.value === group)?.label}</span>}
+              {industry !== 'all' && <span className="ml-1 text-gray-400">· {industry}</span>}
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -276,8 +382,13 @@ function ContactsTab() {
                 {filtered.map((c, idx) => (
                   <tr key={c.id} className={cn('transition-colors hover:bg-indigo-50/30', idx % 2 === 1 && 'bg-gray-50/30')}>
                     <td className="px-4 py-3">
-                      <div className="text-sm font-semibold text-gray-900">{c.name}</div>
-                      {c.title && <div className="text-xs text-gray-500">{c.title}</div>}
+                      <button type="button" onClick={() => setDetail(c)} className="text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900 hover:text-indigo-600">{c.name}</span>
+                          <GroupBadge group={c.group} />
+                        </div>
+                        {c.title && <div className="text-xs text-gray-500">{c.title}</div>}
+                      </button>
                     </td>
                     <td className="hidden px-4 py-3 text-sm text-gray-700 md:table-cell">
                       {c.company ? (
@@ -325,6 +436,13 @@ function ContactsTab() {
         </div>
       )}
 
+      {detail && (
+        <ContactDetailModal
+          contact={detail}
+          onClose={() => setDetail(null)}
+          onEdit={(c) => { setDetail(null); setModal({ contact: c }); }}
+        />
+      )}
       {modal && <ContactModal contact={modal.contact} industries={industriesData} onClose={() => setModal(null)} />}
     </div>
   );

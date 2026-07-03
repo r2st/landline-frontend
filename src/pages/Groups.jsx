@@ -22,6 +22,9 @@ import {
   ToggleRight,
   Clock,
   MessageSquare,
+  LayoutGrid,
+  Table as TableIcon,
+  ExternalLink,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import EmptyState from '../components/EmptyState';
@@ -37,6 +40,7 @@ import {
   useAutoGroupByStage,
 } from '../hooks/useGroups';
 import { useCompanies } from '../hooks/useCompanies';
+import { STAGE_COLORS, STAGE_LABELS } from '../lib/constants';
 import { cn } from '../lib/utils';
 
 const PRESET_COLORS = [
@@ -576,6 +580,129 @@ function GroupCard({ group, onEdit, onDelete, onAddCompanies, onRemoveMember, al
   );
 }
 
+// ── Group Detail Table (table view) ───────────────────────────────────────────
+
+function StageBadge({ stage }) {
+  if (!stage) return <span className="text-gray-300">--</span>;
+  const c = STAGE_COLORS[stage];
+  const label = STAGE_LABELS[stage] || stage;
+  if (!c) {
+    return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">{label}</span>;
+  }
+  return (
+    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', c.bg, c.text)}>{label}</span>
+  );
+}
+
+function GroupDetailSection({ group, onEdit, onDelete, onAddCompanies, onRemoveMember }) {
+  const navigate = useNavigate();
+  const smartInfo = parseSmartPrefix(group.description);
+  const displayDescription = smartInfo ? smartInfo.rest : group.description;
+  const companies = group.companies || [];
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      {/* Section header */}
+      <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-block h-3.5 w-3.5 flex-shrink-0 rounded-full" style={{ backgroundColor: group.color || '#3b82f6' }} />
+            <h3 className="truncate text-base font-semibold text-gray-900">{group.name}</h3>
+            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+              <Users className="h-3 w-3" />
+              {group.member_count}
+            </span>
+            {smartInfo && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700" title={`Smart filter: ${smartInfo.field}=${smartInfo.value}`}>
+                <Zap className="h-3 w-3" />
+                Smart
+              </span>
+            )}
+          </div>
+          {displayDescription && <p className="mt-1 text-sm text-gray-500">{displayDescription}</p>}
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <button type="button" onClick={() => onAddCompanies(group)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50" title="Add companies">
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </button>
+          <button type="button" onClick={() => exportGroupCSV(group)} className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-green-50 hover:text-green-600" title="Export CSV">
+            <Download className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => onEdit(group)} className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600" title="Edit group">
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => onDelete(group.id)} className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600" title="Delete group">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Company table */}
+      {companies.length === 0 ? (
+        <p className="px-5 py-6 text-center text-sm text-gray-400">No companies in this group yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">Company</th>
+                <th className="hidden px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 md:table-cell">Industry</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">Stage</th>
+                <th className="hidden px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 lg:table-cell">Location</th>
+                <th className="hidden px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:table-cell">Contacts</th>
+                <th className="hidden px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:table-cell">Score</th>
+                <th className="w-20 px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {companies.map((c) => {
+                const location = [c.city, c.state, c.country].filter(Boolean).join(', ');
+                return (
+                  <tr key={c.id} className="group transition-colors hover:bg-blue-50/30">
+                    <td className="px-4 py-2.5">
+                      <button type="button" onClick={() => navigate(`/companies/${c.id}`)} className="flex items-center gap-2 text-left">
+                        <Building2 className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-gray-900 group-hover:text-blue-600">{c.name}</span>
+                          {c.domain && <span className="block truncate text-xs text-gray-400">{c.domain}</span>}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="hidden px-4 py-2.5 text-sm text-gray-700 md:table-cell">
+                      {c.industry || <span className="text-gray-300">--</span>}
+                    </td>
+                    <td className="px-4 py-2.5"><StageBadge stage={c.stage} /></td>
+                    <td className="hidden px-4 py-2.5 text-sm text-gray-600 lg:table-cell">
+                      {location || <span className="text-gray-300">--</span>}
+                    </td>
+                    <td className="hidden px-4 py-2.5 text-right text-sm text-gray-700 sm:table-cell">
+                      {c.contact_count != null ? c.contact_count : <span className="text-gray-300">--</span>}
+                    </td>
+                    <td className="hidden px-4 py-2.5 text-right text-sm text-gray-700 sm:table-cell">
+                      {c.score != null ? c.score : <span className="text-gray-300">--</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button type="button" onClick={() => navigate(`/companies/${c.id}`)} className="rounded p-1.5 text-gray-300 transition-colors hover:bg-blue-50 hover:text-blue-600" title="Open company">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={() => onRemoveMember({ groupId: group.id, companyIds: [c.id] })} className="rounded p-1.5 text-gray-300 transition-all hover:bg-red-50 hover:text-red-500" title="Remove from group">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Groups() {
@@ -593,6 +720,7 @@ export default function Groups() {
   const [editingGroup, setEditingGroup] = useState(null);
   const [addCompaniesGroup, setAddCompaniesGroup] = useState(null);
   const [searchFilter, setSearchFilter] = useState('');
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' (graph + cards) | 'table' (detailed)
 
   const handleDelete = (id) => {
     if (window.confirm('Delete this group? Companies will not be deleted.')) {
@@ -664,17 +792,43 @@ export default function Groups() {
           </div>
         </div>
 
-        {/* Search bar */}
+        {/* Search bar + view toggle */}
         {groups && groups.length > 0 && (
-          <div className="mt-4 relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              placeholder="Filter groups..."
-              className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Filter groups..."
+                className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div className="inline-flex flex-shrink-0 items-center rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  viewMode === 'cards' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Graph
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  viewMode === 'table' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                <TableIcon className="h-3.5 w-3.5" />
+                Details
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -693,6 +847,19 @@ export default function Groups() {
         <div className="text-center py-12">
           <Search className="mx-auto h-10 w-10 text-gray-300 mb-3" />
           <p className="text-sm text-gray-500">No groups match "{searchFilter}"</p>
+        </div>
+      ) : viewMode === 'table' ? (
+        <div className="space-y-4">
+          {filteredGroups.map((group) => (
+            <GroupDetailSection
+              key={group.id}
+              group={group}
+              onEdit={(g) => setEditingGroup(g)}
+              onDelete={handleDelete}
+              onAddCompanies={(g) => setAddCompaniesGroup(g)}
+              onRemoveMember={({ groupId, companyIds }) => removeMembers.mutate({ groupId, companyIds })}
+            />
+          ))}
         </div>
       ) : (
         <>
