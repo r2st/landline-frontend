@@ -35,6 +35,8 @@ import EmptyState from '../components/EmptyState';
 import SmartSuggestions from '../components/SmartSuggestions';
 import ClientHealthAlerts from '../components/ClientHealthAlerts';
 import { useDashboardMetrics, useRecentActivity, useTopLeads, useEmailTrends, useUpcomingTasks, useKPIs } from '../hooks/useDashboard';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { buildGreeting } from '../lib/greeting';
 import { useFollowUps, useStaleContacts } from '../hooks/useFollowUps';
 import { emailApi } from '../api/client';
 import { STAGES, STAGE_LABELS, STAGE_COLORS } from '../lib/constants';
@@ -97,8 +99,8 @@ function SkeletonCard() {
 // ─── Welcome Header ─────────────────────────────────────────────────────────
 
 function WelcomeHeader({ kpis, trends }) {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const user = useCurrentUser();
+  const greeting = buildGreeting(user, new Date().getHours());
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   // Calculate productivity streak from recent trend data
@@ -114,14 +116,14 @@ function WelcomeHeader({ kpis, trends }) {
   }, [trends]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 px-8 py-6 text-white shadow-lg">
-      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }} />
+    <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white px-8 py-6 shadow-sm">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-gray-50 to-white" />
       <div className="relative flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{greeting}</h1>
-          <p className="mt-1 text-blue-100">{today}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{greeting}</h1>
+          <p className="mt-1 text-gray-500">{today}</p>
           {kpis && (
-            <p className="mt-3 text-sm text-blue-200">
+            <p className="mt-3 text-sm text-gray-600">
               {kpis.emails_sent_today > 0
                 ? `You've sent ${kpis.emails_sent_today} email${kpis.emails_sent_today === 1 ? '' : 's'} today`
                 : 'Ready to start your day'}
@@ -130,8 +132,8 @@ function WelcomeHeader({ kpis, trends }) {
           )}
         </div>
         {streakDays >= 3 && (
-          <div className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium backdrop-blur-sm">
-            <Flame className="h-4 w-4 text-orange-300" />
+          <div className="flex items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700">
+            <Flame className="h-4 w-4 text-orange-500" />
             <span>{streakDays}-day email streak</span>
           </div>
         )}
