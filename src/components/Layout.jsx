@@ -29,9 +29,12 @@ import {
   Landmark,
   ChevronRight,
   Brain,
+  LogOut,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import CommandPalette from './CommandPalette';
 import Logo, { LogoMark } from './Logo';
 
@@ -110,6 +113,7 @@ const NAV_PREFS_KEY = 'landline.nav.collapsedSections';
 
 export default function Layout({ children }) {
   const location = useLocation();
+  const { user, isAdmin, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -334,7 +338,32 @@ export default function Layout({ children }) {
 
       <div className="border-t border-gray-200 px-3 py-3">
         <NavLink item={{ name: 'Settings', href: '/settings', icon: Settings }} />
-        <div className="px-3 pb-1 pt-2.5">
+        {isAdmin && (
+          <NavLink item={{ name: 'Users', href: '/admin/users', icon: UserCog }} />
+        )}
+
+        {user && (
+          <div className="mt-2 flex items-center gap-2.5 rounded-lg px-3 py-2">
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold uppercase text-indigo-700">
+              {(user.name || user.email || '?').trim().charAt(0)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-gray-900">{user.name}</div>
+              <div className="truncate text-[11px] capitalize text-gray-400">{user.role}</div>
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="-mr-1 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        <div className="px-3 pb-1 pt-1.5">
           <div className="text-[11px] font-medium text-gray-400">Landline v1.0 &middot; B2B Lead Gen</div>
         </div>
       </div>

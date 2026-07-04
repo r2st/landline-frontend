@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Outlet } from 'react-router-dom';
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Analytics = lazy(() => import('./pages/Analytics'));
@@ -28,6 +29,9 @@ const Calls = lazy(() => import('./pages/Calls'));
 const Investors = lazy(() => import('./pages/Investors'));
 const InvestorDetail = lazy(() => import('./pages/InvestorDetail'));
 const SentimentDashboard = lazy(() => import('./pages/SentimentDashboard'));
+const Login = lazy(() => import('./pages/Login'));
+const ChangePassword = lazy(() => import('./pages/ChangePassword'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 
 function NotFound() {
   return (
@@ -49,11 +53,37 @@ function LoadingSpinner() {
   );
 }
 
+// Authenticated app shell: gate on auth, then render the sidebar layout with the
+// matched page inside a Suspense boundary (for the lazy route chunks).
+function ProtectedShell() {
+  return (
+    <ProtectedRoute>
+      <Layout>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Outlet />
+        </Suspense>
+      </Layout>
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   return (
-    <Layout>
-      <Suspense fallback={<LoadingSpinner />}>
-        <Routes>
+    <Suspense fallback={<LoadingSpinner />}>
+      <Routes>
+        {/* Public / auth routes — rendered without the app layout. */}
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/change-password"
+          element={
+            <ProtectedRoute>
+              <ChangePassword />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Everything below requires authentication. */}
+        <Route element={<ProtectedShell />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/pipeline" element={<Pipeline />} />
@@ -80,9 +110,17 @@ export default function App() {
           <Route path="/investors" element={<Investors />} />
           <Route path="/investors/:id" element={<InvestorDetail />} />
           <Route path="/sentiment" element={<SentimentDashboard />} />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute requireRole="admin">
+                <AdminUsers />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
-    </Layout>
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

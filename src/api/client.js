@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { QueryClient } from '@tanstack/react-query';
+import { tokenStore } from './authToken';
 
 const baseURL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
@@ -10,8 +11,13 @@ export const api = axios.create({
   timeout: 30000,
 });
 
-// Add API key to all requests
+// Attach auth to every request: a JWT bearer token when logged in, plus the
+// legacy VITE_API_KEY (kept for backward compatibility during the transition).
 api.interceptors.request.use((config) => {
+  const token = tokenStore.getAccess();
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
   const apiKey = import.meta.env.VITE_API_KEY;
   if (apiKey) {
     config.headers['X-API-Key'] = apiKey;
@@ -19,12 +25,29 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors
+// On a 401, transparently try one token refresh and replay the request. If the
+// refresh fails (or this IS an auth request), clear the session so the app
+// routes back to login.
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.error('API authentication failed. Check your API key.');
+  async (error) => {
+    const original = error.config;
+    const status = error.response?.status;
+
+    if (
+      status === 401 &&
+      original &&
+      !original._retry &&
+      !original._skipAuthRefresh
+    ) {
+      original._retry = true;
+      const newToken = await tokenStore.runRefresh();
+      if (newToken) {
+        original.headers = original.headers || {};
+        original.headers['Authorization'] = `Bearer ${newToken}`;
+        return api(original);
+      }
+      tokenStore.runLogout();
     }
     return Promise.reject(error);
   }
