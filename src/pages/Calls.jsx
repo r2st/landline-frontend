@@ -21,6 +21,12 @@ import {
   Wand2,
   RefreshCw,
   Lightbulb,
+  Timer,
+  Shield,
+  AlertTriangle,
+  BarChart3,
+  Star,
+  Zap,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import Markdown from '../components/Markdown';
@@ -37,7 +43,44 @@ import {
   useMarkNotificationRead,
   useCustomScript,
   useRegenerateScript,
+  useUpdateTaskEnhanced,
 } from '../hooks/useCalls';
+
+// Sales methodology frameworks from the research docs (15+ books distilled).
+const SALES_FRAMEWORKS = [
+  { value: 'challenger', label: 'Challenger Sale', desc: '6-Step Commercial Teaching Pitch' },
+  { value: 'gap_selling', label: 'Gap Selling', desc: 'Discovery Model (Keenan)' },
+  { value: 'spin', label: 'SPIN Selling', desc: 'Question Flow (Rackham)' },
+  { value: 'voss_tactical', label: 'Tactical Empathy', desc: 'Never Split the Difference (Voss)' },
+  { value: 'blount_fanatical', label: 'Fanatical Prospecting', desc: '5-Step (Blount)' },
+  { value: 'weinberg_story', label: 'Power Statement', desc: 'New Sales Simplified (Weinberg)' },
+  { value: 'sobczak_smart', label: 'Smart Calling', desc: 'Pre-Call Intelligence (Sobczak)' },
+];
+
+// Discovery scorecard elements from Gap Selling (7-element self-assessment)
+const SCORECARD_FIELDS = [
+  { key: 'current_state_identified', label: 'Current State Identified', hint: 'Did you uncover their existing process/situation?' },
+  { key: 'root_cause_uncovered', label: 'Root Cause Uncovered', hint: 'Did you identify why they have the problem?' },
+  { key: 'impact_quantified', label: 'Impact Quantified', hint: 'Did you quantify the cost of the problem?' },
+  { key: 'emotion_surfaced', label: 'Emotion Surfaced', hint: 'Did you connect to the emotional driver?' },
+  { key: 'future_state_defined', label: 'Future State Defined', hint: 'Did you paint a clear picture of success?' },
+  { key: 'next_steps_agreed', label: 'Next Steps Agreed', hint: 'Were concrete next steps committed?' },
+  { key: 'champion_identified', label: 'Champion Identified', hint: 'Is there an internal advocate?' },
+];
+
+// Common objection categories from the sales books research
+const COMMON_OBJECTIONS = [
+  'Price too high',
+  'Happy with current vendor',
+  'Need to think about it',
+  'Not the right time',
+  'Need to talk to partner/boss',
+  'Send me information',
+  'Already tried something like this',
+  'Too busy right now',
+  'Not interested',
+  'Budget constraints',
+];
 
 // ─── Priority meta ────────────────────────────────────────────────────────────
 const PRIORITY = {
@@ -79,6 +122,8 @@ function CallCard({ task, onStart }) {
   const time = field(task, 'scheduled_time', 'scheduled_at', 'due_at');
   const done = ['completed', 'done', 'logged'].includes((field(task, 'status') || '').toLowerCase());
   const outcome = field(task, 'outcome');
+  const optimalWindow = field(task, 'optimal_call_window');
+  const framework = field(task, 'sales_framework');
 
   return (
     <button
@@ -97,6 +142,12 @@ function CallCard({ task, onStart }) {
             <meta.icon className="h-3 w-3" />
             {meta.label}
           </span>
+          {optimalWindow && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700 ring-1 ring-green-200">
+              <Timer className="h-3 w-3" />
+              {optimalWindow}
+            </span>
+          )}
           {done && (
             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-600">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -107,6 +158,12 @@ function CallCard({ task, onStart }) {
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
           {company && <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5 text-gray-400" />{company}</span>}
           {industry && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{industry}</span>}
+          {framework && (
+            <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
+              <Zap className="h-3 w-3" />
+              {SALES_FRAMEWORKS.find(f => f.value === framework)?.label || framework}
+            </span>
+          )}
           {time && <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-gray-400" />{formatDate(time)}</span>}
         </div>
       </div>
@@ -294,12 +351,32 @@ function CustomScriptView({ data }) {
 }
 
 function CustomScriptSection({ taskId, active }) {
-  const { data, isLoading, isError, refetch } = useCustomScript(taskId, active);
+  const [framework, setFramework] = useState(null);
+  const { data, isLoading, isError, refetch } = useCustomScript(taskId, active, framework);
   const regen = useRegenerateScript();
+
+  const frameworkPicker = (
+    <div className="mb-3">
+      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+        <Zap className="mr-1 inline h-3.5 w-3.5" />Sales Methodology
+      </label>
+      <select
+        value={framework || ''}
+        onChange={(e) => setFramework(e.target.value || null)}
+        className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      >
+        <option value="">Auto-detect best fit</option>
+        {SALES_FRAMEWORKS.map((f) => (
+          <option key={f.value} value={f.value}>{f.label} — {f.desc}</option>
+        ))}
+      </select>
+    </div>
+  );
 
   if (isLoading || regen.isPending) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+        {frameworkPicker}
         <Spinner />
         <p className="text-sm text-gray-500">Generating a personalized script…</p>
       </div>
@@ -308,26 +385,38 @@ function CustomScriptSection({ taskId, active }) {
 
   if (isError || !data) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-        <Wand2 className="h-8 w-8 text-indigo-300" />
-        <p className="text-sm text-gray-500">No custom script yet for this call.</p>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
-        >
-          <Wand2 className="h-4 w-4" /> Generate Custom Script
-        </button>
+      <div className="space-y-3">
+        {frameworkPicker}
+        <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+          <Wand2 className="h-8 w-8 text-indigo-300" />
+          <p className="text-sm text-gray-500">No custom script yet for this call.</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+          >
+            <Wand2 className="h-4 w-4" /> Generate Custom Script
+          </button>
+        </div>
       </div>
     );
   }
 
+  const usedFramework = data?.sales_framework;
+
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      {frameworkPicker}
+      <div className="flex items-center justify-between">
+        {usedFramework && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold text-indigo-700 ring-1 ring-indigo-200">
+            <Zap className="h-3 w-3" />
+            {SALES_FRAMEWORKS.find(f => f.value === usedFramework)?.label || usedFramework}
+          </span>
+        )}
         <button
           type="button"
-          onClick={() => regen.mutate(taskId)}
+          onClick={() => regen.mutate({ taskId, framework })}
           disabled={regen.isPending}
           className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
         >
@@ -339,15 +428,147 @@ function CustomScriptSection({ taskId, active }) {
   );
 }
 
+// ─── Discovery Scorecard ─────────────────────────────────────────────────────
+function DiscoveryScorecardSection({ scorecard, onChange }) {
+  const total = Object.values(scorecard).reduce((s, v) => s + v, 0);
+  const max = SCORECARD_FIELDS.length * 5;
+  const pct = max > 0 ? Math.round((total / max) * 100) : 0;
+  const color = pct >= 70 ? 'text-green-600' : pct >= 40 ? 'text-orange-600' : 'text-red-600';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+          <Star className="h-3.5 w-3.5" /> Discovery Scorecard
+        </h4>
+        <span className={cn('text-xs font-bold', color)}>{total}/{max} ({pct}%)</span>
+      </div>
+      <div className="space-y-1.5">
+        {SCORECARD_FIELDS.map((f) => (
+          <div key={f.key} className="flex items-center gap-2">
+            <span className="w-36 truncate text-[11px] text-gray-600" title={f.hint}>{f.label}</span>
+            <div className="flex gap-0.5">
+              {[1, 2, 3, 4, 5].map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => onChange({ ...scorecard, [f.key]: v })}
+                  className={cn(
+                    'h-5 w-5 rounded text-[10px] font-bold transition-colors',
+                    scorecard[f.key] >= v
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                  )}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Objection Tracking ──────────────────────────────────────────────────────
+function ObjectionTracker({ objections, onChange }) {
+  const [custom, setCustom] = useState('');
+
+  const toggle = (obj) => {
+    if (objections.includes(obj)) {
+      onChange(objections.filter((o) => o !== obj));
+    } else {
+      onChange([...objections, obj]);
+    }
+  };
+
+  const addCustom = () => {
+    const trimmed = custom.trim();
+    if (trimmed && !objections.includes(trimmed)) {
+      onChange([...objections, trimmed]);
+      setCustom('');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <h4 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+        <Shield className="h-3.5 w-3.5" /> Objections Encountered
+      </h4>
+      <div className="flex flex-wrap gap-1">
+        {COMMON_OBJECTIONS.map((obj) => (
+          <button
+            key={obj}
+            type="button"
+            onClick={() => toggle(obj)}
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors',
+              objections.includes(obj)
+                ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                : 'bg-gray-50 text-gray-500 ring-1 ring-gray-200 hover:bg-gray-100'
+            )}
+          >
+            {obj}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1.5">
+        <input
+          type="text"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustom())}
+          placeholder="Add custom objection…"
+          className="h-7 flex-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+        <button
+          type="button"
+          onClick={addCustom}
+          className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+        >
+          Add
+        </button>
+      </div>
+      {objections.filter((o) => !COMMON_OBJECTIONS.includes(o)).length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {objections.filter((o) => !COMMON_OBJECTIONS.includes(o)).map((obj) => (
+            <span
+              key={obj}
+              className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-red-200"
+            >
+              {obj}
+              <button type="button" onClick={() => toggle(obj)} className="text-red-400 hover:text-red-600">
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Briefing slide-over ──────────────────────────────────────────────────────
 function BriefingPanel({ task, onClose }) {
   const { data: briefing, isLoading } = useCallBriefing(task.id);
   const log = useLogCallOutcome();
+  const updateEnhanced = useUpdateTaskEnhanced();
   const [visible, setVisible] = useState(false);
   const [outcome, setOutcome] = useState(field(task, 'outcome') || '');
   const [duration, setDuration] = useState(field(task, 'duration') || '');
   const [notes, setNotes] = useState(field(task, 'notes') || '');
   const [scriptTab, setScriptTab] = useState('custom');
+  const [frameworkUsed, setFrameworkUsed] = useState(field(task, 'sales_framework') || '');
+  const [scorecard, setScorecard] = useState(() => {
+    const existing = field(task, 'discovery_scorecard');
+    if (existing && typeof existing === 'object') return existing;
+    return SCORECARD_FIELDS.reduce((acc, f) => ({ ...acc, [f.key]: 0 }), {});
+  });
+  const [objections, setObjections] = useState(() => {
+    const existing = field(task, 'objections_encountered');
+    return Array.isArray(existing) ? existing : [];
+  });
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
   useEffect(() => {
@@ -371,8 +592,15 @@ function BriefingPanel({ task, onClose }) {
 
   const submitOutcome = () => {
     if (!outcome) return;
+    const baseData = { status: 'completed', outcome, duration: duration ? Number(duration) : undefined, notes };
+    // Include sales-book enhancements: discovery scorecard, objections, framework
+    const enhancedData = { ...baseData };
+    if (objections.length > 0) enhancedData.objections_encountered = objections;
+    if (frameworkUsed) enhancedData.sales_framework_used = frameworkUsed;
+    const hasScorecard = outcome === 'connected' && Object.values(scorecard).some(v => v > 0);
+    if (hasScorecard) enhancedData.discovery_scorecard = scorecard;
     log.mutate(
-      { id: task.id, data: { status: 'completed', outcome, duration: duration ? Number(duration) : undefined, notes } },
+      { id: task.id, data: enhancedData },
       { onSuccess: handleClose }
     );
   };
@@ -528,6 +756,16 @@ function BriefingPanel({ task, onClose }) {
               placeholder="Duration (min)"
               className="h-9 w-36 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
+            <select
+              value={frameworkUsed}
+              onChange={(e) => setFrameworkUsed(e.target.value)}
+              className="h-9 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Framework used…</option>
+              {SALES_FRAMEWORKS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
           </div>
           <textarea
             value={notes}
@@ -536,14 +774,27 @@ function BriefingPanel({ task, onClose }) {
             placeholder="Call notes…"
             className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
+
+          {/* Discovery scorecard — Gap Selling 7-element self-assessment */}
+          {outcome === 'connected' && (
+            <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+              <DiscoveryScorecardSection scorecard={scorecard} onChange={setScorecard} />
+            </div>
+          )}
+
+          {/* Objection tracking */}
+          <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
+            <ObjectionTracker objections={objections} onChange={setObjections} />
+          </div>
+
           <button
             type="button"
             onClick={submitOutcome}
-            disabled={!outcome || log.isPending}
-            className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+            disabled={!outcome || log.isPending || updateEnhanced.isPending}
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
           >
             <CheckCircle2 className="h-4 w-4" />
-            {log.isPending ? 'Saving…' : 'Log & Complete'}
+            {(log.isPending || updateEnhanced.isPending) ? 'Saving…' : 'Log & Complete'}
           </button>
         </div>
       </div>

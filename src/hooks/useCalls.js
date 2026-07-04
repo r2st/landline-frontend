@@ -149,10 +149,10 @@ export function useMarkNotificationRead() {
 // Fetch (and lazily generate + cache) a personalised AI script for a call task.
 // Only runs when `enabled` so opening the briefing doesn't trigger generation
 // until the rep switches to the Custom Script tab.
-export function useCustomScript(taskId, enabled = false) {
+export function useCustomScript(taskId, enabled = false, framework = null) {
   return useQuery({
-    queryKey: ['calls', 'custom-script', taskId],
-    queryFn: async () => callsApi.getCustomScript(taskId),
+    queryKey: ['calls', 'custom-script', taskId, framework],
+    queryFn: async () => callsApi.getCustomScript(taskId, framework ? { framework } : undefined),
     enabled: !!taskId && enabled,
     staleTime: 600000,
     retry: false,
@@ -161,11 +161,53 @@ export function useCustomScript(taskId, enabled = false) {
 
 export function useRegenerateScript() {
   return useMutation({
-    mutationFn: async (taskId) => callsApi.getCustomScript(taskId, { regenerate: true }),
-    onSuccess: (data, taskId) => {
-      queryClient.setQueryData(['calls', 'custom-script', taskId], data);
+    mutationFn: async ({ taskId, framework }) =>
+      callsApi.getCustomScript(taskId, { regenerate: true, ...(framework ? { framework } : {}) }),
+    onSuccess: (data, { taskId }) => {
+      queryClient.setQueryData(['calls', 'custom-script', taskId, data?.sales_framework || null], data);
       toast.success(data?.source === 'ai' ? 'Script regenerated' : 'Script refreshed');
     },
     onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to regenerate script'),
+  });
+}
+
+// ─── Enhanced call task update (discovery scorecard + objection tracking) ────
+export function useUpdateTaskEnhanced() {
+  return useMutation({
+    mutationFn: async ({ id, data }) => callsApi.updateTask(id, data),
+    onSuccess: () => {
+      invalidateCallTasks();
+      toast.success('Call details saved');
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Failed to save'),
+  });
+}
+
+// ─── Analytics — sales-book enhancements ────────────────────────────────────
+export function useObjectionTrends(params = {}) {
+  return useQuery({
+    queryKey: ['calls', 'analytics', 'objections', params],
+    queryFn: async () => {
+      try {
+        return await callsApi.getObjectionTrends(params);
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 300000,
+  });
+}
+
+export function useFrameworkStats(params = {}) {
+  return useQuery({
+    queryKey: ['calls', 'analytics', 'frameworks', params],
+    queryFn: async () => {
+      try {
+        return await callsApi.getFrameworkStats(params);
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 300000,
   });
 }

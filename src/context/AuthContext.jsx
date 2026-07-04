@@ -7,6 +7,9 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  // Start in a "restoring" state whenever a persisted token exists, so gated
+  // routes wait for the profile fetch instead of flashing the login page.
+  const [loading, setLoading] = useState(() => tokenStore.hasSession());
 
   const clearSession = useCallback(() => {
     tokenStore.clear();
@@ -48,17 +51,45 @@ export function AuthProvider({ children }) {
     tokenStore.setLogoutHandler(() => clearSession());
   }, [clearSession]);
 
+  // On first mount, restore the session from a persisted token. The request
+  // interceptor attaches the (possibly stale) access token; if it's expired,
+  // the 401 interceptor transparently refreshes via the handler above. Runs
+  // after the handler-registration effect so that refresh path is wired up.
+  useEffect(() => {
+    let cancelled = false;
+    if (!tokenStore.hasSession()) {
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      try {
+        const profile = await authApi.me();
+        if (!cancelled) setUser(profile);
+      } catch {
+        // Token invalid/expired and refresh failed — drop the dead session.
+        if (!cancelled) clearSession();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       isAuthenticated: !!user,
       isAdmin: user?.role === 'admin',
       mustChangePassword,
+      loading,
       login,
       logout,
       changePassword,
     }),
-    [user, mustChangePassword, login, logout, changePassword]
+    [user, mustChangePassword, loading, login, logout, changePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -10,8 +10,18 @@ import { useAuth } from '../context/AuthContext';
  * - Logged in but lacking `requireRole` → send home.
  */
 export default function ProtectedRoute({ children, requireRole }) {
-  const { isAuthenticated, user, mustChangePassword } = useAuth();
+  const { isAuthenticated, user, mustChangePassword, loading } = useAuth();
   const location = useLocation();
+
+  // Still restoring a persisted session — don't redirect to login yet, or a
+  // refresh would bounce an authenticated user out before the profile loads.
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
