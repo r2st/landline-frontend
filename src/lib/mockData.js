@@ -617,7 +617,7 @@ export const mockOutreachEvents = [
 
 // ─── Email Campaign constants ──────────────────────────────────────────────────
 
-export const DEMO_LINK = 'https://true-molding-demo.pages.dev';
+export const DEMO_LINK = 'https://best-molding-demo.pages.dev';
 
 export const MERGE_FIELDS = [
   { label: 'First Name', value: '{{first_name}}' },

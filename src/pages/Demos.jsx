@@ -3,12 +3,12 @@ import { ExternalLink, Copy, Rocket, Link, Check } from 'lucide-react';
 
 const DEMO_SITES = [
   {
-    name: 'True Molding',
-    url: 'https://true-molding-demo.pages.dev',
+    name: 'Best Molding',
+    url: 'https://best-molding-demo.pages.dev',
     industry: 'Plastic Injection Molding',
     description: 'AI-powered defect prediction and mold optimization for injection molding companies.',
     color: '#1e40af',
-    letter: 'T',
+    letter: 'B',
   },
   {
     name: 'TrueQuote CNC',
