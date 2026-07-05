@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Loader2, UserPlus, ShieldAlert } from 'lucide-react';
+import { Loader2, UserPlus, ShieldAlert, KeyRound, X } from 'lucide-react';
 import { adminUsersApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 
@@ -19,6 +19,8 @@ export default function AdminUsers() {
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
   const [form, setForm] = useState(EMPTY_FORM);
+  // The user whose password is being reset (null = modal closed).
+  const [resetTarget, setResetTarget] = useState(null);
 
   const { data: users = [], isLoading, isError } = useQuery({
     queryKey: ['admin-users'],
@@ -29,8 +31,12 @@ export default function AdminUsers() {
 
   const createMutation = useMutation({
     mutationFn: adminUsersApi.create,
-    onSuccess: () => {
-      toast.success('User created');
+    onSuccess: (data) => {
+      toast.success(
+        data?.welcome_email_sent
+          ? 'User created and welcome email sent'
+          : 'User created — no email account configured, so no welcome email was sent'
+      );
       setForm(EMPTY_FORM);
       invalidate();
     },
@@ -42,6 +48,23 @@ export default function AdminUsers() {
           : status === 422
           ? 'Check the form — password must be at least 8 characters'
           : 'Could not create user'
+      );
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ id, newPassword }) => adminUsersApi.resetPassword(id, newPassword),
+    onSuccess: () => {
+      toast.success('Password reset — the user must change it on next login');
+      setResetTarget(null);
+      invalidate();
+    },
+    onError: (err) => {
+      const status = err?.response?.status;
+      toast.error(
+        status === 422
+          ? 'Password must be at least 6 characters'
+          : err?.response?.data?.detail || 'Could not reset password'
       );
     },
   });
@@ -203,16 +226,26 @@ export default function AdminUsers() {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right">
-                        <button
-                          type="button"
-                          disabled={isSelf || updateMutation.isPending}
-                          onClick={() => toggleActive(u)}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          title={isSelf ? 'You cannot change your own status' : ''}
-                        >
-                          {u.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={resetPasswordMutation.isPending}
+                            onClick={() => setResetTarget(u)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" /> Reset password
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSelf || updateMutation.isPending}
+                            onClick={() => toggleActive(u)}
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            title={isSelf ? 'You cannot change your own status' : ''}
+                          >
+                            {u.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -222,6 +255,116 @@ export default function AdminUsers() {
           </div>
         )}
       </section>
+
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          isPending={resetPasswordMutation.isPending}
+          onClose={() => setResetTarget(null)}
+          onSubmit={(newPassword) =>
+            resetPasswordMutation.mutate({ id: resetTarget.id, newPassword })
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function ResetPasswordModal({ user, isPending, onClose, onSubmit }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  const tooShort = password.length > 0 && password.length < 6;
+  const mismatch = confirm.length > 0 && password !== confirm;
+  const canSubmit = password.length >= 6 && password === confirm && !isPending;
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    onSubmit(password);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4"
+      onMouseDown={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-indigo-600" />
+            <h2 className="text-base font-semibold text-gray-900">Reset password</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mb-4 text-sm text-gray-500">
+          Set a new password for <span className="font-medium text-gray-900">{user.name}</span>{' '}
+          <span className="text-gray-400">({user.email})</span>. They'll be required to change it
+          on their next login.
+        </p>
+
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">New password</label>
+            <input
+              type="password"
+              autoFocus
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 6 characters"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            {tooShort && (
+              <p className="mt-1 text-xs text-red-600">Must be at least 6 characters.</p>
+            )}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Confirm password
+            </label>
+            <input
+              type="password"
+              required
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Re-enter the password"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            {mismatch && <p className="mt-1 text-xs text-red-600">Passwords don't match.</p>}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+            >
+              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Reset password
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

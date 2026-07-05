@@ -33,4 +33,11 @@ export const adminUsersApi = {
   create: (payload) => api.post('/admin/users', payload).then((r) => r.data),
   update: (id, payload) => api.patch(`/admin/users/${id}`, payload).then((r) => r.data),
   deactivate: (id) => api.delete(`/admin/users/${id}`).then((r) => r.data),
+  resetPassword: (id, newPassword, mustChangePassword = true) =>
+    api
+      .post(`/admin/users/${id}/reset-password`, {
+        new_password: newPassword,
+        must_change_password: mustChangePassword,
+      })
+      .then((r) => r.data),
 };
