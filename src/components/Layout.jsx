@@ -36,6 +36,7 @@ import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import CommandPalette from './CommandPalette';
+import ViewAsSwitcher from './ViewAsSwitcher';
 import Logo, { LogoMark } from './Logo';
 
 // Sidebar navigation, grouped to match a salesperson's daily flow:
@@ -452,6 +453,7 @@ export default function Layout({ children }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-2">
+            <ViewAsSwitcher />
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}

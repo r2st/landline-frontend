@@ -22,6 +22,9 @@ export const authApi = {
       .then((r) => r.data),
 
   me: () => api.get('/auth/me').then((r) => r.data),
+
+  // Active users for the admin/manager "View as" switcher (403 for others).
+  teamMembers: () => api.get('/auth/team-members').then((r) => r.data),
 };
 
 // Admin user-management endpoints (admin role only).

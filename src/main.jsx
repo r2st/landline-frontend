@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { queryClient } from './api/client';
 import { AuthProvider } from './context/AuthContext';
+import { ViewAsProvider } from './context/ViewAsContext';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,8 +14,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <App />
-          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          <ViewAsProvider>
+            <App />
+            <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          </ViewAsProvider>
         </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>

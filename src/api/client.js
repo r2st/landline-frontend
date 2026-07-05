@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { QueryClient } from '@tanstack/react-query';
 import { tokenStore } from './authToken';
+import { viewAsStore } from './viewAs';
 
 const baseURL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
@@ -21,6 +22,12 @@ api.interceptors.request.use((config) => {
   const apiKey = import.meta.env.VITE_API_KEY;
   if (apiKey) {
     config.headers['X-API-Key'] = apiKey;
+  }
+  // Admin/manager "View as": scope reads to another user (or "all"). Harmless
+  // on endpoints that don't support it — the backend ignores the extra param.
+  const viewAs = viewAsStore.get();
+  if (viewAs) {
+    config.params = { ...(config.params || {}), view_as_user_id: viewAs };
   }
   return config;
 });
