@@ -1,6 +1,6 @@
-// Dependency-free unit tests for the dashboard greeting logic.
-// Run with:  node --test src/lib/greeting.test.js
-import test from 'node:test';
+// Unit tests for the dashboard greeting logic.
+// Run with:  npm test
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 import { pickTimeGreeting, firstNameOf, buildGreeting } from './greeting.js';

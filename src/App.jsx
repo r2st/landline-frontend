@@ -1,7 +1,8 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Outlet } from 'react-router-dom';
+import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Analytics = lazy(() => import('./pages/Analytics'));
@@ -38,7 +39,7 @@ function NotFound() {
     <div className="flex flex-col items-center justify-center h-64 text-center">
       <h1 className="text-4xl font-bold text-gray-900 mb-2">404</h1>
       <p className="text-gray-600 mb-4">Page Not Found</p>
-      <a href="/" className="text-blue-600 hover:text-blue-800 underline">
+      <a href="/" className="text-brand-600 hover:text-brand-800 underline">
         Go back to home
       </a>
     </div>
@@ -48,7 +49,7 @@ function NotFound() {
 function LoadingSpinner() {
   return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
     </div>
   );
 }
@@ -56,12 +57,15 @@ function LoadingSpinner() {
 // Authenticated app shell: gate on auth, then render the sidebar layout with the
 // matched page inside a Suspense boundary (for the lazy route chunks).
 function ProtectedShell() {
+  const location = useLocation();
   return (
     <ProtectedRoute>
       <Layout>
-        <Suspense fallback={<LoadingSpinner />}>
-          <Outlet />
-        </Suspense>
+        <ErrorBoundary resetKey={location.pathname}>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
       </Layout>
     </ProtectedRoute>
   );

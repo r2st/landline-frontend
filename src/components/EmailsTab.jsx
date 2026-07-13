@@ -4,9 +4,9 @@ import {
   ChevronDown, ChevronRight, CheckCircle2, MousePointerClick,
   Reply, MessageSquare,
 } from 'lucide-react';
-import DOMPurify from 'dompurify';
 import toast from 'react-hot-toast';
 import EmptyState from './EmptyState';
+import SafeHtml from './SafeHtml';
 import { useLeadEmails, useSendReply } from '../hooks/useEmailHistory';
 import { formatDate, timeAgo, cn } from '../lib/utils';
 
@@ -36,9 +36,7 @@ function MessageItem({ message }) {
   const [expanded, setExpanded] = useState(false);
   const isSent = message.direction === 'sent';
 
-  const htmlBody = message.body_html
-    ? DOMPurify.sanitize(message.body_html)
-    : null;
+  const htmlBody = message.body_html || null;
 
   return (
     <div className="border-t border-gray-100 py-3 first:border-t-0">
@@ -93,9 +91,9 @@ function MessageItem({ message }) {
             </p>
           )}
           {htmlBody ? (
-            <div
+            <SafeHtml
+              html={htmlBody}
               className="prose prose-sm max-w-none rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700"
-              dangerouslySetInnerHTML={{ __html: htmlBody }}
             />
           ) : message.body_text ? (
             <div className="whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">

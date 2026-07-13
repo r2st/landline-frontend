@@ -6,9 +6,9 @@ import {
   Reply, MessageSquare, Search, Filter, RefreshCw, Building2,
   ArrowRight, Clock,
 } from 'lucide-react';
-import DOMPurify from 'dompurify';
 import toast from 'react-hot-toast';
 import EmptyState from '../components/EmptyState';
+import SafeHtml from '../components/SafeHtml';
 import { useEmailInbox, useSendReply, useTriggerSync } from '../hooks/useEmailHistory';
 import { formatDate, timeAgo, cn } from '../lib/utils';
 
@@ -45,7 +45,7 @@ function StatusBadge({ status }) {
 function MessageItem({ message }) {
   const [expanded, setExpanded] = useState(false);
   const isSent = message.direction === 'sent';
-  const htmlBody = message.body_html ? DOMPurify.sanitize(message.body_html) : null;
+  const htmlBody = message.body_html || null;
 
   return (
     <div className="border-t border-gray-100 py-3 first:border-t-0">
@@ -91,9 +91,9 @@ function MessageItem({ message }) {
       {expanded && (
         <div className="ml-10 mt-2">
           {htmlBody ? (
-            <div
+            <SafeHtml
+              html={htmlBody}
               className="prose prose-sm max-w-none rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700"
-              dangerouslySetInnerHTML={{ __html: htmlBody }}
             />
           ) : message.body_text ? (
             <div className="whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">

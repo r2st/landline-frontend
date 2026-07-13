@@ -7,19 +7,22 @@ import App from './App';
 import { queryClient } from './api/client';
 import { AuthProvider } from './context/AuthContext';
 import { ViewAsProvider } from './context/ViewAsContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ViewAsProvider>
-            <App />
-            <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-          </ViewAsProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ViewAsProvider>
+              <App />
+              <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+            </ViewAsProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );

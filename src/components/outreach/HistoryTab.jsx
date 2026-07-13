@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '../EmptyState';
+import SafeHtml from '../SafeHtml';
 import { useAllEmailSends, useCampaignAnalytics } from '../../hooks/useEmailTemplates';
 import { cn, formatDate } from '../../lib/utils';
 
@@ -316,7 +317,7 @@ export default function HistoryTab() {
                             {s.body && (
                               <div>
                                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">Email Body Preview</p>
-                                <div className="max-h-40 overflow-auto rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700" dangerouslySetInnerHTML={{ __html: s.body }} />
+                                <SafeHtml html={s.body} className="max-h-40 overflow-auto rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700" />
                               </div>
                             )}
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

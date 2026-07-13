@@ -1,0 +1,133 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { api } from './client';
+import { tokenStore } from './authToken';
+
+// Drive the axios instance through a fake adapter so we can script server
+// responses (401 then 200) and inspect exactly what the response interceptor
+// replays.
+function installAdapter(handler) {
+  api.defaults.adapter = async (config) => handler(config);
+}
+
+function axios401(config) {
+  return Promise.reject({
+    config,
+    response: { status: 401, data: { detail: 'expired' } },
+    isAxiosError: true,
+  });
+}
+
+function axios200(config, data = { ok: true }) {
+  return { data, status: 200, statusText: 'OK', headers: {}, config };
+}
+
+describe('api response interceptor — 401 → refresh → replay', () => {
+  beforeEach(() => {
+    tokenStore.clear();
+    tokenStore.setRefreshHandler(null);
+    tokenStore.setLogoutHandler(null);
+    delete api.defaults.adapter;
+  });
+
+  it('refreshes the token and replays the original request with the new bearer', async () => {
+    const seenHeaders = [];
+    installAdapter((config) => {
+      seenHeaders.push(config.headers?.Authorization);
+      if (config._retry) return axios200(config);
+      return axios401(config);
+    });
+
+    const refresh = vi.fn(async () => {
+      tokenStore.set('new-access-token');
+      return 'new-access-token';
+    });
+    tokenStore.setRefreshHandler(refresh);
+
+    const res = await api.get('/companies/');
+
+    expect(res.data).toEqual({ ok: true });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    // Two round-trips: the original 401 and the replay.
+    expect(seenHeaders).toHaveLength(2);
+    // The replayed request carries the refreshed bearer token.
+    expect(seenHeaders[1]).toBe('Bearer new-access-token');
+  });
+
+  it('logs out and rejects when the refresh fails', async () => {
+    installAdapter((config) => axios401(config));
+
+    const refresh = vi.fn(async () => null); // refresh impossible
+    const logout = vi.fn();
+    tokenStore.setRefreshHandler(refresh);
+    tokenStore.setLogoutHandler(logout);
+
+    await expect(api.get('/companies/')).rejects.toMatchObject({
+      response: { status: 401 },
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not attempt a second refresh on a replay that also 401s', async () => {
+    let calls = 0;
+    installAdapter((config) => {
+      calls += 1;
+      return axios401(config); // always 401, even the replay
+    });
+
+    const refresh = vi.fn(async () => 'still-bad-token');
+    const logout = vi.fn();
+    tokenStore.setRefreshHandler(refresh);
+    tokenStore.setLogoutHandler(logout);
+
+    await expect(api.get('/companies/')).rejects.toMatchObject({
+      response: { status: 401 },
+    });
+    // Original + one replay only — the _retry guard stops an infinite loop.
+    expect(calls).toBe(2);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips refresh for requests flagged _skipAuthRefresh (auth endpoints)', async () => {
+    installAdapter((config) => axios401(config));
+
+    const refresh = vi.fn(async () => 'token');
+    tokenStore.setRefreshHandler(refresh);
+
+    await expect(
+      api.post('/auth/login', {}, { _skipAuthRefresh: true })
+    ).rejects.toMatchObject({ response: { status: 401 } });
+
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('api request interceptor — auth headers', () => {
+  beforeEach(() => {
+    tokenStore.clear();
+    delete api.defaults.adapter;
+  });
+
+  it('attaches the bearer token when logged in', async () => {
+    tokenStore.set('abc-123');
+    let seen;
+    installAdapter((config) => {
+      seen = config.headers?.Authorization;
+      return axios200(config);
+    });
+
+    await api.get('/dashboard/overview');
+    expect(seen).toBe('Bearer abc-123');
+  });
+
+  it('omits the bearer token when logged out', async () => {
+    let seen = 'unset';
+    installAdapter((config) => {
+      seen = config.headers?.Authorization;
+      return axios200(config);
+    });
+
+    await api.get('/dashboard/overview');
+    expect(seen).toBeUndefined();
+  });
+});
