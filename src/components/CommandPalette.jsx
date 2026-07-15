@@ -25,6 +25,7 @@ import {
   Phone,
   Landmark,
   Activity,
+  Radio,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -49,6 +50,7 @@ const COMMANDS = [
   { id: 'tasks', label: 'Go to Tasks', hint: 'Follow-ups & to-dos', icon: CheckSquare, to: '/tasks', keywords: 'todo follow-up due calendar' },
   { id: 'reports', label: 'Go to Reports', hint: 'Retention, revenue & activity', icon: BarChart3, to: '/reports', keywords: 'analytics funnel heatmap export csv' },
   { id: 'daily-activity', label: 'Daily Activity', hint: "Autonomous agent's daily summary", icon: Activity, to: '/daily-activity', keywords: 'daily activity summary agent autonomous digest emails sent bounces replies briefing' },
+  { id: 'dialtone-console', label: 'Dialtone Console', hint: 'Live activity log for the cold-email agent', icon: Radio, to: '/dialtone', keywords: 'dialtone console activity log live realtime agent emails opens clicks replies bounces errors leads warmup engagement feed' },
   { id: 'calls', label: 'Cold Calling', hint: "Today's call queue & briefings", icon: Phone, to: '/calls', keywords: 'phone call queue dial briefing script cold' },
   { id: 'knowledge', label: 'Knowledge Base', hint: 'Contacts, guidelines & strategy', icon: BookOpen, to: '/knowledge', keywords: 'guidelines strategy industry playbook docs ai config contacts' },
   { id: 'investors', label: 'Go to Investors', hint: 'Fundraising pipeline & investor CRM', icon: Landmark, to: '/investors', keywords: 'investor fundraise fundraising vc venture capital pipeline funnel seed series check raise' },

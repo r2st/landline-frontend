@@ -258,6 +258,15 @@ export const deliverabilityApi = {
     api.get('/deliverability/domain-auth', { params: { domain, dkim_selector: dkimSelector || undefined } }).then(r => r.data),
 };
 
+// Dialtone Console — the unified activity log for the autonomous cold-email agent.
+export const dialtoneApi = {
+  // At-a-glance header: sending state, warm-up ramp, today's tallies, senders.
+  console: () => api.get('/dialtone/console').then(r => r.data),
+  // Chronological event stream. `params` accepts { start, end, types, status,
+  // contact_id, q, page, page_size }.
+  activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
+};
+
 // Email communication — unified inbox, lead threads, reply sending
 export const emailHistoryApi = {
   getLeadEmails: (companyId, params) => api.get(`/emails/lead/${companyId}`, { params }).then(r => r.data),

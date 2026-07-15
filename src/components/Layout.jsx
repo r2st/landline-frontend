@@ -32,6 +32,7 @@ import {
   LogOut,
   UserCog,
   Activity,
+  Radio,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -53,6 +54,7 @@ const navSections = [
       { name: 'Tasks', href: '/tasks', icon: CheckSquare },
       { name: 'Analytics', href: '/analytics', icon: BarChart3 },
       { name: 'Daily Activity', href: '/daily-activity', icon: Activity },
+      { name: 'Dialtone Console', href: '/dialtone', icon: Radio },
     ],
   },
   {
