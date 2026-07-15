@@ -5,11 +5,12 @@ import { cn } from '../lib/utils';
 import toast from 'react-hot-toast';
 
 /**
- * Global sending kill switch.
+ * Dialtone kill switch (global sending pause).
  *
- * Shows the current sending state (ACTIVE / PAUSED) and lets an operator halt or
- * resume ALL autonomous outbound email. Halting requires an explicit
- * confirmation because it pauses every active sequence enrollment immediately.
+ * Shows whether Dialtone — the autonomous cold-email agent — is active or paused,
+ * and lets an operator pause or resume ALL of its outbound email. Pausing
+ * requires an explicit confirmation because it stops every active sequence
+ * enrollment immediately.
  *
  * `compact` renders a single-row banner (used on the Daily Activity page);
  * the default renders a full card (used on Settings → System).
@@ -52,18 +53,18 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
         if (enabled) {
           toast.success(
             data.enrollments_affected
-              ? `Sending resumed — ${data.enrollments_affected} enrollment(s) reactivated`
-              : 'Sending resumed'
+              ? `Dialtone resumed — ${data.enrollments_affected} enrollment(s) reactivated`
+              : 'Dialtone resumed'
           );
         } else {
           toast.success(
             data.enrollments_affected
-              ? `Sending halted — ${data.enrollments_affected} enrollment(s) paused`
-              : 'Sending halted'
+              ? `Dialtone paused — ${data.enrollments_affected} enrollment(s) paused`
+              : 'Dialtone paused'
           );
         }
       } catch {
-        toast.error('Could not update sending status');
+        toast.error('Could not update Dialtone status');
       } finally {
         setSaving(false);
       }
@@ -100,7 +101,7 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
       )}
     >
       <span className={cn('h-2 w-2 rounded-full', enabled ? 'bg-green-500' : 'bg-red-500 animate-pulse')} />
-      {enabled ? 'Sending ACTIVE' : 'Sending PAUSED'}
+      {enabled ? 'Dialtone active' : 'Dialtone paused'}
     </span>
   );
 
@@ -134,7 +135,7 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
               className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
             >
               <Power className="h-3.5 w-3.5" />
-              Stop all sending
+              Pause Dialtone
             </button>
           )
         ) : (
@@ -145,7 +146,7 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
             className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
-            Resume sending
+            Resume Dialtone
           </button>
         )}
       </div>
@@ -160,8 +161,8 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
           {enabled ? <ShieldCheck className="h-5 w-5 text-green-600" /> : <ShieldAlert className="h-5 w-5 text-red-600" />}
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Global Sending Kill Switch</h2>
-          <p className="text-sm text-gray-500">Immediately halt or resume ALL autonomous outgoing email</p>
+          <h2 className="text-lg font-semibold text-gray-900">Dialtone Kill Switch</h2>
+          <p className="text-sm text-gray-500">Immediately pause or resume Dialtone — all autonomous outgoing email</p>
         </div>
       </div>
 
@@ -189,7 +190,7 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
               className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700"
             >
               <Power className="h-4 w-4" />
-              Stop all sending
+              Pause Dialtone
             </button>
           )
         ) : (
@@ -200,7 +201,7 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
             className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-            Resume sending
+            Resume Dialtone
           </button>
         )}
       </div>
@@ -223,8 +224,8 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
       )}
 
       <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-xs text-amber-700">
-        When engaged, the outreach queue, sequence steps, auto-replies, and test sends all stop immediately, and every
-        active enrollment is paused. Resuming reactivates exactly those paused enrollments.
+        When Dialtone is paused, the outreach queue, sequence steps, auto-replies, and test sends all stop immediately,
+        and every active enrollment is paused. Resuming reactivates exactly those paused enrollments.
       </div>
     </div>
   );
@@ -233,7 +234,7 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
 function ConfirmHalt({ saving, onConfirm, onCancel }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-red-700">This stops ALL outgoing emails. Sure?</span>
+      <span className="text-xs font-medium text-red-700">This pauses Dialtone and stops ALL outgoing emails. Sure?</span>
       <button
         type="button"
         disabled={saving}

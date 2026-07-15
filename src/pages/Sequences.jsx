@@ -1072,7 +1072,7 @@ export default function Sequences() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500">
-            Manage your email outreach sequences and track performance.
+            Build the outreach sequences Dialtone sends automatically, and track their performance.
           </p>
         </div>
         {!showBuilder && (

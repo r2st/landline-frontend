@@ -23,39 +23,39 @@ beforeEach(() => {
 });
 
 describe('SendingKillSwitch', () => {
-  it('shows ACTIVE status and a stop button when sending is enabled', async () => {
+  it('shows active status and a pause button when Dialtone is enabled', async () => {
     mockGet.mockResolvedValue({ data: { enabled: true, today_sent: 5, daily_limit: 25 } });
     render(<SendingKillSwitch />);
 
-    expect(await screen.findByText('Sending ACTIVE')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /stop all sending/i })).toBeInTheDocument();
+    expect(await screen.findByText('Dialtone active')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pause dialtone/i })).toBeInTheDocument();
   });
 
-  it('requires confirmation, then halts sending', async () => {
+  it('requires confirmation, then pauses Dialtone', async () => {
     const user = userEvent.setup();
     mockGet.mockResolvedValue({ data: { enabled: true } });
     mockPost.mockResolvedValue({ data: { enabled: false, enrollments_affected: 3 } });
 
     render(<SendingKillSwitch />);
-    await screen.findByText('Sending ACTIVE');
+    await screen.findByText('Dialtone active');
 
-    await user.click(screen.getByRole('button', { name: /stop all sending/i }));
+    await user.click(screen.getByRole('button', { name: /pause dialtone/i }));
     // Confirmation appears before anything is sent.
-    expect(screen.getByText(/this stops all outgoing emails/i)).toBeInTheDocument();
+    expect(screen.getByText(/pauses dialtone and stops all outgoing emails/i)).toBeInTheDocument();
     expect(mockPost).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: /confirm halt/i }));
     await waitFor(() =>
       expect(mockPost).toHaveBeenCalledWith('/system/sending-toggle', expect.objectContaining({ enabled: false }))
     );
-    expect(await screen.findByText('Sending PAUSED')).toBeInTheDocument();
+    expect(await screen.findByText('Dialtone paused')).toBeInTheDocument();
   });
 
-  it('shows PAUSED status and a resume button when sending is disabled', async () => {
+  it('shows paused status and a resume button when Dialtone is disabled', async () => {
     mockGet.mockResolvedValue({ data: { enabled: false, reason: 'manual' } });
     render(<SendingKillSwitch />);
 
-    expect(await screen.findByText('Sending PAUSED')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /resume sending/i })).toBeInTheDocument();
+    expect(await screen.findByText('Dialtone paused')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resume dialtone/i })).toBeInTheDocument();
   });
 });
