@@ -7,6 +7,12 @@ vi.mock('../hooks/useReports', () => ({
   useDailySummary: (...args) => mockUseDailySummary(...args),
 }));
 
+// The embedded SendingKillSwitch banner fetches sending status on mount — stub
+// the API client so the page renders offline without hitting the network.
+vi.mock('../api/client', () => ({
+  api: { get: vi.fn().mockResolvedValue({ data: { enabled: true } }), post: vi.fn() },
+}));
+
 // Recharts' ResponsiveContainer needs real layout; stub it so charts render at a
 // fixed size under jsdom instead of collapsing to 0×0 and warning.
 vi.mock('recharts', async (importOriginal) => {

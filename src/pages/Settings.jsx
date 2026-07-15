@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import GmailConnect from '../components/GmailConnect';
 import EmailSignatureEditor from '../components/EmailSignatureEditor';
+import SendingKillSwitch from '../components/SendingKillSwitch';
+import TestDeliverability from '../components/TestDeliverability';
 import { api } from '../api/client';
 import { API_BASE_URL } from '../lib/constants';
 import { cn } from '../lib/utils';
@@ -706,6 +708,12 @@ export default function Settings() {
 
   const renderSystemTab = () => (
     <div className="space-y-6">
+      {/* Global sending kill switch — the launch-blocker safety valve. */}
+      <SendingKillSwitch />
+
+      {/* Test deliverability — compliant test send + SPF/DKIM/DMARC posture. */}
+      <TestDeliverability />
+
       {/* API Configuration */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-3">

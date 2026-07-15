@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import EmptyState from '../components/EmptyState';
 import MetricCard from '../components/MetricCard';
+import SendingKillSwitch from '../components/SendingKillSwitch';
 import { useDailySummary } from '../hooks/useReports';
 import { cn } from '../lib/utils';
 
@@ -122,6 +123,9 @@ export default function DailyActivity() {
           ))}
         </div>
       </div>
+
+      {/* Global sending status + kill switch */}
+      <SendingKillSwitch compact />
 
       {!latest ? (
         <EmptyState
