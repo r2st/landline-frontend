@@ -31,6 +31,7 @@ import {
   Brain,
   LogOut,
   UserCog,
+  Activity,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -51,6 +52,7 @@ const navSections = [
       { name: 'Pipeline', href: '/pipeline', icon: GitBranch },
       { name: 'Tasks', href: '/tasks', icon: CheckSquare },
       { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+      { name: 'Daily Activity', href: '/daily-activity', icon: Activity },
     ],
   },
   {

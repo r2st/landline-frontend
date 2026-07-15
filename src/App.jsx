@@ -24,6 +24,7 @@ const Clients = lazy(() => import('./pages/Clients'));
 const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
 const Tasks = lazy(() => import('./pages/Tasks'));
 const Reports = lazy(() => import('./pages/Reports'));
+const DailyActivity = lazy(() => import('./pages/DailyActivity'));
 const Inbox = lazy(() => import('./pages/Inbox'));
 const Knowledge = lazy(() => import('./pages/Knowledge'));
 const Calls = lazy(() => import('./pages/Calls'));
@@ -108,6 +109,7 @@ export default function App() {
           <Route path="/client-dashboard" element={<ClientDashboard />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/daily-activity" element={<DailyActivity />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/calls" element={<Calls />} />

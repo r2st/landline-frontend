@@ -246,6 +246,9 @@ export const reportsApi = {
   emailPerformance: (params) => api.get('/reports/email-performance', { params }).then(r => r.data),
   pipelineAnalytics: (params) => api.get('/reports/pipeline-analytics', { params }).then(r => r.data),
   leadQuality: (params) => api.get('/reports/lead-quality', { params }).then(r => r.data),
+  // Daily autonomous-activity summary: latest + short history, or a specific date.
+  dailySummary: (days = 30) => api.get('/reports/daily-summary', { params: { days } }).then(r => r.data),
+  dailySummaryByDate: (date) => api.get(`/reports/daily-summary/${date}`).then(r => r.data),
 };
 
 // Deliverability — sender health + sending-domain SPF/DKIM/DMARC checks

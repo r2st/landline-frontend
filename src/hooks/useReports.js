@@ -54,3 +54,20 @@ export function useLeadQualityReport(days = 30) {
     retry: false,
   });
 }
+
+// Daily autonomous-activity summary — returns { latest, history }. Degrades to
+// an empty shape so the page renders even if the backend isn't ready.
+export function useDailySummary(days = 30) {
+  return useQuery({
+    queryKey: ['report-daily-summary', days],
+    queryFn: async () => {
+      try {
+        const data = await reportsApi.dailySummary(days);
+        return { latest: data?.latest || null, history: data?.history || [] };
+      } catch {
+        return { latest: null, history: [] };
+      }
+    },
+    retry: false,
+  });
+}
