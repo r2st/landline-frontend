@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart3, Download, TrendingUp, Filter as FilterIcon, Activity, Trophy,
-  Users, DollarSign, Heart, Zap,
+  Users, DollarSign, Heart, Zap, ShieldCheck, GraduationCap,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -11,7 +11,9 @@ import {
 import EmptyState from '../components/EmptyState';
 import {
   useRetentionReport, useRevenueFunnelReport, useActivityHeatmapReport, useTopClientsReport,
+  useLeadQualityReport,
 } from '../hooks/useReports';
+import { deliverabilityApi } from '../api/client';
 import { STAGE_LABELS, STAGE_COLORS } from '../lib/constants';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 
@@ -44,6 +46,131 @@ function shortDate(d) {
   const dt = new Date(d);
   if (isNaN(dt)) return String(d);
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const GRADE_BAR = { A: 'bg-green-500', B: 'bg-lime-500', C: 'bg-amber-500', D: 'bg-orange-500', F: 'bg-red-400' };
+
+function statusBadge(status) {
+  if (status === 'pass') return 'bg-green-50 text-green-700';
+  if (status === 'warn') return 'bg-amber-50 text-amber-700';
+  if (status === 'fail') return 'bg-red-50 text-red-700';
+  return 'bg-gray-100 text-gray-500';
+}
+
+// A/B/C/D/F grade distribution for the current leads plus qualified /
+// disqualified / average-fit summary stats.
+function LeadQualityCard({ report }) {
+  const dist = report?.grade_distribution || {};
+  const grades = ['A', 'B', 'C', 'D', 'F'];
+  const total = grades.reduce((s, g) => s + (dist[g] || 0), 0);
+  return (
+    <ChartCard title="Lead Quality" icon={GraduationCap}>
+      {total === 0 ? (
+        <EmptyState icon={GraduationCap} title="No scored leads yet" description="Grades appear once leads are scored." />
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              ['Qualified (A/B)', report.qualified_leads ?? 0],
+              ['Disqualified', report.disqualified_leads ?? 0],
+              ['Avg Fit', report.average_fit_score ?? 0],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-gray-50 p-3">
+                <p className="text-[11px] font-medium text-gray-500">{label}</p>
+                <p className="mt-0.5 text-lg font-bold text-gray-900">{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {grades.map((g) => {
+              const count = dist[g] || 0;
+              const pct = total ? Math.round((count / total) * 100) : 0;
+              return (
+                <div key={g} className="flex items-center gap-3">
+                  <span className="w-5 text-right text-xs font-semibold text-gray-600">{g}</span>
+                  <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
+                    <div className={cn('h-full rounded-md', GRADE_BAR[g])} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-10 text-right text-xs text-gray-500">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </ChartCard>
+  );
+}
+
+// On-demand SPF/DKIM/DMARC check for a sending domain.
+function DomainAuthChecker() {
+  const [domain, setDomain] = useState('');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const check = async () => {
+    const d = domain.trim();
+    if (!d) return;
+    setLoading(true); setError(''); setResult(null);
+    try {
+      setResult(await deliverabilityApi.domainAuth(d));
+    } catch {
+      setError('Check failed — try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rows = result ? [['SPF', result.spf], ['DKIM', result.dkim], ['DMARC', result.dmarc]] : [];
+  return (
+    <ChartCard title="Domain Authentication" icon={ShieldCheck}>
+      <div className="flex gap-2">
+        <input
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && check()}
+          placeholder="yourdomain.com"
+          className="h-9 flex-1 rounded-md border border-gray-300 px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+        <button
+          type="button"
+          onClick={check}
+          disabled={loading}
+          className="h-9 rounded-md bg-indigo-600 px-4 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {loading ? 'Checking…' : 'Check'}
+        </button>
+      </div>
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {!result && !error && (
+        <p className="mt-3 text-xs text-gray-400">Verify SPF, DKIM and DMARC are set up before warming a sender.</p>
+      )}
+      {result && (
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">{result.domain}</span>
+            <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold uppercase', statusBadge(result.overall))}>
+              {result.overall}
+            </span>
+          </div>
+          {rows.map(([label, rec]) => (
+            <div key={label} className="flex items-center justify-between rounded-md border border-gray-100 px-3 py-2">
+              <span className="text-xs font-medium text-gray-600">{label}</span>
+              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase', statusBadge(rec?.status))}>
+                {rec?.status || 'unknown'}
+              </span>
+            </div>
+          ))}
+          {result.recommendations?.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-gray-500">
+              {result.recommendations.slice(0, 4).map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </ChartCard>
+  );
 }
 
 // Horizontal funnel: bars scaled to the largest stage value.
@@ -174,6 +301,7 @@ export default function Reports() {
   const { data: funnel = [] } = useRevenueFunnelReport(params);
   const { data: heatmap = [] } = useActivityHeatmapReport(params);
   const { data: topClients = [] } = useTopClientsReport(params);
+  const { data: leadQuality = {} } = useLeadQualityReport(30);
 
   const retentionData = retention.map((r) => ({ date: shortDate(r.date ?? r.period), rate: r.rate ?? r.value ?? 0 }));
   const funnelData = funnel.map((f) => ({ stage: f.stage, value: f.value ?? f.revenue ?? 0, count: f.count }));
@@ -371,6 +499,12 @@ export default function Reports() {
             </div>
           )}
         </ChartCard>
+      </div>
+
+      {/* Lead quality + sending-domain authentication */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <LeadQualityCard report={leadQuality} />
+        <DomainAuthChecker />
       </div>
 
       {/* Sales Velocity */}

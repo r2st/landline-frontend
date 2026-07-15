@@ -38,3 +38,19 @@ export function useActivityHeatmapReport(range) {
 export function useTopClientsReport(range) {
   return reportQuery('report-top-clients', (r) => reportsApi.topClients(r), range);
 }
+
+// Lead-quality returns an object (grade distribution, counts), not an array, so
+// it can't use reportQuery's asArray wrapper. Degrades to an empty object.
+export function useLeadQualityReport(days = 30) {
+  return useQuery({
+    queryKey: ['report-lead-quality', days],
+    queryFn: async () => {
+      try {
+        return await reportsApi.leadQuality({ days });
+      } catch {
+        return {};
+      }
+    },
+    retry: false,
+  });
+}

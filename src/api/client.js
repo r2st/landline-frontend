@@ -245,6 +245,14 @@ export const reportsApi = {
   topClients: (params) => api.get('/reports/top-clients', { params }).then(r => r.data),
   emailPerformance: (params) => api.get('/reports/email-performance', { params }).then(r => r.data),
   pipelineAnalytics: (params) => api.get('/reports/pipeline-analytics', { params }).then(r => r.data),
+  leadQuality: (params) => api.get('/reports/lead-quality', { params }).then(r => r.data),
+};
+
+// Deliverability — sender health + sending-domain SPF/DKIM/DMARC checks
+export const deliverabilityApi = {
+  senders: () => api.get('/deliverability/senders').then(r => r.data),
+  domainAuth: (domain, dkimSelector) =>
+    api.get('/deliverability/domain-auth', { params: { domain, dkim_selector: dkimSelector || undefined } }).then(r => r.data),
 };
 
 // Email communication — unified inbox, lead threads, reply sending
