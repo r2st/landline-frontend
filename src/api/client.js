@@ -267,6 +267,22 @@ export const dialtoneApi = {
   activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
 };
 
+// Autonomous prospecting — the agent sources companies, scores them against the
+// learned ICP, and parks the borderline ones for a human call.
+export const prospectingApi = {
+  // Candidates by disposition. `params` accepts { status, limit, sort, order }.
+  // `status` is the *stored* disposition: 'review' is the pending queue and
+  // 'enrolled' is what a reviewer approved — there is no 'approved' status.
+  reviewQueue: (params) => api.get('/prospecting/review-queue', { params }).then(r => r.data),
+  approve: (id, reviewer) =>
+    api.post(`/prospecting/candidates/${id}/approve`, null, { params: { reviewer } }).then(r => r.data),
+  reject: (id, reviewer) =>
+    api.post(`/prospecting/candidates/${id}/reject`, null, { params: { reviewer } }).then(r => r.data),
+  runs: (params) => api.get('/prospecting/runs', { params }).then(r => r.data),
+  runCandidates: (runId) => api.get(`/prospecting/runs/${runId}/candidates`).then(r => r.data),
+  icp: () => api.get('/prospecting/icp').then(r => r.data),
+};
+
 // Email communication — unified inbox, lead threads, reply sending
 export const emailHistoryApi = {
   getLeadEmails: (companyId, params) => api.get(`/emails/lead/${companyId}`, { params }).then(r => r.data),

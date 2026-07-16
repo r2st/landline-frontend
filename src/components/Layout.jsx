@@ -33,6 +33,7 @@ import {
   UserCog,
   Activity,
   Radio,
+  Radar,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -64,6 +65,7 @@ const navSections = [
       { name: 'Companies', href: '/companies', icon: Building2 },
       { name: 'Contacts', href: '/contacts', icon: Users },
       { name: 'Discovery', href: '/discovery', icon: Sparkles },
+      { name: 'Prospecting', href: '/prospecting', icon: Radar },
       { name: 'Groups', href: '/groups', icon: Folder },
       { name: 'News', href: '/news', icon: Newspaper },
       { name: 'Import', href: '/import', icon: Upload },

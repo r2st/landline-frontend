@@ -11,6 +11,7 @@ const Companies = lazy(() => import('./pages/Companies'));
 const CompanyDetail = lazy(() => import('./pages/CompanyDetail'));
 const Import = lazy(() => import('./pages/Import'));
 const Discovery = lazy(() => import('./pages/Discovery'));
+const Prospecting = lazy(() => import('./pages/Prospecting'));
 const Sequences = lazy(() => import('./pages/Sequences'));
 const Outreach = lazy(() => import('./pages/Outreach'));
 const FollowUps = lazy(() => import('./pages/FollowUps'));
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/companies/:id" element={<CompanyDetail />} />
           <Route path="/import" element={<Import />} />
           <Route path="/discovery" element={<Discovery />} />
+          <Route path="/prospecting" element={<Prospecting />} />
           <Route path="/sequences" element={<Sequences />} />
           <Route path="/outreach" element={<Outreach />} />
           <Route path="/follow-ups" element={<FollowUps />} />
