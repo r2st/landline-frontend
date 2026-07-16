@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 // Mock the data hook so the page renders deterministically without a backend.
 const mockUseDailySummary = vi.fn();
@@ -53,10 +54,17 @@ const SAMPLE = {
   ],
 };
 
+const renderPage = () =>
+  render(
+    <MemoryRouter>
+      <DailyActivity />
+    </MemoryRouter>
+  );
+
 describe('DailyActivity page', () => {
   it('renders the narrative, headline metrics, and history', () => {
     mockUseDailySummary.mockReturnValue({ data: SAMPLE, isLoading: false });
-    render(<DailyActivity />);
+    renderPage();
 
     expect(screen.getByText('Daily Activity')).toBeInTheDocument();
     // Page is branded as Dialtone and renders Dialtone's narrative + briefing.
@@ -75,15 +83,23 @@ describe('DailyActivity page', () => {
     expect(screen.getByText('sales@apprend.com')).toBeInTheDocument();
   });
 
+  it('links the headline metrics to the records behind them', () => {
+    mockUseDailySummary.mockReturnValue({ data: SAMPLE, isLoading: false });
+    renderPage();
+    expect(screen.getByRole('link', { name: /^Leads found/ })).toHaveAttribute('href', '/prospecting');
+    expect(screen.getByRole('link', { name: /^Emails sent/ })).toHaveAttribute('href', '/dialtone?type=email_sent');
+    expect(screen.getByRole('link', { name: /^Replies/ })).toHaveAttribute('href', '/inbox');
+  });
+
   it('shows an empty state when there is no summary yet', () => {
     mockUseDailySummary.mockReturnValue({ data: { latest: null, history: [] }, isLoading: false });
-    render(<DailyActivity />);
+    renderPage();
     expect(screen.getByText('No activity summaries yet')).toBeInTheDocument();
   });
 
   it('shows a loading skeleton while fetching', () => {
     mockUseDailySummary.mockReturnValue({ data: undefined, isLoading: true });
-    const { container } = render(<DailyActivity />);
+    const { container } = renderPage();
     expect(container.querySelector('.animate-pulse')).toBeTruthy();
   });
 });

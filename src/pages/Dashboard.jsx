@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Building2,
@@ -159,20 +159,29 @@ function QuickStatsRow({ kpis, metricsLoading }) {
   }
 
   const stats = [
-    { label: 'Emails Sent Today', value: kpis.emails_sent_today || 0, color: 'text-blue-600', bgAccent: 'bg-blue-50 border-blue-100', trend: 'Daily outreach activity' },
-    { label: 'Open Rate', value: `${kpis.open_rate || 0}%`, color: 'text-emerald-600', bgAccent: 'bg-emerald-50 border-emerald-100', trend: `${(kpis.open_rate || 0) >= 25 ? 'Above' : 'Below'} 25% industry avg` },
-    { label: 'Replies This Week', value: kpis.replies_this_week || 0, color: 'text-purple-600', bgAccent: 'bg-purple-50 border-purple-100', trend: 'Engagement from prospects' },
-    { label: 'Deals Won This Month', value: kpis.deals_won_this_month || 0, color: 'text-amber-600', bgAccent: 'bg-amber-50 border-amber-100', trend: 'Closed-won deals this month' },
+    { label: 'Emails Sent Today', value: kpis.emails_sent_today || 0, color: 'text-blue-600', bgAccent: 'bg-blue-50 border-blue-100', trend: 'Daily outreach activity', to: '/outreach?tab=history' },
+    { label: 'Open Rate', value: `${kpis.open_rate || 0}%`, color: 'text-emerald-600', bgAccent: 'bg-emerald-50 border-emerald-100', trend: `${(kpis.open_rate || 0) >= 25 ? 'Above' : 'Below'} 25% industry avg`, to: '/analytics' },
+    { label: 'Replies This Week', value: kpis.replies_this_week || 0, color: 'text-purple-600', bgAccent: 'bg-purple-50 border-purple-100', trend: 'Engagement from prospects', to: '/inbox' },
+    { label: 'Deals Won This Month', value: kpis.deals_won_this_month || 0, color: 'text-amber-600', bgAccent: 'bg-amber-50 border-amber-100', trend: 'Closed-won deals this month', to: '/pipeline' },
   ];
 
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {stats.map((s) => (
-        <div key={s.label} className={`rounded-xl border p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${s.bgAccent}`} title={s.trend}>
+        <Link
+          key={s.label}
+          to={s.to}
+          title={s.trend}
+          className={cn(
+            'group block rounded-xl border p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2',
+            s.bgAccent
+          )}
+        >
           <p className="text-xs font-medium uppercase tracking-wider text-gray-500">{s.label}</p>
-          <p className={`mt-2 text-3xl font-bold ${s.color}`}>{s.value}</p>
+          <p className={cn('mt-2 text-3xl font-bold underline-offset-4 group-hover:underline', s.color)}>{s.value}</p>
           <p className="mt-1 text-xs text-gray-400">{s.trend}</p>
-        </div>
+        </Link>
       ))}
     </div>
   );
@@ -542,6 +551,8 @@ function Dashboard() {
               value={formatNumber(metrics?.total_leads || 0)}
               icon={Building2}
               color="blue"
+              to="/companies"
+              linkLabel="Total leads — view all companies"
               change={calcChange(metrics?.leads_this_week || 0, metrics?.leads_prev_week || 0)}
               subtitle={`${metrics?.leads_this_week || 0} added this week`}
             />
@@ -550,6 +561,8 @@ function Dashboard() {
               value={formatNumber(metrics?.total_contacts || 0)}
               icon={Users}
               color="teal"
+              to="/contacts"
+              linkLabel="Total contacts — view all contacts"
               change={calcChange(metrics?.contacts_this_week || 0, metrics?.contacts_prev_week || 0)}
             />
             <MetricCard
@@ -557,6 +570,8 @@ function Dashboard() {
               value={formatNumber(metrics?.emails_sent || 0)}
               icon={Mail}
               color="purple"
+              to="/outreach?tab=history"
+              linkLabel="Emails sent — view send history"
               change={calcChange(metrics?.emails_sent || 0, metrics?.emails_sent_prev_week || 0)}
               subtitle={`${metrics?.open_rate || 0}% open rate`}
               sparkline={
@@ -574,12 +589,16 @@ function Dashboard() {
               value={metrics?.avg_score || 0}
               icon={Target}
               color="yellow"
+              to="/companies"
+              linkLabel="Average lead score — view scored companies"
             />
             <MetricCard
               title="Active Deals"
               value={formatNumber(metrics?.active_deals_count || 0)}
               icon={DollarSign}
               color="green"
+              to="/pipeline"
+              linkLabel="Active deals — view the deal pipeline"
               subtitle={`${formatCurrency(metrics?.active_deals_value || 0, { compact: true })} pipeline`}
             />
             <MetricCard
@@ -587,6 +606,8 @@ function Dashboard() {
               value={formatNumber(metrics?.tasks_due_today || 0)}
               icon={CheckCircle2}
               color="orange"
+              to="/tasks"
+              linkLabel="Tasks due today — view tasks"
             />
           </>
         )}
@@ -632,22 +653,39 @@ function Dashboard() {
                   {recentItems.map((item) => {
                     const IconComp = activityIcons[item.type] || Activity;
                     const colorClass = activityColors[item.type] || 'text-gray-500 bg-gray-50';
-                    return (
-                      <li
-                        key={item.id}
-                        className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 cursor-pointer"
-                        onClick={() => item.company_id && navigate(`/companies/${item.company_id}`)}
-                      >
+                    // Only events carrying a company have somewhere to go — the
+                    // rest stay inert rather than showing a dead pointer.
+                    const target = item.company_id ? `/companies/${item.company_id}` : null;
+                    const body = (
+                      <>
                         <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${colorClass}`}>
                           <IconComp className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm text-gray-700 line-clamp-2">{item.description}</p>
                           {item.company_name && (
-                            <p className="mt-0.5 text-xs font-medium text-blue-600">{item.company_name}</p>
+                            <p className={cn('mt-0.5 text-xs font-medium text-blue-600', target && 'group-hover:underline')}>
+                              {item.company_name}
+                            </p>
                           )}
                           <p className="mt-0.5 text-xs text-gray-400">{timeAgo(item.created_at)}</p>
                         </div>
+                        {target && <ChevronRight className="h-4 w-4 flex-shrink-0 self-center text-gray-300" />}
+                      </>
+                    );
+                    return (
+                      <li key={item.id}>
+                        {target ? (
+                          <Link
+                            to={target}
+                            aria-label={`${item.company_name || 'Activity'} — open company`}
+                            className="group flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50"
+                          >
+                            {body}
+                          </Link>
+                        ) : (
+                          <div className="flex items-start gap-3 px-4 py-3">{body}</div>
+                        )}
                       </li>
                     );
                   })}

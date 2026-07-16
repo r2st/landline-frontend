@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 // Mock the data hooks so the page renders deterministically without a backend.
 const mockConsole = vi.fn();
@@ -41,7 +42,7 @@ const FEED = {
     {
       id: 'email_sent:1', type: 'email_sent', timestamp: new Date().toISOString(),
       title: 'Email sent to John Smith', description: 'Intro', source: 'email_send',
-      severity: 'ok', metadata: { to_email: 'john@acme.com', subject: 'Intro' },
+      severity: 'ok', metadata: { to_email: 'john@acme.com', subject: 'Intro', contact_id: 'c-1' },
     },
     {
       id: 'reply:1', type: 'reply', timestamp: new Date().toISOString(),
@@ -52,6 +53,13 @@ const FEED = {
   total: 2, page: 1, page_size: 50,
 };
 
+const renderPage = (path = '/dialtone') =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <DialtoneConsole />
+    </MemoryRouter>
+  );
+
 describe('DialtoneConsole page', () => {
   beforeEach(() => {
     mockConsole.mockReturnValue({ data: CONSOLE, isLoading: false, refetch: vi.fn(), isFetching: false });
@@ -59,7 +67,7 @@ describe('DialtoneConsole page', () => {
   });
 
   it('renders the console header, warm-up progress and today tallies', () => {
-    render(<DialtoneConsole />);
+    renderPage();
     expect(screen.getByText('Dialtone Console')).toBeInTheDocument();
     expect(screen.getByText('Warm-up progress')).toBeInTheDocument();
     // Warm-up "8 / 20 today" (8 also appears in the tallies, so assert ≥1).
@@ -70,7 +78,7 @@ describe('DialtoneConsole page', () => {
   });
 
   it('renders the activity feed events', () => {
-    render(<DialtoneConsole />);
+    renderPage();
     expect(screen.getByText('Email sent to John Smith')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe replied')).toBeInTheDocument();
     expect(screen.getByText('john@acme.com')).toBeInTheDocument();
@@ -78,7 +86,63 @@ describe('DialtoneConsole page', () => {
 
   it('shows an empty state when the feed is empty', () => {
     mockActivity.mockReturnValue({ data: { items: [], total: 0, page: 1, page_size: 50 }, isLoading: false });
-    render(<DialtoneConsole />);
+    renderPage();
     expect(screen.getByText('No activity yet')).toBeInTheDocument();
+  });
+
+  it('links each tally to the activity log filtered to those events', () => {
+    renderPage();
+    expect(screen.getByRole('link', { name: /^Sent: 8/ })).toHaveAttribute('href', '/dialtone?type=email_sent');
+    expect(screen.getByRole('link', { name: /^Leads found: 3/ })).toHaveAttribute('href', '/dialtone?type=lead_discovered');
+    // Warm-up headroom isn't a count of events, so it stays inert.
+    expect(screen.queryByRole('link', { name: /^Remaining/ })).toBeNull();
+  });
+
+  it('applies a type filter arriving from the URL', () => {
+    renderPage('/dialtone?type=lead_discovered');
+    expect(mockActivity).toHaveBeenCalledWith(expect.objectContaining({ types: 'lead_discovered' }));
+  });
+
+  it('asks for the whole of the chosen end date, not midnight', () => {
+    renderPage('/dialtone?end=2026-07-15');
+    expect(mockActivity).toHaveBeenCalledWith(expect.objectContaining({ end: '2026-07-15T23:59:59' }));
+  });
+
+  it('links a discovered lead to its company, and a send to its contact', () => {
+    mockActivity.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'lead_discovered:1', type: 'lead_discovered', timestamp: new Date().toISOString(),
+            title: 'Lead discovered: Acme Metals', description: 'Fit 72/100 · review',
+            source: 'prospecting', severity: 'ok', metadata: { candidate_id: 'p-1', company_id: 'co-9' },
+          },
+          ...FEED.items,
+        ],
+        total: 3, page: 1, page_size: 50,
+      },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.getByRole('link', { name: /Lead discovered: Acme Metals/ })).toHaveAttribute('href', '/companies/co-9');
+    expect(screen.getByRole('link', { name: /Email sent to John Smith/ })).toHaveAttribute('href', '/contacts?highlight=c-1');
+    // The reply carries no contact_id, so it has nowhere to go and isn't a link.
+    expect(screen.queryByRole('link', { name: /Jane Doe replied/ })).toBeNull();
+  });
+
+  it('sends a candidate with no company yet to the review queue', () => {
+    mockActivity.mockReturnValue({
+      data: {
+        items: [{
+          id: 'lead_discovered:2', type: 'lead_discovered', timestamp: new Date().toISOString(),
+          title: 'Lead discovered: Beta Works', description: 'Fit 60/100 · review',
+          source: 'prospecting', severity: 'ok', metadata: { candidate_id: 'p-2', company_id: null },
+        }],
+        total: 1, page: 1, page_size: 50,
+      },
+      isLoading: false,
+    });
+    renderPage();
+    expect(screen.getByRole('link', { name: /Lead discovered: Beta Works/ })).toHaveAttribute('href', '/prospecting');
   });
 });

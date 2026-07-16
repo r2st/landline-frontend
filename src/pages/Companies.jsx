@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   Plus,
@@ -413,28 +413,71 @@ function BulkActionBar({ selectedIds, onDeselect, onStageChange, onAddToGroup, o
   );
 }
 
+const EMPTY_FILTERS = {
+  stage: '',
+  country: '',
+  source: '',
+  industry: '',
+  scoreMin: '',
+  scoreMax: '',
+  enriched: '',
+  has_contacts: false,
+};
+
+// Filters this page accepts from the URL, so a stat tile elsewhere in the app
+// can link straight to the rows behind its number (e.g. Leads found →
+// /companies?source=google_places).
+function filtersFromParams(params) {
+  return {
+    ...EMPTY_FILTERS,
+    stage: params.get('stage') || '',
+    country: params.get('country') || '',
+    source: params.get('source') || '',
+    industry: params.get('industry') || '',
+    scoreMin: params.get('scoreMin') || '',
+    scoreMax: params.get('scoreMax') || '',
+    enriched: params.get('enriched') || '',
+    has_contacts: params.get('has_contacts') === 'true',
+  };
+}
+
+function anyFilterSet(f) {
+  return Object.entries(f).some(([k, v]) => (k === 'has_contacts' ? v === true : v !== ''));
+}
+
 export default function Companies() {
   const navigate = useNavigate();
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramString = searchParams.toString();
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || '');
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [showModal, setShowModal] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bulkOperating, setBulkOperating] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards' | 'byCity'
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [filters, setFilters] = useState({
-    stage: '',
-    country: '',
-    source: '',
-    industry: '',
-    scoreMin: '',
-    scoreMax: '',
-    enriched: '',
-    has_contacts: false,
-  });
+  const [filters, setFilters] = useState(() => filtersFromParams(searchParams));
+  // A filter arriving by link is invisible unless the panel is open — otherwise
+  // the list just looks short for no reason.
+  const [showFilters, setShowFilters] = useState(() => anyFilterSet(filtersFromParams(searchParams)));
+
+  // Re-apply whenever the query string changes: navigating between two filtered
+  // links (?source=apollo → ?source=google_places) reuses this component, so
+  // seeding state at mount alone would leave the first filter stuck on screen.
+  // Adjusted during render so the list never paints with the old filter first.
+  const [appliedParams, setAppliedParams] = useState(paramString);
+  if (appliedParams !== paramString) {
+    setAppliedParams(paramString);
+    const params = new URLSearchParams(paramString);
+    const next = filtersFromParams(params);
+    setFilters(next);
+    setSearchInput(params.get('q') || '');
+    setSearch(params.get('q') || '');
+    setPage(1);
+    if (anyFilterSet(next)) setShowFilters(true);
+  }
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -449,6 +492,7 @@ export default function Companies() {
   if (filters.country) serverFilters.country = filters.country;
   if (filters.industry) serverFilters.industry_segment = filters.industry;
   if (filters.enriched) serverFilters.enriched = filters.enriched;
+  if (filters.source) serverFilters.source = filters.source;
   if (filters.has_contacts) serverFilters.has_contacts = true;
   serverFilters.page = page;
   serverFilters.page_size = pageSize;
@@ -462,17 +506,18 @@ export default function Companies() {
   const { data: sequences } = useSequences();
   const addGroupMembers = useAddGroupMembers();
 
-  // Source + score range are filtered client-side (not supported server-side).
+  // Score range is filtered client-side (the list endpoint doesn't support it),
+  // so it only narrows the current page. Source is a server-side filter — doing
+  // it here would have scoped "all Places leads" to whichever 50 rows loaded.
   const companies = useMemo(() => {
     const min = filters.scoreMin !== '' ? Number(filters.scoreMin) : null;
     const max = filters.scoreMax !== '' ? Number(filters.scoreMax) : null;
     return (allCompanies || []).filter((c) => {
-      if (filters.source && c.source !== filters.source) return false;
       if (min != null && (c.score ?? -1) < min) return false;
       if (max != null && (c.score ?? 101) > max) return false;
       return true;
     });
-  }, [allCompanies, filters.source, filters.scoreMin, filters.scoreMax]);
+  }, [allCompanies, filters.scoreMin, filters.scoreMax]);
 
   // Hash-based color for company initial avatars
   const AVATAR_COLORS = [
@@ -536,6 +581,14 @@ export default function Companies() {
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
     setPage(1);
+  };
+
+  // Also drop the params that seeded these filters, so a cleared view stays
+  // cleared across a reload and the URL keeps matching what's on screen.
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setPage(1);
+    if (paramString) setSearchParams({}, { replace: true });
   };
 
   // Serialize rows to a CSV file and trigger a download. `value(row)` cells may
@@ -964,7 +1017,7 @@ export default function Companies() {
           {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => { setFilters({ stage: '', country: '', source: '', industry: '', scoreMin: '', scoreMax: '', enriched: '', has_contacts: false }); setPage(1); }}
+              onClick={clearFilters}
               className="h-9 text-sm text-gray-500 hover:text-gray-700"
             >
               Clear

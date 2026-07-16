@@ -4,7 +4,7 @@ import { companiesApi, queryClient } from '../api/client';
 import { normalizeCompanies, normalizeCompany, companyFormToApi } from '../lib/normalize';
 
 // Translate UI filter keys to the backend's company list query params.
-// Score/source filtering happens client-side (the list endpoint doesn't support them).
+// Score filtering happens client-side (the list endpoint doesn't support it).
 function toServerParams(filters = {}) {
   const params = {};
   if (filters.search) params.q = filters.search;
@@ -12,6 +12,7 @@ function toServerParams(filters = {}) {
   if (filters.country) params.country = filters.country;
   if (filters.industry_segment) params.industry_segment = filters.industry_segment;
   if (filters.enriched) params.enriched = filters.enriched;
+  if (filters.source) params.source = filters.source;
   if (filters.has_contacts) params.has_contacts = true;
   params.page = filters.page || 1;
   params.page_size = filters.page_size || 50;

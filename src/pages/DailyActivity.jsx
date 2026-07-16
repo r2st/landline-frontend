@@ -146,12 +146,54 @@ export default function DailyActivity() {
 
           {/* Headline metrics */}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <MetricCard title="Emails sent" value={latest.emails_sent} icon={Mail} color="indigo" />
-            <MetricCard title="Leads found" value={latest.leads_discovered} icon={UserPlus} color="blue" />
-            <MetricCard title="Replies" value={latest.replies_received} icon={MessageSquareReply} color="green" />
-            <MetricCard title="Bounces" value={latest.bounces_received} icon={AlertTriangle} color="red" />
-            <MetricCard title="Follow-ups" value={latest.follow_ups_created} icon={Bell} color="orange" />
-            <MetricCard title="Calls queued" value={latest.calls_queued} icon={Phone} color="teal" />
+            <MetricCard
+              title="Emails sent"
+              value={latest.emails_sent}
+              icon={Mail}
+              color="indigo"
+              to="/dialtone?type=email_sent"
+              linkLabel="Emails sent — view send activity"
+            />
+            <MetricCard
+              title="Leads found"
+              value={latest.leads_discovered}
+              icon={UserPlus}
+              color="blue"
+              to="/prospecting"
+              linkLabel="Leads found — view the prospecting queue"
+            />
+            <MetricCard
+              title="Replies"
+              value={latest.replies_received}
+              icon={MessageSquareReply}
+              color="green"
+              to="/inbox"
+              linkLabel="Replies — view the inbox"
+            />
+            <MetricCard
+              title="Bounces"
+              value={latest.bounces_received}
+              icon={AlertTriangle}
+              color="red"
+              to="/dialtone?type=bounced"
+              linkLabel="Bounces — view bounced sends"
+            />
+            <MetricCard
+              title="Follow-ups"
+              value={latest.follow_ups_created}
+              icon={Bell}
+              color="orange"
+              to="/follow-ups"
+              linkLabel="Follow-ups — view follow-ups"
+            />
+            <MetricCard
+              title="Calls queued"
+              value={latest.calls_queued}
+              icon={Phone}
+              color="teal"
+              to="/calls"
+              linkLabel="Calls queued — view the call queue"
+            />
           </div>
 
           {/* Trend charts */}

@@ -1,12 +1,24 @@
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Mail } from 'lucide-react';
 import { cn } from '../lib/utils';
 import ComposeTab from '../components/outreach/ComposeTab';
 import TemplatesTab from '../components/outreach/TemplatesTab';
 import HistoryTab from '../components/outreach/HistoryTab';
 
+const TABS = [
+  { id: 'compose', label: 'Compose & Send' },
+  { id: 'templates', label: 'Templates' },
+  { id: 'history', label: 'History' },
+];
+
 export default function Outreach() {
-  const [tab, setTab] = useState('compose');
+  // The tab lives in the URL so "Emails sent" elsewhere can link straight to the
+  // send history. An unknown ?tab= falls back to compose rather than rendering
+  // an empty page.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get('tab');
+  const tab = TABS.some((t) => t.id === requested) ? requested : 'compose';
+  const setTab = (id) => setSearchParams(id === 'compose' ? {} : { tab: id }, { replace: true });
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -21,11 +33,7 @@ export default function Outreach() {
       </div>
 
       <div className="flex gap-1 border-b border-gray-200">
-        {[
-          { id: 'compose', label: 'Compose & Send' },
-          { id: 'templates', label: 'Templates' },
-          { id: 'history', label: 'History' },
-        ].map((t) => (
+        {TABS.map((t) => (
           <button
             key={t.id}
             type="button"

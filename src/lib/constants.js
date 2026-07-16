@@ -129,8 +129,21 @@ export const INTERACTION_TYPE_COLORS = {
 };
 
 export const COUNTRIES = ['US', 'CA'];
-export const SOURCES = ['csv_import', 'manual', 'web_scrape', 'referral', 'linkedin'];
+// Values the backend actually stores on Company.source. The agent-sourced ones
+// (google_places, apollo) are what the prospector writes, so they have to be
+// selectable here for a "Leads found" drill-down to resolve to anything.
+export const SOURCES = [
+  'google_places',
+  'apollo',
+  'csv_import',
+  'manual',
+  'web_scrape',
+  'referral',
+  'linkedin',
+];
 export const SOURCE_LABELS = {
+  google_places: 'Google Places',
+  apollo: 'Apollo',
   csv_import: 'CSV Import',
   manual: 'Manual',
   web_scrape: 'Web Scrape',

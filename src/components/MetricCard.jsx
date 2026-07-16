@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -12,19 +13,34 @@ const colorMap = {
   teal: { bg: 'bg-teal-100', text: 'text-teal-600', gradient: 'from-teal-500 to-teal-600', lightBg: 'bg-teal-50' },
 };
 
-export default function MetricCard({ title, value, change, subtitle, icon: Icon, color = 'blue', sparkline }) {
+// `to` turns the whole card into a link to the records behind the number.
+// `linkLabel` names that destination for screen readers, which otherwise only
+// hear the title and value and can't tell where the card goes.
+export default function MetricCard({ title, value, change, subtitle, icon: Icon, color = 'blue', sparkline, to, linkLabel }) {
   const isPositive = change >= 0;
   const palette = colorMap[color] || colorMap.blue;
+  const clickable = Boolean(to);
 
-  return (
-    <div className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+  const body = (
+    <>
       {/* Subtle gradient accent bar at top */}
       <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r', palette.gradient)} />
 
       <div className="flex items-center justify-between">
         <div className="space-y-1">
+          {/* No inline affordance icon here on purpose: at the dashboard's
+              6-column width it pushes titles like "Total Contacts" onto a
+              second line. The pointer cursor and the value's hover underline
+              carry the affordance instead. */}
           <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p
+            className={cn(
+              'text-2xl font-bold text-gray-900',
+              clickable && 'underline-offset-4 group-hover:underline'
+            )}
+          >
+            {value}
+          </p>
           {change !== undefined && change !== null && (
             <div className="flex items-center gap-1">
               {isPositive ? (
@@ -55,6 +71,25 @@ export default function MetricCard({ title, value, change, subtitle, icon: Icon,
 
       {/* Optional sparkline area */}
       {sparkline && <div className="mt-3 -mx-2">{sparkline}</div>}
-    </div>
+    </>
+  );
+
+  const shell = 'group relative block overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5';
+
+  if (!clickable) {
+    return <div className={shell}>{body}</div>;
+  }
+
+  return (
+    <Link
+      to={to}
+      aria-label={linkLabel || `${title}: ${value}. View details`}
+      className={cn(
+        shell,
+        'cursor-pointer hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2'
+      )}
+    >
+      {body}
+    </Link>
   );
 }

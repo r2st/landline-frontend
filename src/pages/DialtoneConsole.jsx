@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Radio, Mail, MailOpen, MousePointerClick, MessageSquareReply, AlertTriangle,
-  Ban, UserPlus, Send, Gauge, ShieldCheck, RefreshCw, Search, Filter, X,
+  Ban, UserPlus, Send, Gauge, ShieldCheck, RefreshCw, Search, Filter, X, ChevronRight,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import SendingKillSwitch from '../components/SendingKillSwitch';
@@ -79,19 +80,54 @@ function EventBadge({ type }) {
   );
 }
 
+// Where a feed entry drills down to. Lead discovery points at the company it
+// created (or the queue it's still waiting in); everything email-shaped points
+// at the contact on the other end. Events with neither — domain health, an
+// auto-pause — are system-wide and stay inert rather than linking nowhere.
+function targetFor(event) {
+  if (event.type === 'lead_discovered') {
+    return event.metadata?.company_id
+      ? `/companies/${event.metadata.company_id}`
+      : '/prospecting';
+  }
+  return event.metadata?.contact_id ? `/contacts?highlight=${event.metadata.contact_id}` : null;
+}
+
 // --- Console header stat tiles ----------------------------------------------
-function StatTile({ label, value, icon: Icon, tone = 'gray' }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+// `to` drills the tile's number down to the events behind it.
+function StatTile({ label, value, icon: Icon, tone = 'gray', to }) {
+  const iconClass = cn('h-4 w-4', {
+    indigo: 'text-indigo-400', blue: 'text-blue-400', green: 'text-green-400',
+    violet: 'text-violet-400', red: 'text-red-400', amber: 'text-amber-400', gray: 'text-gray-300',
+  }[tone]);
+
+  const body = (
+    <>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</span>
-        <Icon className={cn('h-4 w-4', {
-          indigo: 'text-indigo-400', blue: 'text-blue-400', green: 'text-green-400',
-          violet: 'text-violet-400', red: 'text-red-400', amber: 'text-amber-400', gray: 'text-gray-300',
-        }[tone])} />
+        <Icon className={iconClass} />
       </div>
-      <p className="mt-2 text-2xl font-bold text-gray-900">{value ?? 0}</p>
-    </div>
+      <p className={cn('mt-2 text-2xl font-bold text-gray-900', to && 'underline-offset-4 group-hover:underline')}>
+        {value ?? 0}
+      </p>
+    </>
+  );
+
+  const shell = 'rounded-xl border border-gray-200 bg-white p-4 shadow-sm';
+  if (!to) return <div className={shell}>{body}</div>;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`${label}: ${value ?? 0}. Filter the activity log to these events`}
+      className={cn(
+        shell,
+        'group block cursor-pointer transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2'
+      )}
+    >
+      {body}
+    </Link>
   );
 }
 
@@ -188,18 +224,31 @@ export default function DialtoneConsole() {
   const today = consoleData?.today || {};
   const warmup = consoleData?.warmup || {};
 
-  // Activity feed filters.
-  const [type, setType] = useState('');
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
-  const [q, setQ] = useState('');
+  // Activity feed filters live in the URL: that's what lets the stat tiles above
+  // (and links from other pages) be plain links into a filtered log, and keeps
+  // the filter bar and the URL from drifting apart.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const type = searchParams.get('type') || '';
+  const start = searchParams.get('start') || '';
+  const end = searchParams.get('end') || '';
+  const q = searchParams.get('q') || '';
   const [page, setPage] = useState(1);
+
+  const setFilter = (key) => (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setSearchParams(next, { replace: true });
+  };
 
   const filters = useMemo(() => {
     const f = { page, page_size: PAGE_SIZE };
     if (type) f.types = type;
     if (start) f.start = start;
-    if (end) f.end = end;
+    // The API treats `end` as an inclusive instant, so a bare date means
+    // midnight — i.e. picking today would exclude all of today. Ask for the end
+    // of the chosen day, which is what a "To date" picker implies.
+    if (end) f.end = `${end}T23:59:59`;
     if (q.trim()) f.q = q.trim();
     return f;
   }, [type, start, end, q, page]);
@@ -209,12 +258,19 @@ export default function DialtoneConsole() {
   const total = feed?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const hasFilters = type || start || end || q.trim();
-  const resetFilters = () => {
-    setType(''); setStart(''); setEnd(''); setQ(''); setPage(1);
-  };
-  // Any filter change resets to page 1.
-  const onFilterChange = (setter) => (val) => { setter(val); setPage(1); };
+  const hasFilters = Boolean(type || start || end || q.trim());
+  const resetFilters = () => setSearchParams({}, { replace: true });
+
+  // Any filter change — including one arriving from a stat tile — puts the feed
+  // back on page 1, or page 3 of the old filter would silently carry over.
+  // Adjusted during render (rather than in an effect) so the feed never paints
+  // at the stale page first.
+  const filterKey = `${type}|${start}|${end}|${q}`;
+  const [appliedFilterKey, setAppliedFilterKey] = useState(filterKey);
+  if (appliedFilterKey !== filterKey) {
+    setAppliedFilterKey(filterKey);
+    setPage(1);
+  }
 
   return (
     <div className="space-y-6">
@@ -251,13 +307,14 @@ export default function DialtoneConsole() {
         <WarmupCard warmup={warmup} />
         <div className="lg:col-span-2">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Sent" value={today.emails_sent} icon={Mail} tone="indigo" />
-            <StatTile label="Opens" value={today.opens} icon={MailOpen} tone="blue" />
-            <StatTile label="Clicks" value={today.clicks} icon={MousePointerClick} tone="violet" />
-            <StatTile label="Replies" value={today.replies} icon={MessageSquareReply} tone="green" />
-            <StatTile label="Bounces" value={today.bounces} icon={AlertTriangle} tone="red" />
-            <StatTile label="Errors" value={today.errors} icon={AlertTriangle} tone="red" />
-            <StatTile label="Leads found" value={today.leads_discovered} icon={UserPlus} tone="blue" />
+            <StatTile label="Sent" value={today.emails_sent} icon={Mail} tone="indigo" to="/dialtone?type=email_sent" />
+            <StatTile label="Opens" value={today.opens} icon={MailOpen} tone="blue" to="/dialtone?type=email_opened" />
+            <StatTile label="Clicks" value={today.clicks} icon={MousePointerClick} tone="violet" to="/dialtone?type=email_clicked" />
+            <StatTile label="Replies" value={today.replies} icon={MessageSquareReply} tone="green" to="/dialtone?type=reply" />
+            <StatTile label="Bounces" value={today.bounces} icon={AlertTriangle} tone="red" to="/dialtone?type=bounced" />
+            <StatTile label="Errors" value={today.errors} icon={AlertTriangle} tone="red" to="/dialtone?type=error" />
+            <StatTile label="Leads found" value={today.leads_discovered} icon={UserPlus} tone="blue" to="/dialtone?type=lead_discovered" />
+            {/* Remaining is warm-up headroom, not a count of events — nothing to drill into. */}
             <StatTile label="Remaining" value={warmup.daily_remaining} icon={Gauge} tone="gray" />
           </div>
         </div>
@@ -282,14 +339,14 @@ export default function DialtoneConsole() {
                 <input
                   type="text"
                   value={q}
-                  onChange={(e) => onFilterChange(setQ)(e.target.value)}
+                  onChange={(e) => setFilter('q')(e.target.value)}
                   placeholder="Search contact or email…"
                   className="w-44 rounded-lg border border-gray-200 py-1.5 pl-8 pr-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                 />
               </div>
               <select
                 value={type}
-                onChange={(e) => onFilterChange(setType)(e.target.value)}
+                onChange={(e) => setFilter('type')(e.target.value)}
                 className="rounded-lg border border-gray-200 py-1.5 pl-2.5 pr-8 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
               >
                 {FILTER_TYPES.map((t) => (
@@ -299,14 +356,14 @@ export default function DialtoneConsole() {
               <input
                 type="date"
                 value={start}
-                onChange={(e) => onFilterChange(setStart)(e.target.value)}
+                onChange={(e) => setFilter('start')(e.target.value)}
                 aria-label="From date"
                 className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-600 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
               />
               <input
                 type="date"
                 value={end}
-                onChange={(e) => onFilterChange(setEnd)(e.target.value)}
+                onChange={(e) => setFilter('end')(e.target.value)}
                 aria-label="To date"
                 className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-600 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
               />
@@ -341,32 +398,53 @@ export default function DialtoneConsole() {
               />
             ) : (
               <ul className="divide-y divide-gray-50">
-                {items.map((it) => (
-                  <li key={it.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
-                    <span
-                      className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full',
-                        it.severity === 'error' ? 'bg-red-500' : it.severity === 'warn' ? 'bg-amber-500' : 'bg-indigo-400')}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <EventBadge type={it.type} />
-                        <span className="truncate text-sm font-medium text-gray-900">{it.title}</span>
+                {items.map((it) => {
+                  const target = targetFor(it);
+                  const body = (
+                    <>
+                      <span
+                        className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full',
+                          it.severity === 'error' ? 'bg-red-500' : it.severity === 'warn' ? 'bg-amber-500' : 'bg-indigo-400')}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <EventBadge type={it.type} />
+                          <span className={cn('truncate text-sm font-medium text-gray-900', target && 'group-hover:underline')}>
+                            {it.title}
+                          </span>
+                        </div>
+                        {it.description && (
+                          <p className="mt-0.5 truncate text-sm text-gray-500">{it.description}</p>
+                        )}
+                        {it.metadata?.to_email && (
+                          <p className="mt-0.5 truncate text-xs text-gray-400">{it.metadata.to_email}</p>
+                        )}
                       </div>
-                      {it.description && (
-                        <p className="mt-0.5 truncate text-sm text-gray-500">{it.description}</p>
+                      <time
+                        className="flex-shrink-0 whitespace-nowrap text-xs text-gray-400"
+                        title={absTime(it.timestamp)}
+                      >
+                        {relTime(it.timestamp)}
+                      </time>
+                      {target && <ChevronRight className="h-4 w-4 flex-shrink-0 self-center text-gray-300" aria-hidden="true" />}
+                    </>
+                  );
+                  return (
+                    <li key={it.id}>
+                      {target ? (
+                        <Link
+                          to={target}
+                          aria-label={`${it.title} — open details`}
+                          className="group flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50"
+                        >
+                          {body}
+                        </Link>
+                      ) : (
+                        <div className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">{body}</div>
                       )}
-                      {it.metadata?.to_email && (
-                        <p className="mt-0.5 truncate text-xs text-gray-400">{it.metadata.to_email}</p>
-                      )}
-                    </div>
-                    <time
-                      className="flex-shrink-0 whitespace-nowrap text-xs text-gray-400"
-                      title={absTime(it.timestamp)}
-                    >
-                      {relTime(it.timestamp)}
-                    </time>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
