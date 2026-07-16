@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Radar, Check, X, Mail, MailX, MapPin, History, ClipboardList, Loader2, AlertTriangle,
 } from 'lucide-react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import ScoreBadge from '../components/ScoreBadge';
 import { useAuth } from '../context/AuthContext';
@@ -165,6 +166,11 @@ function ReviewQueue() {
   const [sort, setSort] = useState('fit_score');
   const [order, setOrder] = useState('desc');
   const [selected, setSelected] = useState(() => new Set());
+  // Approving is the outward-facing, irreversible half of this page: it enrols
+  // the company and arms a real cold email to a real business. Held behind a
+  // confirm so a stray click — especially on a bulk selection — can't send.
+  // Rejecting sends nothing, so it stays a single click.
+  const [confirming, setConfirming] = useState(null);
 
   const status = TABS.find((t) => t.key === tab).status;
   const { data: candidates = [], isLoading, isFetching } = useProspectCandidates({ status, sort, order });
@@ -197,14 +203,27 @@ function ReviewQueue() {
     setSelected(new Set()); // selections don't carry across dispositions
   };
 
-  const decide = (id, decision) =>
+  const runSingle = (id, decision) =>
     review.mutate({ id, decision, reviewer }, { onSuccess: () => toggle(id) });
 
-  const decideBulk = (decision) =>
+  const runBulk = (decision) =>
     bulk.mutate(
       { ids: selectedIds, decision, reviewer },
       { onSuccess: () => setSelected(new Set()) }
     );
+
+  const decide = (id, decision) =>
+    decision === 'approve' ? setConfirming({ ids: [id], decision }) : runSingle(id, decision);
+
+  const decideBulk = (decision) =>
+    decision === 'approve' ? setConfirming({ ids: selectedIds, decision }) : runBulk(decision);
+
+  const confirm = () => {
+    const { ids, decision } = confirming;
+    if (ids.length === 1) runSingle(ids[0], decision);
+    else runBulk(decision);
+    setConfirming(null);
+  };
 
   const busy = bulk.isPending;
 
@@ -343,6 +362,25 @@ function ReviewQueue() {
           <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">Refreshing…</div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirming}
+        variant="warning"
+        title={
+          confirming?.ids.length === 1
+            ? 'Approve and start outreach?'
+            : `Approve ${confirming?.ids.length} candidates and start outreach?`
+        }
+        message={
+          `Approving enrols ${confirming?.ids.length === 1 ? 'this company' : 'these companies'} ` +
+          'in an outreach sequence and arms a real cold email to a real business. The first ' +
+          'message can go out within minutes — the send window and the sending kill switch are ' +
+          'the only things holding it back.'
+        }
+        confirmLabel={confirming?.ids.length === 1 ? 'Approve & enrol' : `Approve ${confirming?.ids.length}`}
+        onConfirm={confirm}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   );
 }

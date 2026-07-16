@@ -101,17 +101,28 @@ describe('Prospecting page', () => {
     expect(within(noEmail).getByText('No')).toBeInTheDocument();
   });
 
-  it('approves a single candidate as the signed-in reviewer', async () => {
+  it('approves a single candidate as the signed-in reviewer, after confirming', async () => {
     const user = userEvent.setup();
     render(<Prospecting />);
     await user.click(screen.getAllByRole('button', { name: /approve$/i })[0]);
+    // Approving arms a real cold email — it must not fire on the first click.
+    expect(mutate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /approve & enrol/i }));
     expect(mutate).toHaveBeenCalledWith(
       { id: 'c1', decision: 'approve', reviewer: 'rep@apprend.tech' },
       expect.anything()
     );
   });
 
-  it('rejects a single candidate', async () => {
+  it('sends nothing when an approval is cancelled', async () => {
+    const user = userEvent.setup();
+    render(<Prospecting />);
+    await user.click(screen.getAllByRole('button', { name: /approve$/i })[0]);
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a single candidate without a confirm step', async () => {
     const user = userEvent.setup();
     render(<Prospecting />);
     await user.click(screen.getAllByRole('button', { name: /^reject$/i })[0]);
@@ -121,12 +132,16 @@ describe('Prospecting page', () => {
     );
   });
 
-  it('bulk-approves every selected candidate', async () => {
+  it('bulk-approves every selected candidate, after confirming', async () => {
     const user = userEvent.setup();
     render(<Prospecting />);
     await user.click(screen.getByLabelText('Select all candidates'));
     expect(screen.getByText('2 selected')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /approve selected/i }));
+    expect(mutate).not.toHaveBeenCalled();
+    // The confirm names the blast radius before anything is sent.
+    expect(screen.getByText(/Approve 2 candidates and start outreach\?/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^approve 2$/i }));
     expect(mutate).toHaveBeenCalledWith(
       { ids: ['c1', 'c2'], decision: 'approve', reviewer: 'rep@apprend.tech' },
       expect.anything()
