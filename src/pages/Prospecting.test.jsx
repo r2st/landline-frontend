@@ -37,6 +37,10 @@ const PLACES = {
   qualification: {},
   status: 'review',
   has_email: true,
+  contact_email: 'shop@clevelandprecision.com',
+  contact_name: 'Dana Reed',
+  contact_title: 'Owner',
+  contact_phone: '+12165550256',
   raw_data: { industry: 'CNC Machining', city: 'Cleveland', state: 'OH', country: 'US' },
   created_at: '2026-07-15T10:00:00Z',
 };
@@ -92,13 +96,18 @@ describe('Prospecting page', () => {
     expect(screen.getByText('Places')).toBeInTheDocument();
   });
 
-  it('distinguishes candidates that have someone to email from ones that do not', () => {
+  it('shows the address approval would email, not just that one exists', () => {
     render(<Prospecting />);
     const rows = screen.getAllByRole('row');
     const places = rows.find((r) => within(r).queryByText('Cleveland Precision Machining'));
     const noEmail = rows.find((r) => within(r).queryByText('Woodcraft Interiors'));
-    expect(within(places).getByText('Yes')).toBeInTheDocument();
-    expect(within(noEmail).getByText('No')).toBeInTheDocument();
+
+    const link = within(places).getByRole('link', { name: 'shop@clevelandprecision.com' });
+    expect(link).toHaveAttribute('href', 'mailto:shop@clevelandprecision.com');
+    expect(within(places).getByText(/Dana Reed · Owner/)).toBeInTheDocument();
+
+    expect(within(noEmail).getByText('No email')).toBeInTheDocument();
+    expect(within(noEmail).queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('approves a single candidate as the signed-in reviewer, after confirming', async () => {

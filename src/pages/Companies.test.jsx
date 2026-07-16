@@ -88,3 +88,66 @@ describe('Companies filters from the URL', () => {
     expect(mockUseCompanies).toHaveBeenLastCalledWith(expect.objectContaining({ source: 'apollo' }));
   });
 });
+
+// The reported bug: Places found these companies and enrichment found emails
+// for most of them, but the table showed only names.
+describe('Companies list shows who to contact', () => {
+  const withContact = {
+    ...PLACES_CO,
+    contact_count: 1,
+    primary_contact: {
+      id: 'ct-1',
+      first_name: 'Dana',
+      last_name: 'Reed',
+      full_name: 'Dana Reed',
+      title: 'Owner',
+      email: 'dana@acme.test',
+      phone: '+12165550256',
+      is_primary: false,
+      unsubscribed: false,
+      suppressed: false,
+    },
+  };
+
+  const renderWith = (company) => {
+    mockUseCompanies.mockReturnValue({
+      data: { items: [company], total: 1, page: 1, pageSize: 50 },
+      isLoading: false,
+      isError: false,
+    });
+    return renderPage('/companies');
+  };
+
+  it('renders the primary contact email as a mailto link', () => {
+    renderWith(withContact);
+    const link = screen.getByRole('link', { name: 'dana@acme.test' });
+    expect(link).toHaveAttribute('href', 'mailto:dana@acme.test');
+  });
+
+  it('renders the contact name and phone alongside the address', () => {
+    renderWith(withContact);
+    expect(screen.getByText('Dana Reed · Owner')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '+12165550256' })).toHaveAttribute('href', 'tel:+12165550256');
+  });
+
+  it('shows the address alone when enrichment found no name', () => {
+    renderWith({
+      ...withContact,
+      primary_contact: { ...withContact.primary_contact, first_name: null, last_name: null, full_name: null, title: null },
+    });
+    expect(screen.getByRole('link', { name: 'dana@acme.test' })).toBeInTheDocument();
+  });
+
+  it('marks an opted-out contact rather than inviting a send', () => {
+    renderWith({
+      ...withContact,
+      primary_contact: { ...withContact.primary_contact, suppressed: true },
+    });
+    expect(screen.getByRole('link', { name: 'dana@acme.test' })).toHaveClass('line-through');
+  });
+
+  it('degrades to a dash when a company genuinely has no contact', () => {
+    renderWith({ ...PLACES_CO, contact_count: 0, primary_contact: null });
+    expect(screen.queryByRole('link', { name: /@/ })).not.toBeInTheDocument();
+  });
+});

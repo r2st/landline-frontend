@@ -29,14 +29,38 @@ export default function ContactList({ contacts = [], companyId, onAddContact }) 
               {getInitials(contact.first_name, contact.last_name)}
             </div>
 
-            {/* Info */}
+            {/* Info — enriched contacts often have an address and no name, so
+                the address stands in as the heading rather than a blank line,
+                and is always shown as text (an icon alone hid it). */}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-gray-900">
-                {contact.first_name} {contact.last_name}
+                {[contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
+                  contact.email ||
+                  'Unnamed contact'}
               </p>
               {contact.title && (
                 <p className="truncate text-sm text-gray-500">{contact.title}</p>
               )}
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                {contact.email && (
+                  <a
+                    href={`mailto:${contact.email}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="truncate text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    {contact.email}
+                  </a>
+                )}
+                {(contact.phone || contact.mobile) && (
+                  <a
+                    href={`tel:${contact.phone || contact.mobile}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="truncate hover:text-gray-900 hover:underline"
+                  >
+                    {contact.phone || contact.mobile}
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Actions */}

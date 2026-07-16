@@ -416,8 +416,14 @@ export default function DialtoneConsole() {
                         {it.description && (
                           <p className="mt-0.5 truncate text-sm text-gray-500">{it.description}</p>
                         )}
-                        {it.metadata?.to_email && (
-                          <p className="mt-0.5 truncate text-xs text-gray-400">{it.metadata.to_email}</p>
+                        {/* Send events carry `to_email`; a discovered lead carries the
+                            contact enrichment found. Either way it's "the address
+                            this event is about". */}
+                        {(it.metadata?.to_email || it.metadata?.contact_email) && (
+                          <p className="mt-0.5 truncate text-xs text-gray-400">
+                            {it.metadata.to_email || it.metadata.contact_email}
+                            {it.metadata?.contact_name ? ` · ${it.metadata.contact_name}` : ''}
+                          </p>
                         )}
                       </div>
                       <time

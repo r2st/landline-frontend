@@ -1,6 +1,7 @@
 import { Users, Globe, MapPin, GripVertical } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { SOURCE_LABELS } from '../lib/constants';
+import PrimaryContact from './PrimaryContact';
 import ScoreBadge from './ScoreBadge';
 import StageSelector from './StageSelector';
 
@@ -55,6 +56,13 @@ export default function CompanyCard({ company, onClick, onTransition, compact = 
           <ScoreBadge score={company.score} size={compact ? 'sm' : 'md'} />
         )}
       </div>
+
+      {/* Who we'd actually reach here */}
+      {company.primary_contact && (
+        <div className={compact ? 'mt-2' : 'mt-3'}>
+          <PrimaryContact contact={company.primary_contact} showPhone={!compact} />
+        </div>
+      )}
 
       {/* Details */}
       <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1', compact ? 'mt-2' : 'mt-3')}>

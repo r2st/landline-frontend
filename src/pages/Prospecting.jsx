@@ -111,15 +111,37 @@ function CandidateRow({ candidate, selected, onSelect, showActions, onDecide, pe
         <ScoreBadge score={candidate.fit_score} size="sm" />
       </td>
       <td className="px-4 py-3">
+        {/* The address itself, not just "Yes": approving enrols a real cold
+            email, so the reviewer should see who it would go to. */}
         {candidate.has_email ? (
-          <span className="inline-flex items-center gap-1 text-sm font-medium text-green-700" title="Has an emailable contact">
-            <Mail className="h-4 w-4" />
-            Yes
-          </span>
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5 flex-shrink-0 text-green-600" />
+              <a
+                href={`mailto:${candidate.contact_email}`}
+                title={candidate.contact_email}
+                className="truncate text-sm text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                {candidate.contact_email}
+              </a>
+            </div>
+            {(candidate.contact_name || candidate.contact_phone) && (
+              <p className="truncate text-xs text-gray-500">
+                {[
+                  candidate.contact_name && candidate.contact_title
+                    ? `${candidate.contact_name} · ${candidate.contact_title}`
+                    : candidate.contact_name,
+                  candidate.contact_phone,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            )}
+          </div>
         ) : (
           <span className="inline-flex items-center gap-1 text-sm text-gray-400" title="No contact to email — enrolling won't send">
             <MailX className="h-4 w-4" />
-            No
+            No email
           </span>
         )}
       </td>

@@ -26,6 +26,7 @@ import toast from 'react-hot-toast';
 import DataTable from '../components/DataTable';
 import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
+import PrimaryContact from '../components/PrimaryContact';
 import { useCompanies, useCreateCompany, useDeleteCompany } from '../hooks/useCompanies';
 import { useGroups, useAddGroupMembers } from '../hooks/useGroups';
 import { useSequences } from '../hooks/useOutreach';
@@ -790,6 +791,12 @@ export default function Companies() {
     },
     { key: 'domain', label: 'Domain' },
     {
+      key: 'primary_contact',
+      label: 'Contact',
+      sortable: false,
+      render: (val, row) => <PrimaryContact contact={row.primary_contact} showPhone />,
+    },
+    {
       key: 'city',
       label: 'Location',
       render: (val, row) => [row.city, row.state].filter(Boolean).join(', ') || '—',
@@ -1097,6 +1104,11 @@ export default function Companies() {
                     {c.score != null && <ScoreBadge score={c.score} size="sm" />}
                   </div>
                 </div>
+                {c.primary_contact && (
+                  <div className="mt-3">
+                    <PrimaryContact contact={c.primary_contact} showPhone />
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
                   {c.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}</span>}
                   {c.contact_count > 0 && <span className="flex items-center gap-1"><Users className="h-3 w-3" />{c.contact_count} contacts</span>}

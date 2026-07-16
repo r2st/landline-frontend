@@ -72,7 +72,7 @@ import {
 } from '../hooks/useTactics';
 import toast from 'react-hot-toast';
 import { STAGE_LABELS, STAGE_COLORS, SOURCE_LABELS } from '../lib/constants';
-import { formatDate, formatNumber, getScoreColor, getScoreLabel, cn } from '../lib/utils';
+import { formatDate, formatNumber, getInitials, getScoreColor, getScoreLabel, cn } from '../lib/utils';
 
 // Map a LeadScore record's sub-scores into displayable factor rows.
 function scoreToFactors(score) {
@@ -668,17 +668,24 @@ export default function CompanyDetail() {
                   <h3 className="text-sm font-semibold text-gray-900">Recent Contacts</h3>
                   <button onClick={() => setActiveTab('contacts')} className="text-xs text-blue-600 hover:text-blue-700">View all</button>
                 </div>
-                {companyContacts.slice(0, 3).map(contact => (
-                  <div key={contact.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-600">
-                      {((contact.first_name || '')[0] || '') + ((contact.last_name || '')[0] || '')}
+                {companyContacts.slice(0, 3).map(contact => {
+                  // An enriched contact is often just an address — falling back
+                  // to it keeps the row from rendering as a blank line.
+                  const name = [contact.first_name, contact.last_name].filter(Boolean).join(' ');
+                  return (
+                    <div key={contact.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+                      <div className="h-8 w-8 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center text-xs font-semibold text-blue-600">
+                        {getInitials(contact.first_name, contact.last_name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900">{name || contact.email || 'Unnamed contact'}</p>
+                        <p className="truncate text-xs text-gray-500">
+                          {[contact.title, name ? contact.email : null].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{contact.first_name} {contact.last_name}</p>
-                      <p className="text-xs text-gray-500">{contact.title || contact.email || ''}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {companyContacts.length === 0 && (
                   <p className="text-sm text-gray-400">No contacts yet</p>
                 )}
