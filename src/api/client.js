@@ -2,6 +2,7 @@ import axios from 'axios';
 import { QueryClient } from '@tanstack/react-query';
 import { tokenStore } from './authToken';
 import { viewAsStore } from './viewAs';
+import { impersonationStore } from './impersonation';
 
 const baseURL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
@@ -15,7 +16,13 @@ export const api = axios.create({
 // Attach auth to every request: a JWT bearer token when logged in, plus the
 // legacy VITE_API_KEY (kept for backward compatibility during the transition).
 api.interceptors.request.use((config) => {
-  const token = tokenStore.getAccess();
+  // Platform-admin impersonation wins: when "viewing as" an org, send that org
+  // user's scoped token so every read is naturally isolated to their org. The
+  // admin's own session stays intact in tokenStore for when they exit. Skipped
+  // for the impersonate call itself (marked _skipImpersonation) so a stale/expired
+  // impersonation token can't block minting a fresh one.
+  const impToken = config._skipImpersonation ? null : impersonationStore.getToken();
+  const token = impToken || tokenStore.getAccess();
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
   }
@@ -40,6 +47,20 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
     const status = error.response?.status;
+
+    // If an impersonation token has gone stale (401), drop back to the admin's
+    // own session rather than refreshing (there's no refresh token for the
+    // impersonated user) or logging the admin out. The next request runs as the
+    // platform admin again; the banner/context react to the cleared store.
+    if (
+      status === 401 &&
+      original &&
+      !original._skipImpersonation &&
+      impersonationStore.getToken()
+    ) {
+      impersonationStore.clear();
+      return Promise.reject(error);
+    }
 
     if (
       status === 401 &&
@@ -423,6 +444,28 @@ export const abTestsApi = {
   // Operator override — declare a winner by variant id or label.
   declareWinner: (testId, body) =>
     api.post(`/dialtone/ab-tests/${testId}/declare-winner`, body).then(r => r.data),
+};
+
+// Platform Admin — cross-org management (platform_admin role only; SaaS Phase 2).
+// The god-view over every tenant: organization CRUD, platform-wide stats, and
+// impersonation to "view as" any org for debugging.
+export const platformApi = {
+  // Platform-wide roll-up: total/active orgs, total users, total emails sent.
+  stats: () => api.get('/platform/stats').then(r => r.data),
+  // Every organization with per-org user + usage counts. `active_only` narrows.
+  listOrganizations: (params) => api.get('/platform/organizations', { params }).then(r => r.data),
+  // One org's detail: config, branding, users, and usage stats.
+  getOrganization: (id) => api.get(`/platform/organizations/${id}`).then(r => r.data),
+  // Provision a new organization.
+  createOrganization: (body) => api.post('/platform/organizations', body).then(r => r.data),
+  // Update name / slug / plan / config / branding / active state.
+  updateOrganization: (id, body) => api.put(`/platform/organizations/${id}`, body).then(r => r.data),
+  // Soft-deactivate (is_active=False; data retained).
+  deactivateOrganization: (id) => api.delete(`/platform/organizations/${id}`).then(r => r.data),
+  // Mint a JWT scoped to a user's org+role for debugging. Marked so the request
+  // interceptor sends the ADMIN's token (never a stale impersonation token).
+  impersonate: (userId) =>
+    api.post(`/platform/impersonate/${userId}`, null, { _skipImpersonation: true }).then(r => r.data),
 };
 
 // Orchestration policies (feature 2.2) — the guardrails the autonomous engine

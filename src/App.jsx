@@ -49,6 +49,8 @@ const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const OrganizationSettings = lazy(() => import('./pages/OrganizationSettings'));
 const TeamManagement = lazy(() => import('./pages/TeamManagement'));
 const UsageDashboard = lazy(() => import('./pages/UsageDashboard'));
+const Platform = lazy(() => import('./pages/Platform'));
+const PlatformOrganizationDetail = lazy(() => import('./pages/PlatformOrganizationDetail'));
 
 function NotFound() {
   return (
@@ -151,6 +153,23 @@ export default function App() {
             element={
               <ProtectedRoute requireRole="admin">
                 <AdminUsers />
+              </ProtectedRoute>
+            }
+          />
+          {/* Platform Admin (SaaS Phase 2) — platform_admin role only. */}
+          <Route
+            path="/platform"
+            element={
+              <ProtectedRoute requireRole="platform_admin">
+                <Platform />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/platform/organizations/:id"
+            element={
+              <ProtectedRoute requireRole="platform_admin">
+                <PlatformOrganizationDetail />
               </ProtectedRoute>
             }
           />
