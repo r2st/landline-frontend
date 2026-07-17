@@ -27,6 +27,11 @@ const Tasks = lazy(() => import('./pages/Tasks'));
 const Reports = lazy(() => import('./pages/Reports'));
 const DailyActivity = lazy(() => import('./pages/DailyActivity'));
 const DialtoneConsole = lazy(() => import('./pages/DialtoneConsole'));
+const DialtoneHealth = lazy(() => import('./pages/DialtoneHealth'));
+const DialtoneInbox = lazy(() => import('./pages/DialtoneInbox'));
+const AiDrafts = lazy(() => import('./pages/AiDrafts'));
+const DomainHealth = lazy(() => import('./pages/DomainHealth'));
+const PlacesDiscovery = lazy(() => import('./pages/PlacesDiscovery'));
 const Inbox = lazy(() => import('./pages/Inbox'));
 const Knowledge = lazy(() => import('./pages/Knowledge'));
 const Calls = lazy(() => import('./pages/Calls'));
@@ -114,6 +119,11 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/daily-activity" element={<DailyActivity />} />
           <Route path="/dialtone" element={<DialtoneConsole />} />
+          <Route path="/dialtone/health" element={<DialtoneHealth />} />
+          <Route path="/dialtone/inbox" element={<DialtoneInbox />} />
+          <Route path="/dialtone/drafts" element={<AiDrafts />} />
+          <Route path="/dialtone/discovery" element={<PlacesDiscovery />} />
+          <Route path="/deliverability/domains" element={<DomainHealth />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/calls" element={<Calls />} />

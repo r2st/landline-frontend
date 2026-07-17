@@ -258,6 +258,96 @@ export const deliverabilityApi = {
     api.get('/deliverability/domain-auth', { params: { domain, dkim_selector: dkimSelector || undefined } }).then(r => r.data),
 };
 
+// System — kill switch, warm-up, and what the agent automates.
+export const systemApi = {
+  sendingStatus: () => api.get('/system/sending-status').then(r => r.data),
+  sendingToggle: (body) => api.post('/system/sending-toggle', body).then(r => r.data),
+  resetWarmup: () => api.post('/system/reset-warmup').then(r => r.data),
+  // The real state of each autonomous behaviour, read from backend config and
+  // the beat schedule. The Settings badges must come from here — they used to
+  // be hardcoded, and two of the three were wrong.
+  automation: () => api.get('/system/automation').then(r => r.data),
+};
+
+// Domain health — the multi-domain monitor (every sending domain's SPF/DKIM/
+// DMARC + blacklist state), as opposed to `deliverabilityApi.domainAuth`, which
+// is the older one-off check of a single domain you name.
+export const domainHealthApi = {
+  list: () => api.get('/deliverability/domains').then(r => r.data),
+  detail: (domain) => api.get(`/deliverability/domains/${encodeURIComponent(domain)}`).then(r => r.data),
+  recheck: (domain) => api.post(`/deliverability/domains/${encodeURIComponent(domain)}/recheck`).then(r => r.data),
+};
+
+// Danger signals — the auto-pause rail. Dialtone halts its own sending when
+// bounce/complaint rates breach their thresholds; these endpoints expose why,
+// and `resume` is the ONLY safe way back. It re-checks live metrics and refuses
+// (409) to resume into a still-breaching state — `/system/sending-toggle` does
+// no such check, so it must not be used to clear an auto-pause.
+export const dangerSignalsApi = {
+  health: () => api.get('/dialtone/health/signals').then(r => r.data),
+  events: (params) => api.get('/dialtone/health/signals/events', { params }).then(r => r.data),
+  test: () => api.post('/dialtone/health/signals/test').then(r => r.data),
+  // `note` is required and audited; `force` overrides a still-live danger.
+  resume: ({ acknowledgeDangerSignalId, note, force = false }) =>
+    api.post('/dialtone/resume', {
+      acknowledge_danger_signal_id: acknowledgeDangerSignalId,
+      note,
+      force,
+    }).then(r => r.data),
+};
+
+// Dialtone replies inbox — cold-email replies classified by intent. Distinct
+// from `emailHistoryApi.getInbox` (/emails/inbox), which is the generic mailbox:
+// this is the agent's triaged queue, and the detail route lazily drafts a reply
+// for anything classified `interested`.
+export const repliesApi = {
+  inbox: (params) => api.get('/dialtone/inbox', { params }).then(r => r.data),
+  stats: () => api.get('/dialtone/inbox/stats').then(r => r.data),
+  detail: (replyId) => api.get(`/dialtone/inbox/${replyId}`).then(r => r.data),
+  // `category`, not `classification` — see ReclassifyRequest in schemas/replies.py.
+  reclassify: (replyId, { category, priorityFlag } = {}) =>
+    api.post(`/dialtone/inbox/${replyId}/reclassify`, {
+      category,
+      ...(priorityFlag == null ? {} : { priority_flag: priorityFlag }),
+    }).then(r => r.data),
+  markRead: (replyId) => api.post(`/dialtone/inbox/${replyId}/read`).then(r => r.data),
+};
+
+// AI drafts — the human review gate on AI-composed first touches. The first N
+// AI emails per sequence are parked here instead of sent. Approving dispatches
+// the AI's copy; rejecting sends the static template it would have replaced
+// (the prospect is mid-sequence, so dropping the touch entirely is worse).
+export const aiDraftsApi = {
+  list: (params) => api.get('/ai-drafts', { params }).then(r => r.data),
+  approve: (draftId, body) => api.post(`/ai-drafts/${draftId}/approve`, body || {}).then(r => r.data),
+  reject: (draftId, body) => api.post(`/ai-drafts/${draftId}/reject`, body || {}).then(r => r.data),
+};
+
+// Google Places SMB discovery — the long tail Apollo's B2B database misses.
+// Note this is `/dialtone/discovery/*`; `discoveryApi` above is the separate
+// Apollo-backed `/discovery/*` feature.
+export const placesDiscoveryApi = {
+  // `body` = { query, location, radius_km, lat, lng, business_type, country,
+  // limit (<=60), save }. `save: false` previews — it still spends credits.
+  search: (body) => api.post('/dialtone/discovery/search', body).then(r => r.data),
+  // `params` = { status, country, category, search_id, has_email, has_website,
+  // q, limit, offset }.
+  results: (params) => api.get('/dialtone/discovery/results', { params }).then(r => r.data),
+  // `enrich` spends a Hunter credit and blocks on a scrape, so it's opt-in —
+  // there is no separate enrich route, it's a flag on import.
+  importBusiness: (businessId, { enrich = false, icpProfileId } = {}) =>
+    api.post(`/dialtone/discovery/results/${businessId}/import`, {
+      enrich,
+      ...(icpProfileId ? { icp_profile_id: icpProfileId } : {}),
+    }).then(r => r.data),
+  stats: () => api.get('/dialtone/discovery/stats').then(r => r.data),
+  savedSearches: () => api.get('/dialtone/discovery/searches').then(r => r.data),
+  createSearch: (body) => api.post('/dialtone/discovery/searches', body).then(r => r.data),
+  updateSearch: (id, body) => api.patch(`/dialtone/discovery/searches/${id}`, body).then(r => r.data),
+  deleteSearch: (id) => api.delete(`/dialtone/discovery/searches/${id}`).then(r => r.data),
+  runSearch: (id) => api.post(`/dialtone/discovery/searches/${id}/run`).then(r => r.data),
+};
+
 // Dialtone Console — the unified activity log for the autonomous cold-email agent.
 export const dialtoneApi = {
   // At-a-glance header: sending state, warm-up ramp, today's tallies, senders.

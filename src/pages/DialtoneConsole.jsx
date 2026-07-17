@@ -224,6 +224,21 @@ export default function DialtoneConsole() {
   const today = consoleData?.today || {};
   const warmup = consoleData?.warmup || {};
 
+  // The tallies above are scoped to the console's reporting day, so their
+  // drill-downs must be too. Without the date bounds a tile reading "Sent: 12"
+  // opened a feed of every send ever — the number you clicked and the list you
+  // landed on didn't reconcile. `end` is expanded to the end of the day by
+  // `filters` below, so passing the same date for both bounds means that day.
+  const reportingDay = consoleData?.date;
+  const drillTo = (type) => {
+    const params = new URLSearchParams({ type });
+    if (reportingDay) {
+      params.set('start', reportingDay);
+      params.set('end', reportingDay);
+    }
+    return `/dialtone?${params}`;
+  };
+
   // Activity feed filters live in the URL: that's what lets the stat tiles above
   // (and links from other pages) be plain links into a filtered log, and keeps
   // the filter bar and the URL from drifting apart.
@@ -307,13 +322,13 @@ export default function DialtoneConsole() {
         <WarmupCard warmup={warmup} />
         <div className="lg:col-span-2">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Sent" value={today.emails_sent} icon={Mail} tone="indigo" to="/dialtone?type=email_sent" />
-            <StatTile label="Opens" value={today.opens} icon={MailOpen} tone="blue" to="/dialtone?type=email_opened" />
-            <StatTile label="Clicks" value={today.clicks} icon={MousePointerClick} tone="violet" to="/dialtone?type=email_clicked" />
-            <StatTile label="Replies" value={today.replies} icon={MessageSquareReply} tone="green" to="/dialtone?type=reply" />
-            <StatTile label="Bounces" value={today.bounces} icon={AlertTriangle} tone="red" to="/dialtone?type=bounced" />
-            <StatTile label="Errors" value={today.errors} icon={AlertTriangle} tone="red" to="/dialtone?type=error" />
-            <StatTile label="Leads found" value={today.leads_discovered} icon={UserPlus} tone="blue" to="/dialtone?type=lead_discovered" />
+            <StatTile label="Sent" value={today.emails_sent} icon={Mail} tone="indigo" to={drillTo('email_sent')} />
+            <StatTile label="Opens" value={today.opens} icon={MailOpen} tone="blue" to={drillTo('email_opened')} />
+            <StatTile label="Clicks" value={today.clicks} icon={MousePointerClick} tone="violet" to={drillTo('email_clicked')} />
+            <StatTile label="Replies" value={today.replies} icon={MessageSquareReply} tone="green" to={drillTo('reply')} />
+            <StatTile label="Bounces" value={today.bounces} icon={AlertTriangle} tone="red" to={drillTo('bounced')} />
+            <StatTile label="Errors" value={today.errors} icon={AlertTriangle} tone="red" to={drillTo('error')} />
+            <StatTile label="Leads found" value={today.leads_discovered} icon={UserPlus} tone="blue" to={drillTo('lead_discovered')} />
             {/* Remaining is warm-up headroom, not a count of events — nothing to drill into. */}
             <StatTile label="Remaining" value={warmup.daily_remaining} icon={Gauge} tone="gray" />
           </div>

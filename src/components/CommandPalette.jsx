@@ -27,6 +27,11 @@ import {
   Activity,
   Radio,
   Radar,
+  Stethoscope,
+  MailCheck,
+  PenLine,
+  Globe,
+  MapPin,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -53,6 +58,11 @@ const COMMANDS = [
   { id: 'reports', label: 'Go to Reports', hint: 'Retention, revenue & activity', icon: BarChart3, to: '/reports', keywords: 'analytics funnel heatmap export csv' },
   { id: 'daily-activity', label: 'Daily Activity', hint: "Autonomous agent's daily summary", icon: Activity, to: '/daily-activity', keywords: 'daily activity summary agent autonomous digest emails sent bounces replies briefing' },
   { id: 'dialtone-console', label: 'Dialtone Console', hint: 'Live activity log for the cold-email agent', icon: Radio, to: '/dialtone', keywords: 'dialtone console activity log live realtime agent emails opens clicks replies bounces errors leads warmup engagement feed' },
+  { id: 'dialtone-health', label: 'Deliverability Health', hint: 'Danger signals & auto-pause', icon: Stethoscope, to: '/dialtone/health', keywords: 'dialtone health danger signals auto-pause paused resume bounce complaint rate threshold breach warn kill switch halted trip incident deliverability' },
+  { id: 'dialtone-inbox', label: 'Dialtone Replies', hint: 'Cold-email replies, triaged by intent', icon: MailCheck, to: '/dialtone/inbox', keywords: 'dialtone replies inbox interested hot lead classified intent priority unread reclassify out of office unsubscribe wrong person draft suggested' },
+  { id: 'dialtone-drafts', label: 'AI Draft Review', hint: 'Approve AI-composed first touches', icon: PenLine, to: '/dialtone/drafts', keywords: 'ai drafts review queue approve reject compose first touch generated copy static template pending gate' },
+  { id: 'places-discovery', label: 'Places Discovery', hint: 'Find SMBs by category & location', icon: MapPin, to: '/dialtone/discovery', keywords: 'google places smb discovery search local business category location import staged results funnel india manufacturers' },
+  { id: 'domain-health', label: 'Domain Health', hint: 'SPF, DKIM & DMARC per sending domain', icon: Globe, to: '/deliverability/domains', keywords: 'domain health spf dkim dmarc authentication blacklist dnsbl spamhaus sending domains recheck deliverability' },
   { id: 'calls', label: 'Cold Calling', hint: "Today's call queue & briefings", icon: Phone, to: '/calls', keywords: 'phone call queue dial briefing script cold' },
   { id: 'knowledge', label: 'Knowledge Base', hint: 'Contacts, guidelines & strategy', icon: BookOpen, to: '/knowledge', keywords: 'guidelines strategy industry playbook docs ai config contacts' },
   { id: 'investors', label: 'Go to Investors', hint: 'Fundraising pipeline & investor CRM', icon: Landmark, to: '/investors', keywords: 'investor fundraise fundraising vc venture capital pipeline funnel seed series check raise' },

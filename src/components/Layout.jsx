@@ -34,6 +34,11 @@ import {
   Activity,
   Radio,
   Radar,
+  Stethoscope,
+  MailCheck,
+  PenLine,
+  Globe,
+  MapPin,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -43,8 +48,14 @@ import ViewAsSwitcher from './ViewAsSwitcher';
 import Logo, { LogoMark } from './Logo';
 
 // Sidebar navigation, grouped to match a salesperson's daily flow:
-// plan the day (Workspace) → build the list (Leads) → reach out (Outreach)
-// → manage accounts (Clients) → look things up (Resources).
+// plan the day (Workspace) → watch the agent (Dialtone) → build the list
+// (Leads) → reach out (Outreach) → manage accounts (Clients) → look things up
+// (Resources).
+//
+// Dialtone gets its own section: it is an autonomous agent that sources, sends,
+// triages and can halt itself, and its surfaces were previously scattered
+// across three unrelated groups — so "what is the agent doing, and is it OK?"
+// had no single place to answer it.
 const navSections = [
   {
     key: 'workspace',
@@ -55,7 +66,19 @@ const navSections = [
       { name: 'Tasks', href: '/tasks', icon: CheckSquare },
       { name: 'Analytics', href: '/analytics', icon: BarChart3 },
       { name: 'Daily Activity', href: '/daily-activity', icon: Activity },
-      { name: 'Dialtone Console', href: '/dialtone', icon: Radio },
+    ],
+  },
+  {
+    key: 'dialtone',
+    label: 'Dialtone',
+    items: [
+      { name: 'Console', href: '/dialtone', icon: Radio, end: true },
+      { name: 'Replies', href: '/dialtone/inbox', icon: MailCheck },
+      { name: 'AI Drafts', href: '/dialtone/drafts', icon: PenLine },
+      { name: 'Prospecting', href: '/prospecting', icon: Radar },
+      { name: 'Places Discovery', href: '/dialtone/discovery', icon: MapPin },
+      { name: 'Health', href: '/dialtone/health', icon: Stethoscope },
+      { name: 'Domains', href: '/deliverability/domains', icon: Globe },
     ],
   },
   {
@@ -65,7 +88,6 @@ const navSections = [
       { name: 'Companies', href: '/companies', icon: Building2 },
       { name: 'Contacts', href: '/contacts', icon: Users },
       { name: 'Discovery', href: '/discovery', icon: Sparkles },
-      { name: 'Prospecting', href: '/prospecting', icon: Radar },
       { name: 'Groups', href: '/groups', icon: Folder },
       { name: 'News', href: '/news', icon: Newspaper },
       { name: 'Import', href: '/import', icon: Upload },
@@ -124,9 +146,13 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const isActivePath = (href) =>
+  // Prefix-matching keeps a parent lit on its detail routes (/companies/:id).
+  // `end` opts out for a parent that has real siblings under it: without it
+  // /dialtone would stay lit on /dialtone/health and two items would look
+  // active at once.
+  const isActivePath = (href, end = false) =>
     location.pathname === href ||
-    (href !== '/' && location.pathname.startsWith(href));
+    (!end && href !== '/' && location.pathname.startsWith(href));
 
   // Collapsible nav sections. Persist the user's collapsed/expanded choice so
   // the sidebar feels stable across visits; default everything expanded.
@@ -153,7 +179,7 @@ export default function Layout({ children }) {
   // never hidden inside a collapsed group (e.g. after a command-palette jump).
   useEffect(() => {
     const active = navSections.find((s) =>
-      s.items.some((it) => isActivePath(it.href))
+      s.items.some((it) => isActivePath(it.href, it.end))
     );
     if (active && collapsed[active.key]) {
       setCollapsed((prev) => ({ ...prev, [active.key]: false }));
@@ -200,10 +226,7 @@ export default function Layout({ children }) {
     });
   }, [recentSends]);
 
-  const currentPage = allNavItems.find(
-    item => item.href === location.pathname ||
-    (item.href !== '/' && location.pathname.startsWith(item.href))
-  );
+  const currentPage = allNavItems.find((item) => isActivePath(item.href, item.end));
 
   // Section-aware breadcrumb trail. Non-final segments with an `href` render as
   // links so related pages are one click away (e.g. back to the Companies list
@@ -228,7 +251,7 @@ export default function Layout({ children }) {
       return [{ label: 'Workspace' }, { label: 'Settings', href: '/settings' }];
     }
     for (const section of navSections) {
-      const item = section.items.find((it) => isActivePath(it.href));
+      const item = section.items.find((it) => isActivePath(it.href, it.end));
       if (item) {
         return [{ label: section.label }, { label: item.name, href: item.href }];
       }
@@ -251,7 +274,7 @@ export default function Layout({ children }) {
   }, [mobileOpen]);
 
   const NavLink = ({ item, showBadge }) => {
-    const isActive = isActivePath(item.href);
+    const isActive = isActivePath(item.href, item.end);
     return (
       <Link
         to={item.href}
@@ -298,7 +321,7 @@ export default function Layout({ children }) {
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {navSections.map((section) => {
           const isCollapsed = !!collapsed[section.key];
-          const hasActive = section.items.some((it) => isActivePath(it.href));
+          const hasActive = section.items.some((it) => isActivePath(it.href, it.end));
           const sectionHasBadge =
             section.key === 'outreach' && hasNewReplies;
           return (
