@@ -32,6 +32,7 @@ import {
 import GmailConnect from '../components/GmailConnect';
 import EmailSignatureEditor from '../components/EmailSignatureEditor';
 import SendingKillSwitch from '../components/SendingKillSwitch';
+import ResetWarmupControl from '../components/ResetWarmupControl';
 import TestDeliverability from '../components/TestDeliverability';
 import { api } from '../api/client';
 import { useAutomation } from '../hooks/useAutomation';
@@ -225,6 +226,10 @@ export default function Settings() {
   const [apiConnected, setApiConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [healthData, setHealthData] = useState(null);
+
+  // Live sending status, surfaced by the kill switch on load. Shared so the
+  // warm-up card can show the current ramp without a second fetch.
+  const [sendingStatus, setSendingStatus] = useState(null);
 
   // Automation — read from the backend, never assumed. These used to be
   // hardcoded literals that the page then described as backend state.
@@ -733,7 +738,11 @@ export default function Settings() {
   const renderSystemTab = () => (
     <div className="space-y-6">
       {/* Global sending kill switch — the launch-blocker safety valve. */}
-      <SendingKillSwitch />
+      <SendingKillSwitch onChange={setSendingStatus} />
+
+      {/* Warm-up ramp. Reads its numbers off the kill switch's status rather
+          than fetching /system/sending-status a second time. */}
+      <ResetWarmupControl status={sendingStatus} />
 
       {/* Test deliverability — compliant test send + SPF/DKIM/DMARC posture. */}
       <TestDeliverability />
