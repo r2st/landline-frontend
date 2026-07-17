@@ -343,6 +343,8 @@ function ReplyDrawer({ replyId, onClose }) {
               )}
             </div>
 
+            {reply.bounce && <BounceBreakdown bounce={reply.bounce} />}
+
             {/* The reply itself. body_text is preferred over body_html: this is a
                 triage view, and rendering remote HTML here would pull tracking
                 pixels and remote images on the operator's behalf. */}
@@ -381,6 +383,75 @@ function ReplyDrawer({ replyId, onClose }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Delivery-failure breakdown for a `bounce` reply. A hard bounce is a dead
+// mailbox (suppress and move on); a soft bounce is transient (worth a retry) —
+// so severity is colour-coded hard=red, soft=yellow. Diagnostic codes come
+// straight from the DSN when the bounce sweep recorded them.
+function BounceBreakdown({ bounce }) {
+  const isHard = bounce.category === 'hard';
+  const isSoft = bounce.category === 'soft';
+  const tone = isHard
+    ? { box: 'border-red-200 bg-red-50', head: 'text-red-800', chip: 'bg-red-100 text-red-800 ring-red-600/20', label: 'Hard bounce' }
+    : isSoft
+      ? { box: 'border-amber-200 bg-amber-50', head: 'text-amber-800', chip: 'bg-amber-100 text-amber-800 ring-amber-600/20', label: 'Soft bounce' }
+      : { box: 'border-gray-200 bg-gray-50', head: 'text-gray-700', chip: 'bg-gray-100 text-gray-600 ring-gray-500/20', label: 'Bounce' };
+
+  return (
+    <div className={cn('rounded-lg border px-4 py-3', tone.box)}>
+      <h3 className={cn('flex items-center gap-1.5 text-sm font-semibold', tone.head)}>
+        <AlertTriangle className="h-4 w-4" />
+        Delivery failed
+        <span className={cn('ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset', tone.chip)}>
+          {tone.label}
+        </span>
+      </h3>
+      <p className="mt-1 text-xs text-gray-600">
+        {isHard
+          ? 'A permanent failure — the address is dead. The contact is suppressed from further sends.'
+          : isSoft
+            ? 'A temporary failure — the address may recover. Repeated soft bounces eventually suppress it.'
+            : 'Delivery to this address failed.'}
+      </p>
+
+      <dl className="mt-2.5 space-y-1.5 text-sm">
+        {bounce.recipient && (
+          <div className="flex gap-2">
+            <dt className="w-28 flex-shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">Recipient</dt>
+            <dd className="break-all text-gray-800">{bounce.recipient}</dd>
+          </div>
+        )}
+        {bounce.status_code && (
+          <div className="flex gap-2">
+            <dt className="w-28 flex-shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">Status code</dt>
+            <dd className="font-mono text-gray-800">{bounce.status_code}</dd>
+          </div>
+        )}
+        {bounce.diagnostic && (
+          <div className="flex gap-2">
+            <dt className="w-28 flex-shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">Diagnostic</dt>
+            <dd className="min-w-0 break-words font-mono text-xs text-gray-700">{bounce.diagnostic}</dd>
+          </div>
+        )}
+        {bounce.bounce_count != null && bounce.bounce_count > 0 && (
+          <div className="flex gap-2">
+            <dt className="w-28 flex-shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">Total bounces</dt>
+            <dd className="text-gray-800">{bounce.bounce_count}</dd>
+          </div>
+        )}
+      </dl>
+
+      {/* When the DSN carried no machine-readable code, say so rather than
+          leaving a bare category with no explanation. */}
+      {!bounce.status_code && !bounce.diagnostic && (
+        <p className="mt-2 text-xs text-gray-400">
+          No diagnostic code was recorded for this bounce — the category is inferred from the
+          delivery notice.
+        </p>
+      )}
     </div>
   );
 }
