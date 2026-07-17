@@ -387,6 +387,12 @@ export const sendTimingApi = {
   // Top learned contacts (by opens) with their computed optimal send windows.
   contacts: (limit = 20) =>
     api.get('/dialtone/send-timing/contacts', { params: { limit } }).then(r => r.data),
+  // A single contact's resolved timezone, engagement profile, computed optimal
+  // window, and next optimal send slot. Returns { contact_id, email, timezone,
+  // tz_source, profile, window: { dow_preference[], hour_start, hour_end,
+  // confidence, source }, next_send_at }.
+  contact: (contactId) =>
+    api.get(`/dialtone/send-timing/contacts/${contactId}`).then(r => r.data),
 };
 
 // A/B testing for Dialtone sequence steps: the subject/body variants the agent
