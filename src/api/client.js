@@ -256,6 +256,11 @@ export const reportsApi = {
 // Deliverability — sender health + sending-domain SPF/DKIM/DMARC checks
 export const deliverabilityApi = {
   senders: () => api.get('/deliverability/senders').then(r => r.data),
+  // Per-account reputation trend from the append-only snapshot table.
+  sendersHistory: (days = 30) =>
+    api.get('/deliverability/senders/history', { params: { days } }).then(r => r.data),
+  // Re-assess every sending account now (recomputes reputation + throttle).
+  assess: () => api.post('/deliverability/assess').then(r => r.data),
   domainAuth: (domain, dkimSelector) =>
     api.get('/deliverability/domain-auth', { params: { domain, dkim_selector: dkimSelector || undefined } }).then(r => r.data),
 };
