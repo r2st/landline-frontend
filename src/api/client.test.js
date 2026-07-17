@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { api } from './client';
 import { tokenStore } from './authToken';
+import { impersonationStore } from './impersonation';
 
 // Drive the axios instance through a fake adapter so we can script server
 // responses (401 then 200) and inspect exactly what the response interceptor
@@ -129,5 +130,51 @@ describe('api request interceptor — auth headers', () => {
 
     await api.get('/dashboard/overview');
     expect(seen).toBeUndefined();
+  });
+});
+
+describe('api response interceptor — 403 organization deactivated', () => {
+  beforeEach(() => {
+    tokenStore.clear();
+    tokenStore.setLogoutHandler(null);
+    impersonationStore.clear();
+    delete api.defaults.adapter;
+  });
+
+  function axios403(config, detail) {
+    return Promise.reject({
+      config,
+      response: { status: 403, data: { detail } },
+      isAxiosError: true,
+    });
+  }
+
+  it('ends the session on a 403 whose detail says deactivated', async () => {
+    installAdapter((config) => axios403(config, 'Organization is deactivated'));
+    const logout = vi.fn();
+    tokenStore.setLogoutHandler(logout);
+
+    await expect(api.get('/companies/')).rejects.toBeDefined();
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT end the session on an ordinary permission 403', async () => {
+    installAdapter((config) => axios403(config, 'Insufficient permissions'));
+    const logout = vi.fn();
+    tokenStore.setLogoutHandler(logout);
+
+    await expect(api.get('/companies/')).rejects.toBeDefined();
+    expect(logout).not.toHaveBeenCalled();
+  });
+
+  it('drops impersonation (not the admin session) on a deactivated 403 while impersonating', async () => {
+    impersonationStore.set({ token: 'imp-token', orgId: 'o1', orgName: 'O', userId: 'u1' });
+    installAdapter((config) => axios403(config, 'Organization is deactivated'));
+    const logout = vi.fn();
+    tokenStore.setLogoutHandler(logout);
+
+    await expect(api.get('/companies/')).rejects.toBeDefined();
+    expect(impersonationStore.getToken()).toBeNull();
+    expect(logout).not.toHaveBeenCalled();
   });
 });
