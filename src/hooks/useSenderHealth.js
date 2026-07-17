@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { deliverabilityApi, queryClient } from '../api/client';
+import { bookingApi, deliverabilityApi, queryClient } from '../api/client';
 
 // Current per-account reputation. Like the danger-signals rail, this does NOT
 // swallow a failed fetch into an empty list: a page whose whole job is to show
@@ -30,6 +30,31 @@ export function useSenderHistory({ days = 30 } = {}) {
       }
     },
     retry: false,
+  });
+}
+
+// A sender's calendar-booking config. Fetched lazily (only when its row is
+// expanded) since most senders use the global default and never open it.
+export function useSenderBooking(accountId, enabled = true) {
+  return useQuery({
+    queryKey: ['sender-booking', accountId],
+    queryFn: () => bookingApi.get(accountId),
+    enabled: Boolean(accountId) && enabled,
+    retry: false,
+  });
+}
+
+// Set (or clear) a sender's booking URL. An empty `booking_url` resets it to the
+// global scheduling link. The backend validates the URL (https + known-scheduler
+// host); a rejected one surfaces its reason.
+export function useSetSenderBooking(accountId) {
+  return useMutation({
+    mutationFn: (body) => bookingApi.set(accountId, body),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['sender-booking', accountId], data);
+      toast.success(data?.booking_url ? 'Booking link saved' : 'Reset to global default');
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Could not save booking link'),
   });
 }
 

@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, CheckCircle2, ChevronRight, Gauge, Loader2, Mail,
-  Minus, RefreshCw, TrendingDown, TrendingUp,
+  Activity, AlertTriangle, Calendar, CheckCircle2, ChevronRight, ExternalLink, Gauge, Loader2, Mail,
+  Minus, Pencil, RefreshCw, RotateCcw, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import {
   CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import EmptyState from '../components/EmptyState';
-import { useAssessSenders, useSenderHealth, useSenderHistory } from '../hooks/useSenderHealth';
+import { useAutomation } from '../hooks/useAutomation';
+import {
+  useAssessSenders, useSenderBooking, useSenderHealth, useSenderHistory, useSetSenderBooking,
+} from '../hooks/useSenderHealth';
 import {
   THRESHOLDS, fmtPct, fmtRepDelta, fmtThrottle, reputationTone, senderWarnings, statusMeta,
 } from '../lib/senderHealth';
@@ -24,7 +27,12 @@ import { cn, timeAgo } from '../lib/utils';
 export default function SenderHealth() {
   const { data, isLoading, isError, error, refetch, isFetching } = useSenderHealth();
   const { data: history } = useSenderHistory({ days: 30 });
+  const { data: automation } = useAutomation();
   const assess = useAssessSenders();
+
+  // The global scheduling link a sender falls back to when it has no booking
+  // URL of its own. Shown so "using global default" names the actual link.
+  const globalBookingUrl = automation?.scheduling_link || '';
 
   const senders = Array.isArray(data) ? data : [];
 
@@ -93,7 +101,12 @@ export default function SenderHealth() {
           {atRisk.length > 0 && <RiskCallout atRisk={atRisk} />}
           <div className="space-y-3">
             {senders.map((s) => (
-              <SenderRow key={`${s.account_type}:${s.account_id}`} sender={s} history={historyByAccount[s.account_id]} />
+              <SenderRow
+                key={`${s.account_type}:${s.account_id}`}
+                sender={s}
+                history={historyByAccount[s.account_id]}
+                globalBookingUrl={globalBookingUrl}
+              />
             ))}
           </div>
           <ThresholdLegend />
@@ -181,7 +194,7 @@ function RiskCallout({ atRisk }) {
   );
 }
 
-function SenderRow({ sender: s, history }) {
+function SenderRow({ sender: s, history, globalBookingUrl }) {
   const [open, setOpen] = useState(false);
   const meta = statusMeta(s.status);
   const warnings = senderWarnings(s);
@@ -271,7 +284,152 @@ function SenderRow({ sender: s, history }) {
         </div>
       )}
 
-      {open && <SenderTrend points={points} status={s.status} />}
+      {open && (
+        <>
+          <SenderBooking accountId={s.account_id} globalBookingUrl={globalBookingUrl} />
+          <SenderTrend points={points} status={s.status} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// Per-sender calendar booking link. A sender with no URL of its own inherits the
+// global scheduling link (shown as "using global default"); operators can set a
+// custom link or reset back to the global one. Fetched lazily — this only
+// mounts once the row is expanded.
+function SenderBooking({ accountId, globalBookingUrl }) {
+  const { data: config, isLoading } = useSenderBooking(accountId);
+  const save = useSetSenderBooking(accountId);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  const current = config?.booking_url || '';
+  const usingGlobal = !current;
+
+  const startEdit = () => {
+    setValue(current);
+    setEditing(true);
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    save.mutate(
+      { booking_url: value.trim() },
+      { onSuccess: () => setEditing(false) }
+    );
+  };
+
+  const resetToGlobal = () => {
+    // Clearing the URL is what "reset to global" means server-side.
+    save.mutate(
+      { booking_url: '' },
+      { onSuccess: () => { setEditing(false); setValue(''); } }
+    );
+  };
+
+  return (
+    <div className="border-t border-gray-100 px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            <Calendar className="h-3.5 w-3.5" />
+            Booking link
+          </h3>
+          {isLoading ? (
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+            </p>
+          ) : usingGlobal ? (
+            <p className="mt-1 text-sm text-gray-500">
+              Using global default
+              {globalBookingUrl ? (
+                <>
+                  {' — '}
+                  <a
+                    href={globalBookingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="break-all text-blue-600 hover:underline"
+                  >
+                    {globalBookingUrl}
+                  </a>
+                </>
+              ) : (
+                <span className="text-gray-400"> (no global link set)</span>
+              )}
+            </p>
+          ) : (
+            <a
+              href={current}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 break-all text-sm text-blue-600 hover:underline"
+            >
+              {current}
+              <ExternalLink className="h-3 w-3 flex-shrink-0" />
+            </a>
+          )}
+        </div>
+
+        {!editing && (
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={startEdit}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <Pencil className="h-3 w-3" />
+              {usingGlobal ? 'Set custom' : 'Edit'}
+            </button>
+            {!usingGlobal && (
+              <button
+                type="button"
+                onClick={resetToGlobal}
+                disabled={save.isPending}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset to global
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <form onSubmit={submit} className="mt-2.5 space-y-2">
+          <input
+            type="url"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="https://calendly.com/you/intro"
+            aria-label="Custom booking URL"
+            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <p className="text-[11px] text-gray-400">
+            Must be an https link on a recognised scheduler (Calendly, Cal.com, HubSpot, …). Leave
+            empty and save to fall back to the global default.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={save.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {save.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

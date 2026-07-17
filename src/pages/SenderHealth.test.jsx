@@ -6,13 +6,23 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const mockSenders = vi.fn();
 const mockHistory = vi.fn();
 const mockAssess = vi.fn();
+const mockAutomation = vi.fn();
+const mockBookingGet = vi.fn();
+const mockBookingSet = vi.fn();
 vi.mock('../api/client', () => ({
   api: { get: vi.fn(), post: vi.fn() },
-  queryClient: { invalidateQueries: vi.fn() },
+  queryClient: { invalidateQueries: vi.fn(), setQueryData: vi.fn() },
   deliverabilityApi: {
     senders: (...a) => mockSenders(...a),
     sendersHistory: (...a) => mockHistory(...a),
     assess: (...a) => mockAssess(...a),
+  },
+  systemApi: {
+    automation: (...a) => mockAutomation(...a),
+  },
+  bookingApi: {
+    get: (...a) => mockBookingGet(...a),
+    set: (...a) => mockBookingSet(...a),
   },
 }));
 vi.mock('react-hot-toast', () => ({
@@ -85,6 +95,15 @@ describe('SenderHealth page', () => {
     mockSenders.mockResolvedValue([HEALTHY, THROTTLED]);
     mockHistory.mockResolvedValue(HISTORY);
     mockAssess.mockResolvedValue({ accounts_assessed: 2 });
+    mockAutomation.mockResolvedValue({ flags: [], scheduling_link: 'https://calendly.com/apprend/intro' });
+    mockBookingGet.mockResolvedValue({
+      account_id: 'acc-1', account_type: 'gmail', email: 'good@apprend.co',
+      booking_url: null, booking_provider: null, booking_auto_inject: true,
+    });
+    mockBookingSet.mockResolvedValue({
+      account_id: 'acc-1', account_type: 'gmail', email: 'good@apprend.co',
+      booking_url: 'https://calendly.com/good/15min', booking_provider: null, booking_auto_inject: true,
+    });
   });
 
   it('lists each sender with reputation, status and rates', async () => {
@@ -172,5 +191,46 @@ describe('SenderHealth page', () => {
     // Complaint throttle line is 0.30%.
     const legend = screen.getByText(/how senders are scored/i).closest('div');
     expect(within(legend).getByText(/0\.30%/)).toBeInTheDocument();
+  });
+
+  it('shows a sender using the global booking default when expanded', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /show trend for good@apprend.co/i }));
+    // Booking config loads lazily on expand and reports the fallback.
+    expect(await screen.findByText(/using global default/i)).toBeInTheDocument();
+    // Names the actual global link from /system/automation.
+    expect(screen.getByRole('link', { name: 'https://calendly.com/apprend/intro' })).toBeInTheDocument();
+    expect(mockBookingGet).toHaveBeenCalledWith('acc-1');
+  });
+
+  it('saves a custom booking URL for a sender', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /show trend for good@apprend.co/i }));
+    await screen.findByText(/using global default/i);
+
+    await user.click(screen.getByRole('button', { name: /set custom/i }));
+    const input = screen.getByLabelText(/custom booking url/i);
+    await user.type(input, 'https://calendly.com/good/15min');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(mockBookingSet).toHaveBeenCalledWith('acc-1', { booking_url: 'https://calendly.com/good/15min' });
+  });
+
+  it('resets a custom booking URL back to the global default', async () => {
+    const user = userEvent.setup();
+    mockBookingGet.mockResolvedValue({
+      account_id: 'acc-1', account_type: 'gmail', email: 'good@apprend.co',
+      booking_url: 'https://calendly.com/good/15min', booking_provider: null, booking_auto_inject: true,
+    });
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /show trend for good@apprend.co/i }));
+    // The custom URL is shown as a link.
+    expect(await screen.findByRole('link', { name: /calendly\.com\/good\/15min/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /reset to global/i }));
+    // Clearing the URL server-side is what "reset to global" means.
+    expect(mockBookingSet).toHaveBeenCalledWith('acc-1', { booking_url: '' });
   });
 });
