@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 
 // Mock the data hooks so the page renders deterministically without a backend.
 const mockCandidates = vi.fn();
 const mockRuns = vi.fn();
 const mockReview = vi.fn();
 const mockBulk = vi.fn();
+const mockRunCandidates = vi.fn();
+const mockTriggerRun = vi.fn();
 vi.mock('../hooks/useProspecting', async () => {
   const actual = await vi.importActual('../hooks/useProspecting');
   return {
@@ -15,6 +18,8 @@ vi.mock('../hooks/useProspecting', async () => {
     useProspectingRuns: (...a) => mockRuns(...a),
     useReviewCandidate: () => mockReview(),
     useBulkReview: () => mockBulk(),
+    useRunCandidates: (...a) => mockRunCandidates(...a),
+    useTriggerRun: () => mockTriggerRun(),
   };
 });
 
@@ -93,6 +98,10 @@ const RUN = {
 };
 
 const mutate = vi.fn();
+const triggerMutate = vi.fn();
+
+// The page links to /dialtone/icp, so it needs a Router.
+const renderPage = () => render(<MemoryRouter><Prospecting /></MemoryRouter>);
 
 describe('Prospecting page', () => {
   beforeEach(() => {
@@ -101,10 +110,12 @@ describe('Prospecting page', () => {
     mockRuns.mockReturnValue({ data: [RUN], isLoading: false });
     mockReview.mockReturnValue({ mutate, isPending: false, variables: null });
     mockBulk.mockReturnValue({ mutate, isPending: false });
+    mockRunCandidates.mockReturnValue({ data: [], isLoading: false, isError: false });
+    mockTriggerRun.mockReturnValue({ mutate: triggerMutate, isPending: false });
   });
 
   it('renders each candidate with the context needed to decide', () => {
-    render(<Prospecting />);
+    renderPage();
     expect(screen.getByText('Cleveland Precision Machining')).toBeInTheDocument();
     // The search query that surfaced it, not the Places category.
     expect(screen.getByText('CNC Machining')).toBeInTheDocument();
@@ -114,7 +125,7 @@ describe('Prospecting page', () => {
   });
 
   it('shows the address approval would email, not just that one exists', () => {
-    render(<Prospecting />);
+    renderPage();
     const rows = screen.getAllByRole('row');
     const places = rows.find((r) => within(r).queryByText('Cleveland Precision Machining'));
     const noEmail = rows.find((r) => within(r).queryByText('Woodcraft Interiors'));
@@ -128,7 +139,7 @@ describe('Prospecting page', () => {
   });
 
   it('keeps the score rationale collapsed until asked for', () => {
-    render(<Prospecting />);
+    renderPage();
     expect(screen.queryByText(/strongest segment in the learned ICP/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 68/i }))
       .toHaveAttribute('aria-expanded', 'false');
@@ -136,7 +147,7 @@ describe('Prospecting page', () => {
 
   it("explains a fit score with the model's reasoning and the component split", async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 68/i }));
 
     // The paragraph the model wrote — previously in the payload and discarded.
@@ -150,7 +161,7 @@ describe('Prospecting page', () => {
 
   it('collapses the rationale again on a second click', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     const toggle = screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 68/i });
     await user.click(toggle);
     expect(screen.getByText('32 / 40')).toBeInTheDocument();
@@ -160,7 +171,7 @@ describe('Prospecting page', () => {
 
   it('says so plainly when a candidate was scored on rules alone', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByRole('button', { name: /show why Woodcraft Interiors scored 52/i }));
     // No invented rationale for a candidate the model never wrote one for.
     expect(screen.getByText(/scored on the rules below alone/)).toBeInTheDocument();
@@ -184,7 +195,7 @@ describe('Prospecting page', () => {
       isLoading: false,
       isFetching: false,
     });
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 0/i }));
     expect(screen.getByText(/Excluded by your ICP/)).toBeInTheDocument();
     expect(screen.getByText(/industry 'Staffing' is excluded/)).toBeInTheDocument();
@@ -196,13 +207,13 @@ describe('Prospecting page', () => {
       isLoading: false,
       isFetching: false,
     });
-    render(<Prospecting />);
+    renderPage();
     expect(screen.queryByRole('button', { name: /show why/i })).not.toBeInTheDocument();
   });
 
   it('approves a single candidate as the signed-in reviewer, after confirming', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getAllByRole('button', { name: /approve$/i })[0]);
     // Approving arms a real cold email — it must not fire on the first click.
     expect(mutate).not.toHaveBeenCalled();
@@ -215,7 +226,7 @@ describe('Prospecting page', () => {
 
   it('sends nothing when an approval is cancelled', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getAllByRole('button', { name: /approve$/i })[0]);
     await user.click(screen.getByRole('button', { name: /cancel/i }));
     expect(mutate).not.toHaveBeenCalled();
@@ -223,7 +234,7 @@ describe('Prospecting page', () => {
 
   it('rejects a single candidate without a confirm step', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getAllByRole('button', { name: /^reject$/i })[0]);
     expect(mutate).toHaveBeenCalledWith(
       { id: 'c1', decision: 'reject', reviewer: 'rep@apprend.tech' },
@@ -233,7 +244,7 @@ describe('Prospecting page', () => {
 
   it('bulk-approves every selected candidate, after confirming', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByLabelText('Select all candidates'));
     expect(screen.getByText('2 selected')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /approve selected/i }));
@@ -249,7 +260,7 @@ describe('Prospecting page', () => {
 
   it('asks the API for the enrolled disposition when filtering to Approved', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByRole('button', { name: 'Approved' }));
     // "Approved" is stored as 'enrolled' — the filter must not send 'approved'.
     expect(mockCandidates).toHaveBeenLastCalledWith(
@@ -264,7 +275,7 @@ describe('Prospecting page', () => {
       isLoading: false,
       isFetching: false,
     });
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByRole('button', { name: 'Approved' }));
     expect(screen.queryByRole('button', { name: /approve$/i })).not.toBeInTheDocument();
     expect(screen.getByText('by rep@apprend.tech')).toBeInTheDocument();
@@ -272,7 +283,7 @@ describe('Prospecting page', () => {
 
   it('sorts by date on request', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.selectOptions(screen.getByLabelText('Sort by'), 'created_at');
     expect(mockCandidates).toHaveBeenLastCalledWith(
       expect.objectContaining({ sort: 'created_at', order: 'desc' })
@@ -281,13 +292,13 @@ describe('Prospecting page', () => {
 
   it('shows an empty state when nothing is waiting', () => {
     mockCandidates.mockReturnValue({ data: [], isLoading: false, isFetching: false });
-    render(<Prospecting />);
+    renderPage();
     expect(screen.getByText('Nothing waiting on you')).toBeInTheDocument();
   });
 
   it('renders run history with its found/qualified/enrolled tallies', async () => {
     const user = userEvent.setup();
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByRole('button', { name: /runs/i }));
     expect(screen.getByText('completed')).toBeInTheDocument();
     expect(screen.getByText('25')).toBeInTheDocument(); // found
@@ -302,8 +313,101 @@ describe('Prospecting page', () => {
       data: [{ ...RUN, status: 'failed', error: 'Places quota exhausted' }],
       isLoading: false,
     });
-    render(<Prospecting />);
+    renderPage();
     await user.click(screen.getByRole('button', { name: /runs/i }));
     expect(screen.getByText('Places quota exhausted')).toBeInTheDocument();
+  });
+
+  // --- Manual run trigger (P2-3) ---
+
+  it('holds a manual run behind a confirm that names what it spends and arms', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /^run now$/i }));
+    expect(triggerMutate).not.toHaveBeenCalled();
+    // A run spends credits and can enrol straight into outreach without ever
+    // passing the review queue — that is not a refresh button.
+    expect(screen.getByText(/spends Apollo \/ Google Places credit/i)).toBeInTheDocument();
+    expect(screen.getByText(/enrolled in outreach automatically/i)).toBeInTheDocument();
+  });
+
+  it('starts nothing when a run is cancelled', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /^run now$/i }));
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(triggerMutate).not.toHaveBeenCalled();
+  });
+
+  it('triggers the run after confirming', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /^run now$/i }));
+    await user.click(screen.getByRole('button', { name: /run the prospector/i }));
+    expect(triggerMutate).toHaveBeenCalledWith({});
+  });
+
+  it('shows the run as in flight while it works', () => {
+    mockTriggerRun.mockReturnValue({ mutate: triggerMutate, isPending: true });
+    renderPage();
+    // A prospecting run is slow (sourcing + scoring + enrolling); a button that
+    // looked idle would invite a second, credit-spending click.
+    expect(screen.getByRole('button', { name: /running…/i })).toBeDisabled();
+  });
+
+  // --- Run candidates drill-down (P2-2) ---
+
+  it('shows which companies a run actually found', async () => {
+    const user = userEvent.setup();
+    mockRunCandidates.mockReturnValue({
+      data: [PLACES, NO_EMAIL], isLoading: false, isError: false,
+    });
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /runs/i }));
+
+    // "Found 25 / Qualified 9" was unauditable — you could see the agent did
+    // something, never what.
+    await user.click(screen.getByRole('button', { name: /show companies/i }));
+    expect(mockRunCandidates).toHaveBeenLastCalledWith('r1');
+    expect(screen.getByRole('link', { name: 'Cleveland Precision Machining' }))
+      .toHaveAttribute('href', '/companies/co1');
+  });
+
+  it('does not fetch a run\'s candidates until it is opened', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /runs/i }));
+
+    // Run history lists 25; most are never opened. The hook isn't merely
+    // disabled — it's never mounted, so a page of runs costs one request.
+    expect(mockRunCandidates).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /show companies/i }));
+    expect(mockRunCandidates).toHaveBeenCalledWith('r1');
+  });
+
+  it('says a run recorded nothing rather than showing a blank table', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /runs/i }));
+    await user.click(screen.getByRole('button', { name: /show companies/i }));
+    expect(screen.getByText(/recorded no candidates/i)).toBeInTheDocument();
+  });
+
+  it('surfaces a failed candidates fetch instead of an empty run', async () => {
+    const user = userEvent.setup();
+    mockRunCandidates.mockReturnValue({
+      data: undefined, isLoading: false, isError: true, error: { message: 'boom' },
+    });
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /runs/i }));
+    await user.click(screen.getByRole('button', { name: /show companies/i }));
+    expect(screen.getByText(/couldn't load this run's candidates/i)).toBeInTheDocument();
+  });
+
+  it('links to the ICP the scores were judged against', () => {
+    renderPage();
+    expect(screen.getAllByRole('link', { name: /icp/i })[0]).toHaveAttribute('href', '/dialtone/icp');
   });
 });

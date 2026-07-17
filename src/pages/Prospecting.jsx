@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
   Radar, Check, X, Mail, MailX, MapPin, History, ClipboardList, Loader2, AlertTriangle,
-  ChevronRight, Ban,
+  ChevronRight, Ban, Play, Target,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import ScoreBadge from '../components/ScoreBadge';
@@ -13,6 +14,8 @@ import {
   useProspectCandidates,
   useProspectingRuns,
   useReviewCandidate,
+  useRunCandidates,
+  useTriggerRun,
 } from '../hooks/useProspecting';
 import { cn, formatDate, timeAgo } from '../lib/utils';
 
@@ -518,8 +521,82 @@ function ReviewQueue() {
   );
 }
 
+// Which companies a run actually found. The tallies alone ("Found 40 /
+// Qualified 12") were unauditable — you could see that the agent did something
+// but never what, and `runCandidates` had been defined and never called.
+function RunCandidates({ runId }) {
+  const { data, isLoading, isError, error } = useRunCandidates(runId);
+  const candidates = Array.isArray(data) ? data : [];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6 text-gray-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <p className="px-1 py-3 text-xs text-amber-700">
+        Couldn't load this run's candidates — {error?.response?.data?.detail || error?.message || 'no response'}.
+      </p>
+    );
+  }
+  if (candidates.length === 0) {
+    return (
+      <p className="px-1 py-3 text-xs text-gray-400">
+        This run recorded no candidates. Its tallies came from companies it had already seen.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 overflow-x-auto rounded-lg border border-gray-100">
+      <table className="w-full min-w-[34rem] text-left text-sm">
+        <thead className="bg-gray-50/80">
+          <tr className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            <th scope="col" className="px-3 py-2">Company</th>
+            <th scope="col" className="px-3 py-2">Fit</th>
+            <th scope="col" className="px-3 py-2">Status</th>
+            <th scope="col" className="px-3 py-2">Email</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {candidates.map((c) => (
+            <tr key={c.id}>
+              <td className="px-3 py-2">
+                {/* An enrolled candidate has a company; a rejected one may not. */}
+                {c.company_id ? (
+                  <Link to={`/companies/${c.company_id}`} className="text-blue-600 hover:underline">
+                    {c.company_name}
+                  </Link>
+                ) : (
+                  <span className="text-gray-700">{c.company_name}</span>
+                )}
+                {c.domain && <span className="ml-1.5 text-xs text-gray-400">{c.domain}</span>}
+              </td>
+              <td className="px-3 py-2"><ScoreBadge score={c.fit_score} size="sm" /></td>
+              <td className="px-3 py-2">
+                <Pill tone={STATUS_TONE[c.status] || STATUS_TONE.skipped}>{c.status}</Pill>
+              </td>
+              <td className="px-3 py-2">
+                {c.has_email ? (
+                  <span className="truncate text-xs text-gray-600">{c.contact_email}</span>
+                ) : (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function RunsHistory() {
   const { data: runs = [], isLoading } = useProspectingRuns(25);
+  const [expanded, setExpanded] = useState(null);
 
   if (isLoading) {
     return (
@@ -545,6 +622,7 @@ function RunsHistory() {
     <div className="space-y-3">
       {runs.map((run) => {
         const sources = Array.isArray(run.sources_queried) ? run.sources_queried : [];
+        const open = expanded === run.id;
         return (
           <div key={run.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -558,6 +636,15 @@ function RunsHistory() {
                   via {sources.map((s) => SOURCE_LABELS[s] || s).join(', ')}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => setExpanded(open ? null : run.id)}
+                aria-expanded={open}
+                className="ml-auto inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              >
+                <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')} />
+                {open ? 'Hide companies' : 'Show companies'}
+              </button>
             </div>
 
             <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -580,6 +667,8 @@ function RunsHistory() {
                 <span className="break-words">{run.error}</span>
               </p>
             )}
+
+            {open && <RunCandidates runId={run.id} />}
           </div>
         );
       })}
@@ -589,6 +678,8 @@ function RunsHistory() {
 
 export default function Prospecting() {
   const [view, setView] = useState('queue');
+  const [confirmingRun, setConfirmingRun] = useState(false);
+  const trigger = useTriggerRun();
 
   return (
     <div className="space-y-6">
@@ -599,32 +690,74 @@ export default function Prospecting() {
             Prospecting
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Companies the agent sourced and scored against your ICP. It enrols the ones it is sure
-            about and leaves the rest to you.
+            Companies the agent sourced and scored against your{' '}
+            <Link to="/dialtone/icp" className="text-indigo-600 hover:underline">
+              ICP
+            </Link>
+            . It enrols the ones it is sure about and leaves the rest to you.
           </p>
         </div>
-        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
-          {[
-            { key: 'queue', label: 'Review queue', icon: ClipboardList },
-            { key: 'runs', label: 'Runs', icon: History },
-          ].map((v) => (
-            <button
-              key={v.key}
-              type="button"
-              onClick={() => setView(v.key)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                view === v.key ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:text-gray-900'
-              )}
-            >
-              <v.icon className="h-4 w-4" />
-              {v.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/dialtone/icp"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            <Target className="h-4 w-4" />
+            ICP
+          </Link>
+          {/* A run sources companies, spends Apollo/Places credit, and enrols
+              the confident ones straight into outreach — so it is confirmed,
+              not a refresh button. */}
+          <button
+            type="button"
+            disabled={trigger.isPending}
+            onClick={() => setConfirmingRun(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {trigger.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            {trigger.isPending ? 'Running…' : 'Run now'}
+          </button>
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
+            {[
+              { key: 'queue', label: 'Review queue', icon: ClipboardList },
+              { key: 'runs', label: 'Runs', icon: History },
+            ].map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                onClick={() => setView(v.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  view === v.key ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:text-gray-900'
+                )}
+              >
+                <v.icon className="h-4 w-4" />
+                {v.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {view === 'queue' ? <ReviewQueue /> : <RunsHistory />}
+
+      <ConfirmDialog
+        open={confirmingRun}
+        variant="warning"
+        title="Run the prospector now?"
+        message={
+          'This sources new companies against your ICP and spends Apollo / Google Places credit ' +
+          'to do it. Anything it scores highly enough is enrolled in outreach automatically — a ' +
+          'real cold email, without passing through the review queue. The kill switch and the ' +
+          'send window are what hold it back.'
+        }
+        confirmLabel="Run the prospector"
+        onConfirm={() => {
+          trigger.mutate({});
+          setConfirmingRun(false);
+        }}
+        onCancel={() => setConfirmingRun(false)}
+      />
     </div>
   );
 }
