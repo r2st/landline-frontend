@@ -3,8 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Radio, Mail, MailOpen, MousePointerClick, MessageSquareReply, AlertTriangle,
   Ban, UserPlus, Send, Gauge, ShieldCheck, RefreshCw, Search, Filter, X, ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
+import SafeHtml from '../components/SafeHtml';
 import SendingKillSwitch from '../components/SendingKillSwitch';
 import { useDialtoneConsole, useDialtoneActivity } from '../hooks/useDialtone';
 import { cn } from '../lib/utils';
@@ -91,6 +93,112 @@ function targetFor(event) {
       : '/prospecting';
   }
   return event.metadata?.contact_id ? `/contacts?highlight=${event.metadata.contact_id}` : null;
+}
+
+// --- Activity feed row -------------------------------------------------------
+// A single event. When the event carries the copy that was sent
+// (`metadata.body_html` — populated for Dialtone's own sequence sends), the row
+// becomes an expandable disclosure so the operator can read back exactly what
+// went out. Sequence sends have no EmailSend row, so this feed is the only place
+// that copy lives in the app. Otherwise the row keeps the old behaviour: a link
+// to the related contact/company, or a plain, non-interactive line.
+function ActivityRow({ it, target }) {
+  const [expanded, setExpanded] = useState(false);
+  const bodyHtml = it.metadata?.body_html || null;
+  const subject = it.metadata?.subject || null;
+  const canExpand = Boolean(bodyHtml);
+
+  const rowInner = (
+    <>
+      <span
+        className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full',
+          it.severity === 'error' ? 'bg-red-500' : it.severity === 'warn' ? 'bg-amber-500' : 'bg-indigo-400')}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <EventBadge type={it.type} />
+          <span className={cn('truncate text-sm font-medium text-gray-900', (target || canExpand) && 'group-hover:underline')}>
+            {it.title}
+          </span>
+        </div>
+        {it.description && (
+          <p className="mt-0.5 truncate text-sm text-gray-500">{it.description}</p>
+        )}
+        {/* Send events carry `to_email`; a discovered lead carries the
+            contact enrichment found. Either way it's "the address
+            this event is about". */}
+        {(it.metadata?.to_email || it.metadata?.contact_email) && (
+          <p className="mt-0.5 truncate text-xs text-gray-400">
+            {it.metadata.to_email || it.metadata.contact_email}
+            {it.metadata?.contact_name ? ` · ${it.metadata.contact_name}` : ''}
+          </p>
+        )}
+      </div>
+      <time
+        className="flex-shrink-0 whitespace-nowrap text-xs text-gray-400"
+        title={absTime(it.timestamp)}
+      >
+        {relTime(it.timestamp)}
+      </time>
+      {canExpand ? (
+        <ChevronDown
+          className={cn('h-4 w-4 flex-shrink-0 self-center text-gray-300 transition-transform', expanded && 'rotate-180')}
+          aria-hidden="true"
+        />
+      ) : target && (
+        <ChevronRight className="h-4 w-4 flex-shrink-0 self-center text-gray-300" aria-hidden="true" />
+      )}
+    </>
+  );
+
+  const rowClasses = 'group flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50';
+
+  // A readable body wins over a navigation target: the sent copy is the detail
+  // the operator wants here, and it opens in place.
+  if (canExpand) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-label={expanded ? `${it.title} — hide email` : `${it.title} — read email`}
+          className={rowClasses}
+        >
+          {rowInner}
+        </button>
+        {expanded && (
+          <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-3">
+            {subject && (
+              <p className="mb-2 text-sm font-medium text-gray-700">
+                <span className="text-gray-400">Subject: </span>{subject}
+              </p>
+            )}
+            <SafeHtml
+              html={bodyHtml}
+              className="prose prose-sm max-w-none overflow-x-auto rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800"
+            />
+          </div>
+        )}
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      {target ? (
+        <Link
+          to={target}
+          aria-label={`${it.title} — open details`}
+          className="group flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50"
+        >
+          {rowInner}
+        </Link>
+      ) : (
+        <div className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">{rowInner}</div>
+      )}
+    </li>
+  );
 }
 
 // --- Console header stat tiles ----------------------------------------------
@@ -413,59 +521,9 @@ export default function DialtoneConsole() {
               />
             ) : (
               <ul className="divide-y divide-gray-50">
-                {items.map((it) => {
-                  const target = targetFor(it);
-                  const body = (
-                    <>
-                      <span
-                        className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full',
-                          it.severity === 'error' ? 'bg-red-500' : it.severity === 'warn' ? 'bg-amber-500' : 'bg-indigo-400')}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <EventBadge type={it.type} />
-                          <span className={cn('truncate text-sm font-medium text-gray-900', target && 'group-hover:underline')}>
-                            {it.title}
-                          </span>
-                        </div>
-                        {it.description && (
-                          <p className="mt-0.5 truncate text-sm text-gray-500">{it.description}</p>
-                        )}
-                        {/* Send events carry `to_email`; a discovered lead carries the
-                            contact enrichment found. Either way it's "the address
-                            this event is about". */}
-                        {(it.metadata?.to_email || it.metadata?.contact_email) && (
-                          <p className="mt-0.5 truncate text-xs text-gray-400">
-                            {it.metadata.to_email || it.metadata.contact_email}
-                            {it.metadata?.contact_name ? ` · ${it.metadata.contact_name}` : ''}
-                          </p>
-                        )}
-                      </div>
-                      <time
-                        className="flex-shrink-0 whitespace-nowrap text-xs text-gray-400"
-                        title={absTime(it.timestamp)}
-                      >
-                        {relTime(it.timestamp)}
-                      </time>
-                      {target && <ChevronRight className="h-4 w-4 flex-shrink-0 self-center text-gray-300" aria-hidden="true" />}
-                    </>
-                  );
-                  return (
-                    <li key={it.id}>
-                      {target ? (
-                        <Link
-                          to={target}
-                          aria-label={`${it.title} — open details`}
-                          className="group flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50"
-                        >
-                          {body}
-                        </Link>
-                      ) : (
-                        <div className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">{body}</div>
-                      )}
-                    </li>
-                  );
-                })}
+                {items.map((it) => (
+                  <ActivityRow key={it.id} it={it} target={targetFor(it)} />
+                ))}
               </ul>
             )}
 

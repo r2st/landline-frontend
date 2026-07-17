@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -168,6 +168,33 @@ describe('DialtoneConsole page', () => {
     expect(screen.getByRole('link', { name: /Email sent to John Smith/ })).toHaveAttribute('href', '/contacts?highlight=c-1');
     // The reply carries no contact_id, so it has nowhere to go and isn't a link.
     expect(screen.queryByRole('link', { name: /Jane Doe replied/ })).toBeNull();
+  });
+
+  it('expands a send that carries its copy, and shows the subject + body', () => {
+    mockActivity.mockReturnValue({
+      data: {
+        items: [{
+          id: 'outreach:1', type: 'email_sent', timestamp: new Date().toISOString(),
+          title: 'Sequence step 1: email to John Smith', description: 'Quick question about your CNC line',
+          source: 'outreach', severity: 'ok',
+          metadata: {
+            contact_id: 'c-1', contact_name: 'John Smith', to_email: 'john@acme.com',
+            subject: 'Quick question about your CNC line',
+            body_html: '<p>Hi John, saw you run 5-axis machining…</p>',
+          },
+        }],
+        total: 1, page: 1, page_size: 50,
+      },
+      isLoading: false,
+    });
+    renderPage();
+    // A send with its copy is a disclosure button, not a navigation link.
+    expect(screen.queryByRole('link', { name: /email to John Smith/ })).toBeNull();
+    const toggle = screen.getByRole('button', { name: /read email/i });
+    expect(screen.queryByText(/saw you run 5-axis machining/)).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByText(/saw you run 5-axis machining/)).toBeInTheDocument();
+    expect(screen.getByText(/Subject:/)).toBeInTheDocument();
   });
 
   it('sends a candidate with no company yet to the review queue', () => {
