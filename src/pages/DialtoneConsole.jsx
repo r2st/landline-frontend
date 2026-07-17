@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Radio, Mail, MailOpen, MousePointerClick, MessageSquareReply, AlertTriangle,
   Ban, UserPlus, Send, Gauge, ShieldCheck, RefreshCw, Search, Filter, X, ChevronRight,
-  ChevronDown,
+  ChevronDown, Phone,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import SafeHtml from '../components/SafeHtml';
@@ -22,6 +22,7 @@ const EVENT_META = {
   unsubscribed: { label: 'Unsubscribed', icon: Ban, tone: 'amber' },
   error: { label: 'Error', icon: AlertTriangle, tone: 'red' },
   lead_discovered: { label: 'Lead found', icon: UserPlus, tone: 'blue' },
+  phone_enriched: { label: 'Phone found', icon: Phone, tone: 'green' },
 };
 
 const TONE = {
@@ -45,6 +46,7 @@ const FILTER_TYPES = [
   { value: 'error', label: 'Errors' },
   { value: 'unsubscribed', label: 'Unsubscribes' },
   { value: 'lead_discovered', label: 'Leads found' },
+  { value: 'phone_enriched', label: 'Phones found' },
 ];
 
 const PAGE_SIZE = 50;

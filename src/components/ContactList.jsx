@@ -52,13 +52,30 @@ export default function ContactList({ contacts = [], companyId, onAddContact }) 
                   </a>
                 )}
                 {(contact.phone || contact.mobile) && (
-                  <a
-                    href={`tel:${contact.phone || contact.mobile}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="truncate hover:text-gray-900 hover:underline"
-                  >
-                    {contact.phone || contact.mobile}
-                  </a>
+                  <span className="flex items-center gap-1">
+                    <a
+                      href={`tel:${contact.phone || contact.mobile}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="truncate hover:text-gray-900 hover:underline"
+                    >
+                      {contact.phone || contact.mobile}
+                    </a>
+                    {/* Auto-enriched numbers (Apollo people match / company line)
+                        are flagged so a rep knows Dialtone found it for a warm
+                        lead — a green "call them" nudge, not just a field. */}
+                    {(contact.phone_source === 'apollo' || contact.phone_source === 'company') && (
+                      <span
+                        className="rounded bg-green-50 px-1 py-px text-[10px] font-medium text-green-700 ring-1 ring-green-600/20"
+                        title={
+                          contact.phone_source === 'apollo'
+                            ? 'Direct dial auto-found for this warm lead'
+                            : 'Company main line auto-found for this warm lead'
+                        }
+                      >
+                        {contact.phone_source === 'apollo' ? 'warm · direct' : 'warm · company'}
+                      </span>
+                    )}
+                  </span>
                 )}
               </div>
             </div>

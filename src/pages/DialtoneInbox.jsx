@@ -27,6 +27,7 @@ const CATEGORIES = [
   { key: 'out_of_office', label: 'Out of office', tone: 'bg-blue-50 text-blue-700 ring-blue-600/20' },
   { key: 'wrong_person', label: 'Wrong person', tone: 'bg-amber-50 text-amber-700 ring-amber-600/20' },
   { key: 'unsubscribe', label: 'Unsubscribe', tone: 'bg-red-50 text-red-700 ring-red-600/20' },
+  { key: 'bounce', label: 'Bounce', tone: 'bg-orange-50 text-orange-700 ring-orange-600/20' },
   { key: 'unknown', label: 'Unknown', tone: 'bg-gray-100 text-gray-500 ring-gray-500/20' },
 ];
 

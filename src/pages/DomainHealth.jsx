@@ -288,6 +288,47 @@ function RecordCard({ title, record }) {
         <p className="mt-1.5 text-[11px] text-gray-400">No record found.</p>
       )}
       {record?.detail && <p className="mt-1 text-[11px] text-gray-500">{record.detail}</p>}
+      {record?.recommended_record && (
+        <RecommendedRecord host={record.host} value={record.recommended_record} />
+      )}
+    </div>
+  );
+}
+
+// Shown when a check (currently DMARC) can hand the operator the exact TXT
+// record to publish. DNS is edited by hand, so a one-click copy of the precise
+// host + value removes the step most likely to be fat-fingered.
+function RecommendedRecord({ host, value }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(value).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => {},
+    );
+  };
+  return (
+    <div className="mt-2 rounded-md border border-indigo-100 bg-indigo-50/60 p-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
+          Add this DNS record
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          className="rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-medium text-white hover:bg-indigo-700"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      {host && (
+        <p className="mt-1 text-[10px] text-indigo-700/80">
+          Host: <span className="font-mono">{host}</span> · Type: <span className="font-mono">TXT</span>
+        </p>
+      )}
+      <p className="mt-0.5 break-all font-mono text-[11px] leading-relaxed text-indigo-900">{value}</p>
     </div>
   );
 }
