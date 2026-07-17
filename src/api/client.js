@@ -261,6 +261,16 @@ export const deliverabilityApi = {
     api.get('/deliverability/senders/history', { params: { days } }).then(r => r.data),
   // Re-assess every sending account now (recomputes reputation + throttle).
   assess: () => api.post('/deliverability/assess').then(r => r.data),
+  // Pre-send spam-filter risk scan for a draft. Returns
+  // { spam_score 0-100, risk: 'low'|'medium'|'high', issues[], suggestions[] }.
+  // `use_ai` blends a Claude assessment on top of the heuristics.
+  scanContent: ({ subject = '', body, hasUnsubscribe = true, useAi = false }) =>
+    api.post('/deliverability/scan-content', {
+      subject,
+      body,
+      has_unsubscribe: hasUnsubscribe,
+      use_ai: useAi,
+    }).then(r => r.data),
   domainAuth: (domain, dkimSelector) =>
     api.get('/deliverability/domain-auth', { params: { domain, dkim_selector: dkimSelector || undefined } }).then(r => r.data),
 };

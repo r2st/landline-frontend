@@ -1,11 +1,39 @@
 import { useState } from 'react';
 import {
-  AlertTriangle, Check, FileText, Loader2, PenLine, RefreshCw, Sparkles, X,
+  AlertTriangle, Check, FileText, Loader2, PenLine, RefreshCw, ShieldAlert,
+  ShieldCheck, Sparkles, X,
 } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import { useAiDrafts, useReviewDraft } from '../hooks/useAiDrafts';
+import { useSpamScan } from '../hooks/useSpamScan';
 import { cn, timeAgo } from '../lib/utils';
+
+// Spam-risk band → the color language used across Dialtone health surfaces
+// (green healthy / amber at-risk / red danger).
+const RISK_STYLES = {
+  low: {
+    Icon: ShieldCheck,
+    label: 'Low spam risk',
+    chip: 'bg-green-50 text-green-700 ring-green-600/20',
+    panel: 'border-green-200 bg-green-50/70',
+    bar: 'bg-green-500',
+  },
+  medium: {
+    Icon: ShieldAlert,
+    label: 'Medium spam risk',
+    chip: 'bg-amber-50 text-amber-700 ring-amber-600/20',
+    panel: 'border-amber-200 bg-amber-50/70',
+    bar: 'bg-amber-500',
+  },
+  high: {
+    Icon: ShieldAlert,
+    label: 'High spam risk',
+    chip: 'bg-red-50 text-red-700 ring-red-600/20',
+    panel: 'border-red-200 bg-red-50/70',
+    bar: 'bg-red-500',
+  },
+};
 
 /**
  * AI Draft Review — the human gate on AI-composed first touches.
@@ -159,6 +187,13 @@ function DraftCard({ draft, showActions, busy, onDecide }) {
   const [showStatic, setShowStatic] = useState(false);
   const hasStatic = Boolean(draft.static_subject || draft.static_body);
 
+  // Pre-send spam scan. Read-only, so it runs with no confirm; each card keeps
+  // its own scan state. The body may be plain text or HTML depending on the
+  // draft — send whichever we have.
+  const scan = useSpamScan();
+  const checkSpam = () =>
+    scan.mutate({ subject: draft.subject || '', body: draft.body || draft.body_html || '' });
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -220,6 +255,32 @@ function DraftCard({ draft, showActions, busy, onDecide }) {
         </p>
       )}
 
+      {/* Pre-send spam scan — what a filter would make of this copy before it
+          reaches a real inbox. Checking is free and sends nothing. */}
+      <div className="mt-4 border-t border-gray-100 pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={checkSpam}
+            disabled={scan.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+          >
+            {scan.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="h-4 w-4 text-gray-400" />
+            )}
+            {scan.data ? 'Re-check spam risk' : 'Check spam risk'}
+          </button>
+          {scan.isError && (
+            <span className="text-xs text-red-600">
+              {scan.error?.response?.data?.detail || 'Scan failed — try again.'}
+            </span>
+          )}
+        </div>
+        {scan.data && <SpamScanResult result={scan.data} />}
+      </div>
+
       {showActions && (
         <div className="mt-4 flex items-center gap-2">
           <button
@@ -245,6 +306,78 @@ function DraftCard({ draft, showActions, busy, onDecide }) {
           <span className="text-xs text-gray-400">
             Rejecting sends the static template — the prospect hears from us either way.
           </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline result of a pre-send spam scan: the risk band, the 0-100 score, and
+// the specific triggers/fixes the scanner flagged. A clean scan says so
+// explicitly rather than rendering an empty box.
+function SpamScanResult({ result }) {
+  const risk = RISK_STYLES[result?.risk] || RISK_STYLES.low;
+  const score = Number.isFinite(result?.spam_score) ? result.spam_score : 0;
+  const issues = Array.isArray(result?.issues) ? result.issues : [];
+  const suggestions = Array.isArray(result?.suggestions) ? result.suggestions : [];
+  const { Icon } = risk;
+
+  return (
+    <div className={cn('mt-3 rounded-lg border p-3', risk.panel)}>
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+            risk.chip
+          )}
+        >
+          <Icon className="h-3 w-3" />
+          {risk.label}
+        </span>
+        <span className="text-xs font-medium text-gray-500">Score {score}/100</span>
+      </div>
+
+      {/* A simple 0-100 meter so the score reads at a glance. */}
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/70">
+        <div
+          className={cn('h-full rounded-full', risk.bar)}
+          style={{ width: `${Math.max(2, Math.min(100, score))}%` }}
+        />
+      </div>
+
+      {issues.length > 0 ? (
+        <div className="mt-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            Triggers found
+          </p>
+          <ul className="mt-1 space-y-1">
+            {issues.map((issue, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs text-gray-700">
+                <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-400" />
+                <span>{issue}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="mt-2.5 text-xs text-gray-600">
+          No spam triggers found — this copy looks clean.
+        </p>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="mt-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            Suggested fixes
+          </p>
+          <ul className="mt-1 space-y-1">
+            {suggestions.map((s, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
+                <Check className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-400" />
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
