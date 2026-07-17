@@ -24,18 +24,22 @@ import {
   AlertOctagon,
   Trash2,
   Shield,
+  Sparkles,
+  Search,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import GmailConnect from '../components/GmailConnect';
 import EmailSignatureEditor from '../components/EmailSignatureEditor';
 import SendingKillSwitch from '../components/SendingKillSwitch';
 import TestDeliverability from '../components/TestDeliverability';
 import { api } from '../api/client';
+import { useAutomation } from '../hooks/useAutomation';
 import { API_BASE_URL } from '../lib/constants';
 import { cn } from '../lib/utils';
 import toast from 'react-hot-toast';
 
 // localStorage keys
-const SCHEDULING_LINK_KEY = 'landline.scheduling_link';
 const SCORING_WEIGHTS_KEY = 'landline.scoring_weights';
 const NOTIFICATION_PREFS_KEY = 'landline.notification_prefs';
 const USER_NAME_KEY = 'landline.user_name';
@@ -142,23 +146,47 @@ function WeightSlider({ label, value, description, onChange }) {
   );
 }
 
-function AutomationStatusRow({ icon: Icon, label, enabled, description }) {
+// One automation behaviour, exactly as the server reported it.
+//
+// `flag` comes from GET /system/automation and is never defaulted here. These
+// badges used to be hardcoded literals that claimed to reflect backend state:
+// auto-reply was right by coincidence, and follow-ups and scoring both showed
+// OFF while running on the beat schedule every 4h and 30m. An operator reads
+// this during an incident, so an invented value is worse than no value.
+function AutomationStatusRow({ icon: Icon, flag }) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-4 py-3">
       <div className="flex items-center gap-3">
-        <Icon className="h-4 w-4 text-gray-500" />
+        <Icon className="h-4 w-4 flex-shrink-0 text-gray-500" />
         <div>
-          <span className="text-sm font-medium text-gray-700">{label}</span>
-          <p className="text-xs text-gray-400">{description}</p>
+          <span className="text-sm font-medium text-gray-700">{flag.label}</span>
+          {flag.detail && <p className="text-xs text-gray-400">{flag.detail}</p>}
         </div>
       </div>
-      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
-        <span className={`h-1.5 w-1.5 rounded-full ${enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-        {enabled ? 'ON' : 'OFF'}
-      </span>
+      <div className="flex flex-shrink-0 flex-col items-end gap-1">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${flag.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${flag.enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+          {flag.enabled ? 'ON' : 'OFF'}
+        </span>
+        {/* Whether this is even changeable. A scheduled task has no off switch,
+            so "contact your administrator" would be wrong advice for it. */}
+        <span className="text-[10px] text-gray-400">
+          {flag.source === 'schedule' ? 'always on' : 'env setting'}
+        </span>
+      </div>
     </div>
   );
 }
+
+// Icons are cosmetic, so key off the server's vocabulary with a safe fallback
+// rather than letting an unknown key crash the row.
+const AUTOMATION_ICONS = {
+  auto_reply: Zap,
+  ai_compose: Sparkles,
+  auto_research: Search,
+  auto_followups: Bot,
+  auto_scoring: BarChart3,
+};
 
 function NotificationToggle({ label, description, checked, onChange }) {
   return (
@@ -198,13 +226,13 @@ export default function Settings() {
   const [checking, setChecking] = useState(true);
   const [healthData, setHealthData] = useState(null);
 
-  // Automation
-  const [automation, setAutomation] = useState({
-    auto_reply: true,
-    auto_followups: false,
-    auto_scoring: false,
-    scheduling_link: '',
-  });
+  // Automation — read from the backend, never assumed. These used to be
+  // hardcoded literals that the page then described as backend state.
+  const {
+    data: automation,
+    isLoading: automationLoading,
+    error: automationError,
+  } = useAutomation();
 
   // Scoring weights
   const [weights, setWeights] = useState(() => {
@@ -257,18 +285,6 @@ export default function Settings() {
 
   const timezones = useMemo(() => getTimezones(), []);
 
-  // Load scheduling link from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SCHEDULING_LINK_KEY);
-      if (saved) {
-        setAutomation((prev) => ({ ...prev, scheduling_link: saved }));
-      }
-    } catch {
-      // localStorage unavailable — keep defaults
-    }
-  }, []);
-
   // Check API connection
   useEffect(() => {
     const checkConnection = async () => {
@@ -310,15 +326,6 @@ export default function Settings() {
       toast.error('Could not save profile');
     }
   }, [userName, userTimezone, workingHours]);
-
-  const handleSchedulingLinkSave = () => {
-    try {
-      localStorage.setItem(SCHEDULING_LINK_KEY, automation.scheduling_link.trim());
-      toast.success('Scheduling link saved');
-    } catch {
-      toast.error('Could not save scheduling link');
-    }
-  };
 
   const handleExportCompanies = useCallback(() => {
     const baseURL = import.meta.env.VITE_API_URL
@@ -580,55 +587,72 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="space-y-3">
-          <AutomationStatusRow
-            icon={Zap}
-            label="Auto-Reply"
-            enabled={automation.auto_reply}
-            description="Automatically respond to incoming replies using AI-generated messages"
-          />
-          <AutomationStatusRow
-            icon={Bot}
-            label="Auto Follow-ups"
-            enabled={automation.auto_followups}
-            description="Send follow-up emails automatically when leads do not reply within a set window"
-          />
-          <AutomationStatusRow
-            icon={BarChart3}
-            label="Auto Scoring"
-            enabled={automation.auto_scoring}
-            description="Automatically score new companies when they are imported or discovered"
-          />
-
-          <div className="rounded-lg bg-gray-50 px-4 py-3">
-            <div className="flex items-center gap-3 mb-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              <label className="text-sm font-medium text-gray-700">Scheduling Link</label>
-            </div>
-            <p className="mb-2 text-xs text-gray-400">
-              Calendly or scheduling URL included in outreach emails when a lead is qualified
+        {automationLoading ? (
+          <div className="flex items-center gap-2 py-6 text-sm text-gray-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Reading automation state…
+          </div>
+        ) : automationError ? (
+          // Say we couldn't check. The old page would have shown confident
+          // ON/OFF badges here regardless — that is the bug this replaced.
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="flex items-center gap-1.5 text-sm font-medium text-amber-900">
+              <AlertTriangle className="h-4 w-4" />
+              Couldn't read automation state
             </p>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={automation.scheduling_link}
-                onChange={(e) => setAutomation((prev) => ({ ...prev, scheduling_link: e.target.value }))}
-                placeholder="https://calendly.com/your-link"
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            <p className="mt-1 text-xs text-amber-800">
+              {automationError?.response?.data?.detail || automationError?.message || 'The system endpoint did not respond.'}
+              {' '}Nothing is shown below rather than guessing what's on.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {(automation?.flags || []).map((flag) => (
+              <AutomationStatusRow
+                key={flag.key}
+                icon={AUTOMATION_ICONS[flag.key] || Bot}
+                flag={flag}
               />
-              <button
-                type="button"
-                onClick={handleSchedulingLinkSave}
-                className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
-              >
-                Save
-              </button>
+            ))}
+
+            <div className="rounded-lg bg-gray-50 px-4 py-3">
+              <div className="mb-2 flex items-center gap-3">
+                <Calendar className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Scheduling Link</span>
+              </div>
+              {/* Read-only on purpose. This used to be an editable field with a
+                  Save button that wrote to localStorage — which nothing reads.
+                  The link that actually reaches a prospect comes from the
+                  backend's `scheduling_link` env setting (or a sender's own
+                  booking URL), so typing here changed nothing while reporting
+                  success. */}
+              {automation?.scheduling_link ? (
+                <a
+                  href={automation.scheduling_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="break-all text-sm text-blue-600 hover:underline"
+                >
+                  {automation.scheduling_link}
+                </a>
+              ) : (
+                <p className="text-sm text-gray-400">
+                  Not set — auto-replies go out without a booking link unless the sending account
+                  has its own.
+                </p>
+              )}
+              <p className="mt-1.5 text-xs text-gray-400">
+                Offered in auto-replies and injected as {'{{booking_link}}'}. A sender's own booking
+                URL takes precedence over this.
+              </p>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-xs text-blue-600">
-          These features are controlled by backend environment variables. Contact your administrator to change automation settings.
+          Read live from the backend. Items marked “env setting” change only by editing the server's
+          environment — ask your administrator. Items marked “always on” are scheduled jobs with no
+          off switch; the kill switch above stops all sending regardless.
         </div>
       </div>
 
