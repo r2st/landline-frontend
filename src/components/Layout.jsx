@@ -145,6 +145,9 @@ const navSections = [
 // Flatten all nav items for finding current page name
 const allNavItems = [
   ...navSections.flatMap(s => s.items),
+  { name: 'Organization', href: '/settings/organization', icon: Building2 },
+  { name: 'Team', href: '/settings/team', icon: Users },
+  { name: 'Usage', href: '/settings/usage', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -377,7 +380,10 @@ export default function Layout({ children }) {
       </nav>
 
       <div className="border-t border-gray-200 px-3 py-3">
-        <NavLink item={{ name: 'Settings', href: '/settings', icon: Settings }} />
+        <NavLink item={{ name: 'Settings', href: '/settings', icon: Settings, end: true }} />
+        <NavLink item={{ name: 'Organization', href: '/settings/organization', icon: Building2 }} />
+        <NavLink item={{ name: 'Team', href: '/settings/team', icon: Users }} />
+        <NavLink item={{ name: 'Usage', href: '/settings/usage', icon: BarChart3 }} />
         {isAdmin && (
           <NavLink item={{ name: 'Users', href: '/admin/users', icon: UserCog }} />
         )}

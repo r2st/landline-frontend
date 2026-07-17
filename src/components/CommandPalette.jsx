@@ -76,6 +76,9 @@ const COMMANDS = [
   { id: 'calls', label: 'Cold Calling', hint: "Today's call queue & briefings", icon: Phone, to: '/calls', keywords: 'phone call queue dial briefing script cold' },
   { id: 'knowledge', label: 'Knowledge Base', hint: 'Contacts, guidelines & strategy', icon: BookOpen, to: '/knowledge', keywords: 'guidelines strategy industry playbook docs ai config contacts' },
   { id: 'investors', label: 'Go to Investors', hint: 'Fundraising pipeline & investor CRM', icon: Landmark, to: '/investors', keywords: 'investor fundraise fundraising vc venture capital pipeline funnel seed series check raise' },
+  { id: 'org-settings', label: 'Organization Settings', hint: 'Name, branding, plan & config', icon: Building2, to: '/settings/organization', keywords: 'organization org settings name industry branding logo billing plan config jsonb white-label tenant' },
+  { id: 'org-team', label: 'Team Management', hint: 'Members, roles & invites', icon: Users, to: '/settings/team', keywords: 'team members users roles invite remove admin manager agent org organization seats' },
+  { id: 'org-usage', label: 'Usage Dashboard', hint: 'Contacts, emails & AI usage', icon: BarChart3, to: '/settings/usage', keywords: 'usage stats contacts emails sent ai calls limit billing quota trends charts organization org' },
 ];
 
 function scoreMatch(text, q) {

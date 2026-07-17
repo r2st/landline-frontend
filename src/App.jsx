@@ -46,6 +46,9 @@ const SentimentDashboard = lazy(() => import('./pages/SentimentDashboard'));
 const Login = lazy(() => import('./pages/Login'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const OrganizationSettings = lazy(() => import('./pages/OrganizationSettings'));
+const TeamManagement = lazy(() => import('./pages/TeamManagement'));
+const UsageDashboard = lazy(() => import('./pages/UsageDashboard'));
 
 function NotFound() {
   return (
@@ -115,6 +118,9 @@ export default function App() {
           <Route path="/groups" element={<Groups />} />
           <Route path="/news" element={<NewsFeed />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/organization" element={<OrganizationSettings />} />
+          <Route path="/settings/team" element={<TeamManagement />} />
+          <Route path="/settings/usage" element={<UsageDashboard />} />
           <Route path="/demos" element={<Demos />} />
           <Route path="/scan" element={<CardScanner />} />
           <Route path="/contacts" element={<Contacts />} />
