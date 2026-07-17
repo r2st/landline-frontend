@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authApi } from '../api/auth';
 import { tokenStore } from '../api/authToken';
+import { isManager, isOrgAdmin, isPlatformAdmin } from '../lib/roles';
 
 const AuthContext = createContext(null);
 
@@ -78,19 +79,25 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const value = useMemo(
-    () => ({
+  const value = useMemo(() => {
+    const role = user?.role;
+    // Role flags mirror the backend hierarchy (see lib/roles.js): a higher role
+    // always satisfies a lower-role check. Legacy role strings are normalized.
+    const admin = isOrgAdmin(role);
+    return {
       user,
       isAuthenticated: !!user,
-      isAdmin: user?.role === 'admin',
+      isAdmin: admin,
+      isPlatformAdmin: isPlatformAdmin(role),
+      isManager: isManager(role),
+      canManageOrg: admin,
       mustChangePassword,
       loading,
       login,
       logout,
       changePassword,
-    }),
-    [user, mustChangePassword, loading, login, logout, changePassword]
-  );
+    };
+  }, [user, mustChangePassword, loading, login, logout, changePassword]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

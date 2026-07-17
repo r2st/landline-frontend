@@ -27,10 +27,14 @@ function renderAt(path, element) {
 
 const PROTECTED = <ProtectedRoute><div>SECRET CONTENT</div></ProtectedRoute>;
 const ADMIN_ONLY = (
-  <ProtectedRoute requireRole="admin">
+  <ProtectedRoute requireRole="org_admin">
     <div>ADMIN CONTENT</div>
   </ProtectedRoute>
 );
+
+function authed(role, extra = {}) {
+  return { loading: false, isAuthenticated: true, user: { role }, mustChangePassword: false, ...extra };
+}
 
 describe('ProtectedRoute redirect matrix', () => {
   beforeEach(() => {
@@ -79,26 +83,38 @@ describe('ProtectedRoute redirect matrix', () => {
     expect(screen.queryByText('SECRET CONTENT')).not.toBeInTheDocument();
   });
 
-  it('redirects home when the required role is missing', () => {
-    mockUseAuth.mockReturnValue({
-      loading: false,
-      isAuthenticated: true,
-      user: { role: 'sales' },
-      mustChangePassword: false,
-    });
+  it('redirects home when the required role is missing (org_agent → org_admin route)', () => {
+    mockUseAuth.mockReturnValue(authed('org_agent'));
     renderAt('/admin', ADMIN_ONLY);
 
     expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
     expect(screen.queryByText('ADMIN CONTENT')).not.toBeInTheDocument();
   });
 
-  it('renders children when the required role matches', () => {
-    mockUseAuth.mockReturnValue({
-      loading: false,
-      isAuthenticated: true,
-      user: { role: 'admin' },
-      mustChangePassword: false,
-    });
+  it('redirects home for an org_manager on an org_admin route', () => {
+    mockUseAuth.mockReturnValue(authed('org_manager'));
+    renderAt('/admin', ADMIN_ONLY);
+
+    expect(screen.getByText('HOME PAGE')).toBeInTheDocument();
+    expect(screen.queryByText('ADMIN CONTENT')).not.toBeInTheDocument();
+  });
+
+  it('renders children when the required role matches exactly', () => {
+    mockUseAuth.mockReturnValue(authed('org_admin'));
+    renderAt('/admin', ADMIN_ONLY);
+
+    expect(screen.getByText('ADMIN CONTENT')).toBeInTheDocument();
+  });
+
+  it('admits a more-privileged role (platform_admin → org_admin route)', () => {
+    mockUseAuth.mockReturnValue(authed('platform_admin'));
+    renderAt('/admin', ADMIN_ONLY);
+
+    expect(screen.getByText('ADMIN CONTENT')).toBeInTheDocument();
+  });
+
+  it('normalizes a legacy role string (admin satisfies org_admin route)', () => {
+    mockUseAuth.mockReturnValue(authed('admin'));
     renderAt('/admin', ADMIN_ONLY);
 
     expect(screen.getByText('ADMIN CONTENT')).toBeInTheDocument();

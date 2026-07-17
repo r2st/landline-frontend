@@ -4,16 +4,20 @@ import toast from 'react-hot-toast';
 import { Loader2, UserPlus, ShieldAlert, KeyRound, X } from 'lucide-react';
 import { adminUsersApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { ROLE_LABEL, normalizeRole } from '../lib/roles';
 
-const ROLES = ['admin', 'manager', 'agent'];
+// Roles assignable from the admin console. platform_admin is intentionally not
+// listed — it is granted out-of-band (migration / platform tooling), not here.
+const ROLES = ['org_admin', 'org_manager', 'org_agent'];
 
 const ROLE_BADGE = {
-  admin: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
-  manager: 'bg-blue-50 text-blue-700 ring-blue-600/20',
-  agent: 'bg-gray-100 text-gray-600 ring-gray-500/20',
+  platform_admin: 'bg-purple-50 text-purple-700 ring-purple-600/20',
+  org_admin: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
+  org_manager: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+  org_agent: 'bg-gray-100 text-gray-600 ring-gray-500/20',
 };
 
-const EMPTY_FORM = { email: '', name: '', role: 'agent', password: '' };
+const EMPTY_FORM = { email: '', name: '', role: 'org_agent', password: '' };
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
@@ -131,11 +135,11 @@ export default function AdminUsers() {
           <select
             value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value })}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm capitalize focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           >
             {ROLES.map((r) => (
-              <option key={r} value={r} className="capitalize">
-                {r}
+              <option key={r} value={r}>
+                {ROLE_LABEL[r] || r}
               </option>
             ))}
           </select>
@@ -200,20 +204,29 @@ export default function AdminUsers() {
                       </td>
                       <td className="px-5 py-3 text-gray-600">{u.email}</td>
                       <td className="px-5 py-3">
-                        <select
-                          value={u.role}
-                          disabled={isSelf || updateMutation.isPending}
-                          onChange={(e) => changeRole(u, e.target.value)}
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ring-1 ring-inset disabled:opacity-70 ${
-                            ROLE_BADGE[u.role] || ROLE_BADGE.agent
-                          }`}
-                        >
-                          {ROLES.map((r) => (
-                            <option key={r} value={r} className="capitalize">
-                              {r}
-                            </option>
-                          ))}
-                        </select>
+                        {normalizeRole(u.role) === 'platform_admin' ? (
+                          // Platform admins aren't editable from the org console.
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${ROLE_BADGE.platform_admin}`}
+                          >
+                            {ROLE_LABEL.platform_admin}
+                          </span>
+                        ) : (
+                          <select
+                            value={normalizeRole(u.role)}
+                            disabled={isSelf || updateMutation.isPending}
+                            onChange={(e) => changeRole(u, e.target.value)}
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset disabled:opacity-70 ${
+                              ROLE_BADGE[normalizeRole(u.role)] || ROLE_BADGE.org_agent
+                            }`}
+                          >
+                            {ROLES.map((r) => (
+                              <option key={r} value={r}>
+                                {ROLE_LABEL[r] || r}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td className="px-5 py-3">
                         {u.is_active ? (

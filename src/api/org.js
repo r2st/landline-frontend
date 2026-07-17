@@ -1,4 +1,5 @@
 import { api } from './client';
+import { isOrgAdmin } from '../lib/roles';
 
 // Organization self-service management (Phase 3). The backend resolves the org
 // from the caller's JWT, so none of these take an org id — they always act on
@@ -18,11 +19,9 @@ export const orgApi = {
   getUsage: () => api.get('/org/usage').then((r) => r.data),
 };
 
-// Roles that can perform org-management writes. Legacy ``admin`` is included so
-// a not-yet-migrated token still grants access.
-const WRITE_ROLES = new Set(['org_admin', 'platform_admin', 'admin']);
-
 // Whether a user (from AuthContext) may perform org_admin write actions.
+// org_admin and platform_admin qualify; legacy ``admin`` is normalized by
+// isOrgAdmin so a not-yet-migrated token still grants access.
 export function canManageOrg(user) {
-  return !!user && WRITE_ROLES.has(user.role);
+  return !!user && isOrgAdmin(user.role);
 }

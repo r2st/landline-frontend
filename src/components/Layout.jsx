@@ -169,11 +169,11 @@ const NAV_PREFS_KEY = 'landline.nav.collapsedSections';
 
 export default function Layout({ children }) {
   const location = useLocation();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, isPlatformAdmin, logout } = useAuth();
   // Platform admins get an extra top-level nav section for cross-org management.
   const sections = useMemo(
-    () => (user?.role === 'platform_admin' ? [platformSection, ...navSections] : navSections),
-    [user?.role]
+    () => (isPlatformAdmin ? [platformSection, ...navSections] : navSections),
+    [isPlatformAdmin]
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
