@@ -372,6 +372,22 @@ export const dialtoneApi = {
   // Chronological event stream. `params` accepts { start, end, types, status,
   // contact_id, q, page, page_size }.
   activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
+  // Warm-lead phone-enrichment roll-up: { enriched, attempts, hit_rate,
+  // apollo, company, recent[] }. `recentLimit` caps the recent-activity strip.
+  phoneEnrichment: (recentLimit = 8) =>
+    api.get('/dialtone/phone-enrichment/summary', { params: { recent_limit: recentLimit } }).then(r => r.data),
+};
+
+// Per-sender calendar booking config. A sender with no `booking_url` falls back
+// to the global `scheduling_link` (from systemApi.automation), so clearing the
+// URL is how you "reset to global". `account_id` is the same id the Sender
+// Health list (`/deliverability/senders`) returns.
+export const bookingApi = {
+  get: (accountId) => api.get(`/dialtone/senders/${accountId}/booking`).then(r => r.data),
+  // `body` = { booking_url?, booking_provider?, booking_auto_inject? }. An empty
+  // string clears the URL (resets to global). The URL is validated server-side
+  // (https + known-scheduler-host allowlist); a bad one returns 400.
+  set: (accountId, body) => api.put(`/dialtone/senders/${accountId}/booking`, body).then(r => r.data),
 };
 
 // Smart Send-Time Optimization (Feature 6) — read-only Console surfaces under

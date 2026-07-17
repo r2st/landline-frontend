@@ -8,7 +8,7 @@ import {
 import EmptyState from '../components/EmptyState';
 import SafeHtml from '../components/SafeHtml';
 import SendingKillSwitch from '../components/SendingKillSwitch';
-import { useDialtoneConsole, useDialtoneActivity } from '../hooks/useDialtone';
+import { useDialtoneConsole, useDialtoneActivity, usePhoneEnrichment } from '../hooks/useDialtone';
 import { cn } from '../lib/utils';
 
 // --- Event type presentation -------------------------------------------------
@@ -329,8 +329,99 @@ function SendersCard({ senders }) {
   );
 }
 
+// Warm-lead phone-enrichment roll-up: how many engaged contacts now have a
+// callable number, the hit rate against attempts, the Apollo-direct-dial vs
+// company-line split, and the latest finds. Distinct from the activity feed's
+// per-event "Phone found" rows — this is the standing scoreboard.
+function PhoneEnrichmentCard({ summary }) {
+  const enriched = summary?.enriched ?? 0;
+  const attempts = summary?.attempts ?? 0;
+  const apollo = summary?.apollo ?? 0;
+  const company = summary?.company ?? 0;
+  const recent = Array.isArray(summary?.recent) ? summary.recent : [];
+  const hitPct = summary?.hit_rate != null ? Math.round(summary.hit_rate * 100) : 0;
+  // Split bar widths, guarding a divide-by-zero when nothing is enriched yet.
+  const apolloPct = enriched > 0 ? Math.round((apollo / enriched) * 100) : 0;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <Phone className="h-4 w-4 text-green-500" />
+          Phone enrichment
+        </h2>
+        <span className="text-xs text-gray-400">{attempts} looked up</span>
+      </div>
+
+      {enriched === 0 && attempts === 0 ? (
+        <p className="mt-4 text-sm text-gray-400">
+          No numbers found yet. Dialtone enriches warm leads with a phone number as they engage.
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 flex items-end gap-6">
+            <div>
+              <p className="text-3xl font-bold text-gray-900">{enriched}</p>
+              <p className="text-xs text-gray-400">contacts with a number</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold text-gray-900">
+                {hitPct}<span className="text-base font-medium text-gray-400">%</span>
+              </p>
+              <p className="text-xs text-gray-400">hit rate</p>
+            </div>
+          </div>
+
+          {/* Source split: Apollo direct dials vs company-line fallbacks. */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Direct dial <span className="font-medium text-gray-700">{apollo}</span></span>
+              <span>Company line <span className="font-medium text-gray-700">{company}</span></span>
+            </div>
+            <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full bg-green-500" style={{ width: `${apolloPct}%` }} title={`${apollo} direct dial`} />
+              <div className="h-full bg-teal-400" style={{ width: `${100 - apolloPct}%` }} title={`${company} company line`} />
+            </div>
+          </div>
+
+          {recent.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Recent</h3>
+              <ul className="mt-1.5 space-y-1.5">
+                {recent.slice(0, 5).map((r) => (
+                  <li key={r.contact_id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate text-gray-700">
+                      {r.contact_id ? (
+                        <Link to={`/contacts?highlight=${r.contact_id}`} className="hover:underline">
+                          {r.contact_name || 'Unknown'}
+                        </Link>
+                      ) : (
+                        r.contact_name || 'Unknown'
+                      )}
+                      {r.company_name && <span className="text-gray-400"> · {r.company_name}</span>}
+                    </span>
+                    <span
+                      className={cn(
+                        'flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+                        r.source === 'apollo' ? TONE.green : TONE.teal
+                      )}
+                    >
+                      {r.source_label || r.source || 'phone'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function DialtoneConsole() {
   const { data: consoleData, isLoading: consoleLoading, refetch, isFetching } = useDialtoneConsole();
+  const { data: phoneSummary } = usePhoneEnrichment();
   const today = consoleData?.today || {};
   const warmup = consoleData?.warmup || {};
 
@@ -446,8 +537,9 @@ export default function DialtoneConsole() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+        <div className="space-y-6 lg:col-span-1">
           <SendersCard senders={consoleData?.senders} />
+          <PhoneEnrichmentCard summary={phoneSummary} />
         </div>
 
         {/* Activity log */}
