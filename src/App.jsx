@@ -44,6 +44,7 @@ const Investors = lazy(() => import('./pages/Investors'));
 const InvestorDetail = lazy(() => import('./pages/InvestorDetail'));
 const SentimentDashboard = lazy(() => import('./pages/SentimentDashboard'));
 const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const OrganizationSettings = lazy(() => import('./pages/OrganizationSettings'));
@@ -95,6 +96,7 @@ export default function App() {
       <Routes>
         {/* Public / auth routes — rendered without the app layout. */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route
           path="/change-password"
           element={

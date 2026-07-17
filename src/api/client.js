@@ -62,6 +62,27 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // An organization (or account) deactivated mid-session makes the backend
+    // return 403 "…deactivated" on EVERY request. Left unhandled the user would
+    // sit on a wall of errors, so end the session and route back to login
+    // (which shows the deactivation message). Scoped to the deactivation detail
+    // so ordinary permission 403s (e.g. an agent hitting an admin route) are
+    // untouched. While impersonating, drop back to the admin's own session
+    // instead of logging the admin out.
+    if (
+      status === 403 &&
+      original &&
+      !original._skipAuthRefresh &&
+      /deactivated/i.test(error.response?.data?.detail || '')
+    ) {
+      if (impersonationStore.getToken()) {
+        impersonationStore.clear();
+      } else {
+        tokenStore.runLogout();
+      }
+      return Promise.reject(error);
+    }
+
     if (
       status === 401 &&
       original &&

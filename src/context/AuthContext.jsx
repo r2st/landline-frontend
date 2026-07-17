@@ -27,6 +27,17 @@ export function AuthProvider({ children }) {
     return data;
   }, []);
 
+  // Public sign-up: create an org + first admin, then log straight in with the
+  // returned tokens (mirrors `login`).
+  const register = useCallback(async (fields) => {
+    const data = await authApi.register(fields);
+    tokenStore.set(data.access_token, data.refresh_token);
+    setMustChangePassword(!!data.must_change_password);
+    const profile = await authApi.me();
+    setUser(profile);
+    return data;
+  }, []);
+
   const logout = useCallback(() => {
     clearSession();
   }, [clearSession]);
@@ -94,10 +105,11 @@ export function AuthProvider({ children }) {
       mustChangePassword,
       loading,
       login,
+      register,
       logout,
       changePassword,
     };
-  }, [user, mustChangePassword, loading, login, logout, changePassword]);
+  }, [user, mustChangePassword, loading, login, register, logout, changePassword]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
