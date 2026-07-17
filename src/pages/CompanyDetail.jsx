@@ -48,6 +48,7 @@ import ActivityTimeline from '../components/ActivityTimeline';
 import EnrollSequenceMenu from '../components/EnrollSequenceMenu';
 import EmptyState from '../components/EmptyState';
 import HealthWidget from '../components/HealthWidget';
+import DialtoneProvenance from '../components/DialtoneProvenance';
 import DealsTab from '../components/DealsTab';
 import InteractionsTab from '../components/InteractionsTab';
 import TaskFormModal from '../components/TaskFormModal';
@@ -322,6 +323,11 @@ function CompanyInfoEditor({ company, onSave, saving }) {
           <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">{company.notes || 'No notes yet.'}</p>
         )}
       </div>
+
+      {/* Sits under Source because it is the long answer to it: "google_places"
+          says where the row came from, this says why the agent kept it. Renders
+          nothing for a company Dialtone never touched. */}
+      <DialtoneProvenance companyId={company.id} />
     </div>
   );
 }
