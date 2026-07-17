@@ -24,10 +24,22 @@ import {
   Circle,
   ChevronRight,
   AlertTriangle,
+  DollarSign,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import { useSequences, useCreateSequence, useUpdateSequenceStatus, useDeleteSequence } from '../hooks/useOutreach';
+import { useDealAttribution } from '../hooks/useDeals';
 import { formatNumber, cn } from '../lib/utils';
+
+/** Format a numeric value as whole-dollar USD (attribution revenue). */
+function fmtMoney(value) {
+  const n = safeNum(value);
+  return n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  });
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
@@ -1002,6 +1014,103 @@ function SequenceBuilder({ onSave, onCancel, initialData }) {
 /*  Sequences (page)                                                          */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/*  Sequence Attribution — which sequences produced revenue                   */
+/* -------------------------------------------------------------------------- */
+
+function SequenceAttributionPanel() {
+  const { data, isLoading } = useDealAttribution();
+
+  // Nothing to show until a deal has been attributed to a sequence. Keep the
+  // panel silent (rather than an empty card) so it only appears once there's
+  // signal — matching the "graceful empty state" convention.
+  const rows = (data?.by_sequence || []).filter(
+    (r) => safeNum(r.total_deals) > 0
+  );
+  if (isLoading || !data || rows.length === 0) return null;
+
+  const attributedRevenue = safeNum(data.total_attributed_won_revenue);
+  const attributedDeals = safeNum(data.attributed_won_deals);
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="mb-1 flex items-center gap-2">
+        <DollarSign className="h-5 w-5 text-green-500" />
+        <h2 className="text-base font-semibold text-gray-900">Sequence Attribution</h2>
+      </div>
+      <p className="mb-4 text-xs text-gray-500">
+        Won deals and revenue traced back to the sequence that first engaged the company.
+      </p>
+
+      {/* Summary */}
+      <div className="mb-4 grid grid-cols-2 gap-4">
+        <div className="rounded-lg bg-green-50 px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-green-700">{fmtMoney(attributedRevenue)}</p>
+          <p className="text-xs text-gray-500">Attributed Won Revenue</p>
+        </div>
+        <div className="rounded-lg bg-blue-50 px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-blue-700">{formatNumber(attributedDeals)}</p>
+          <p className="text-xs text-gray-500">Attributed Won Deals</p>
+        </div>
+      </div>
+
+      {/* Per-sequence table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-left text-xs font-medium text-gray-500">
+              <th className="px-2 py-2">Sequence</th>
+              <th className="px-2 py-2 text-right">Enrolled</th>
+              <th className="px-2 py-2 text-right">Won</th>
+              <th className="px-2 py-2 text-right">Revenue</th>
+              <th className="px-2 py-2 text-right">Open Pipeline</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const unattributed = !r.sequence_id;
+              return (
+                <tr
+                  key={r.sequence_id || 'unattributed'}
+                  className="border-b border-gray-50 last:border-0"
+                >
+                  <td className="px-2 py-2">
+                    <span
+                      className={cn(
+                        'font-medium',
+                        unattributed ? 'italic text-gray-400' : 'text-gray-900'
+                      )}
+                    >
+                      {r.sequence_name || 'Unattributed'}
+                    </span>
+                    {r.sequence_status && r.sequence_status !== 'active' && (
+                      <span className="ml-2 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">
+                        {r.sequence_status}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-2 text-right text-gray-600">
+                    {r.enrollments == null ? '—' : formatNumber(r.enrollments)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-gray-600">
+                    {formatNumber(safeNum(r.won_deals))}
+                  </td>
+                  <td className="px-2 py-2 text-right font-semibold text-green-700">
+                    {fmtMoney(r.won_revenue)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-gray-500">
+                    {fmtMoney(r.pipeline_value)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Sequences() {
   const { data: sequences, isLoading, isError } = useSequences();
   const createSequence = useCreateSequence();
@@ -1204,6 +1313,9 @@ export default function Sequences() {
           </div>
         </div>
       )}
+
+      {/* Sequence Attribution — deals & revenue per sequence */}
+      {!showBuilder && <SequenceAttributionPanel />}
     </div>
   );
 }

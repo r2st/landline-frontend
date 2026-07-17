@@ -214,6 +214,8 @@ export const dealsApi = {
   remove: (id) => api.delete(`/deals/${id}`).then(r => r.data),
   metrics: () => api.get('/deals/metrics').then(r => r.data),
   stages: () => api.get('/deals/stages').then(r => r.data),
+  // Sequence attribution — deals + revenue credited to each outreach sequence.
+  attribution: () => api.get('/deals/attribution').then(r => r.data),
   addNote: (id, data) => api.post(`/deals/${id}/notes`, data).then(r => r.data),
   listNotes: (id) => api.get(`/deals/${id}/notes`).then(r => r.data),
   listActivity: (id) => api.get(`/deals/${id}/activity`).then(r => r.data),

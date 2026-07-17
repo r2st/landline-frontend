@@ -58,6 +58,21 @@ export function useDealMetrics() {
   });
 }
 
+// Sequence attribution — deals + revenue credited to each outreach sequence.
+export function useDealAttribution() {
+  return useQuery({
+    queryKey: ['deal-attribution'],
+    queryFn: async () => {
+      try {
+        return await dealsApi.attribution();
+      } catch {
+        return null;
+      }
+    },
+    retry: false,
+  });
+}
+
 // Deal stages with probabilities
 export function useDealStages() {
   return useQuery({
