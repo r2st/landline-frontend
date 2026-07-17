@@ -26,6 +26,11 @@ import Prospecting from './Prospecting';
 
 // A Places-sourced candidate: `raw_data.industry` is the search query that
 // found it, and it has an email so it is actually enrollable.
+//
+// Shapes mirror what the API really returns (`CandidateRead` in
+// routers/prospecting.py): `qualification` is the deterministic split from
+// `qualify()` — components out of industry 40 / size 30 / location 20 /
+// completeness 10 — and `reasoning` is the model's own paragraph.
 const PLACES = {
   id: 'c1',
   run_id: 'r1',
@@ -34,7 +39,13 @@ const PLACES = {
   domain: 'clevelandprecision.com',
   source: 'google_places',
   fit_score: 68,
-  qualification: {},
+  qualification: {
+    fit_score: 68,
+    excluded: false,
+    reason: null,
+    components: { industry: 32, size: 21, location: 20, completeness: 7.5 },
+  },
+  reasoning: 'Contract CNC shop in the Midwest manufacturing belt, the strongest segment in the learned ICP.',
   status: 'review',
   has_email: true,
   contact_email: 'shop@clevelandprecision.com',
@@ -52,7 +63,13 @@ const NO_EMAIL = {
   domain: null,
   source: 'apollo',
   fit_score: 52,
-  qualification: {},
+  qualification: {
+    fit_score: 52,
+    excluded: false,
+    reason: null,
+    components: { industry: 18, size: 24, location: 20, completeness: 2.5 },
+  },
+  reasoning: null,
   status: 'review',
   has_email: false,
   raw_data: { industry: 'Woodworking', country: 'US' },
@@ -108,6 +125,79 @@ describe('Prospecting page', () => {
 
     expect(within(noEmail).getByText('No email')).toBeInTheDocument();
     expect(within(noEmail).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('keeps the score rationale collapsed until asked for', () => {
+    render(<Prospecting />);
+    expect(screen.queryByText(/strongest segment in the learned ICP/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 68/i }))
+      .toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it("explains a fit score with the model's reasoning and the component split", async () => {
+    const user = userEvent.setup();
+    render(<Prospecting />);
+    await user.click(screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 68/i }));
+
+    // The paragraph the model wrote — previously in the payload and discarded.
+    expect(screen.getByText(/strongest segment in the learned ICP/)).toBeInTheDocument();
+    // Each component against its ceiling, so "32" reads as 32 of a possible 40.
+    expect(screen.getByText('32 / 40')).toBeInTheDocument();
+    expect(screen.getByText('21 / 30')).toBeInTheDocument();
+    expect(screen.getByText('20 / 20')).toBeInTheDocument();
+    expect(screen.getByText('7.5 / 10')).toBeInTheDocument();
+  });
+
+  it('collapses the rationale again on a second click', async () => {
+    const user = userEvent.setup();
+    render(<Prospecting />);
+    const toggle = screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 68/i });
+    await user.click(toggle);
+    expect(screen.getByText('32 / 40')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /hide why Cleveland Precision Machining scored 68/i }));
+    expect(screen.queryByText('32 / 40')).not.toBeInTheDocument();
+  });
+
+  it('says so plainly when a candidate was scored on rules alone', async () => {
+    const user = userEvent.setup();
+    render(<Prospecting />);
+    await user.click(screen.getByRole('button', { name: /show why Woodcraft Interiors scored 52/i }));
+    // No invented rationale for a candidate the model never wrote one for.
+    expect(screen.getByText(/scored on the rules below alone/)).toBeInTheDocument();
+    expect(screen.getByText('18 / 40')).toBeInTheDocument();
+  });
+
+  it('surfaces an ICP exclusion as the reason a score is zero', async () => {
+    const user = userEvent.setup();
+    mockCandidates.mockReturnValue({
+      data: [{
+        ...PLACES,
+        fit_score: 0,
+        qualification: {
+          fit_score: 0,
+          excluded: true,
+          reason: "industry 'Staffing' is excluded",
+          components: {},
+        },
+        reasoning: null,
+      }],
+      isLoading: false,
+      isFetching: false,
+    });
+    render(<Prospecting />);
+    await user.click(screen.getByRole('button', { name: /show why Cleveland Precision Machining scored 0/i }));
+    expect(screen.getByText(/Excluded by your ICP/)).toBeInTheDocument();
+    expect(screen.getByText(/industry 'Staffing' is excluded/)).toBeInTheDocument();
+  });
+
+  it('offers no rationale toggle when the payload carries neither reasoning nor components', () => {
+    mockCandidates.mockReturnValue({
+      data: [{ ...PLACES, reasoning: null, qualification: {} }],
+      isLoading: false,
+      isFetching: false,
+    });
+    render(<Prospecting />);
+    expect(screen.queryByRole('button', { name: /show why/i })).not.toBeInTheDocument();
   });
 
   it('approves a single candidate as the signed-in reviewer, after confirming', async () => {

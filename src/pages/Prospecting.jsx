@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Radar, Check, X, Mail, MailX, MapPin, History, ClipboardList, Loader2, AlertTriangle,
+  ChevronRight, Ban,
 } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
@@ -64,13 +65,86 @@ function locationOf(raw) {
   return [raw?.city, raw?.state, raw?.country].filter(Boolean).join(', ');
 }
 
-function CandidateRow({ candidate, selected, onSelect, showActions, onDecide, pendingId }) {
+// The weights `qualify()` scores against, so a reviewer reads a component as
+// "12 of 40" rather than a bare number with no ceiling.
+const SCORE_COMPONENTS = [
+  { key: 'industry', label: 'Industry fit', max: 40 },
+  { key: 'size', label: 'Size fit', max: 30 },
+  { key: 'location', label: 'Location fit', max: 20 },
+  { key: 'completeness', label: 'Data completeness', max: 10 },
+];
+
+// Why the agent scored what it did. The deterministic component split and the
+// model's own paragraph both ship in the payload; showing the number alone asks
+// a human to rubber-stamp a judgement they can't see.
+function CandidateRationale({ candidate }) {
+  const qualification = candidate.qualification || {};
+  const components = qualification.components || {};
+  const hasComponents = SCORE_COMPONENTS.some((c) => components[c.key] != null);
+
+  return (
+    <div className="space-y-4 bg-gray-50/80 px-4 py-4">
+      {qualification.excluded && (
+        <p className="flex items-start gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+          <Ban className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <span>
+            <span className="font-semibold">Excluded by your ICP</span>
+            {qualification.reason ? ` — ${qualification.reason}` : ''}
+          </span>
+        </p>
+      )}
+
+      {candidate.reasoning ? (
+        <div>
+          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            Why the agent scored this
+          </h4>
+          <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-gray-700">{candidate.reasoning}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400">
+          No written rationale — this candidate was scored on the rules below alone.
+        </p>
+      )}
+
+      {hasComponents && (
+        <div>
+          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            Score breakdown
+          </h4>
+          <dl className="mt-2 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
+            {SCORE_COMPONENTS.map(({ key, label, max }) => {
+              const value = components[key];
+              const pct = value == null ? 0 : Math.max(0, Math.min(100, (value / max) * 100));
+              return (
+                <div key={key} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                  <dt className="text-[11px] font-medium text-gray-400">{label}</dt>
+                  <dd className="mt-0.5 text-sm font-semibold text-gray-900">
+                    {value == null ? '—' : `${value} / ${max}`}
+                  </dd>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CandidateRow({ candidate, selected, onSelect, showActions, onDecide, pendingId, expanded, onToggleExpand }) {
   const raw = candidate.raw_data || {};
   const location = locationOf(raw);
   const busy = pendingId === candidate.id;
+  // Worth opening only if there's something behind it.
+  const hasRationale = Boolean(candidate.reasoning) || Boolean(candidate.qualification?.components);
 
   return (
-    <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50/70">
+    <>
+    <tr className={cn('border-b border-gray-100 hover:bg-gray-50/70', expanded && 'bg-gray-50/70')}>
       <td className="px-4 py-3">
         <input
           type="checkbox"
@@ -81,15 +155,32 @@ function CandidateRow({ candidate, selected, onSelect, showActions, onDecide, pe
         />
       </td>
       <td className="px-4 py-3">
-        <div className="font-medium text-gray-900">{candidate.company_name}</div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400">
-          <span>{SOURCE_LABELS[candidate.source] || candidate.source}</span>
-          {candidate.domain && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="truncate">{candidate.domain}</span>
-            </>
+        <div className="flex items-start gap-1.5">
+          {hasRationale ? (
+            <button
+              type="button"
+              onClick={() => onToggleExpand(candidate.id)}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Hide' : 'Show'} why ${candidate.company_name} scored ${candidate.fit_score}`}
+              className="mt-0.5 rounded text-gray-400 transition-colors hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <ChevronRight className={cn('h-4 w-4 transition-transform', expanded && 'rotate-90')} />
+            </button>
+          ) : (
+            <span className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
           )}
+          <div className="min-w-0">
+            <div className="font-medium text-gray-900">{candidate.company_name}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400">
+              <span>{SOURCE_LABELS[candidate.source] || candidate.source}</span>
+              {candidate.domain && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="truncate">{candidate.domain}</span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </td>
       <td className="px-4 py-3">
@@ -178,6 +269,14 @@ function CandidateRow({ candidate, selected, onSelect, showActions, onDecide, pe
         )}
       </td>
     </tr>
+    {expanded && (
+      <tr className="border-b border-gray-100">
+        <td colSpan={8} className="p-0">
+          <CandidateRationale candidate={candidate} />
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 
@@ -188,6 +287,7 @@ function ReviewQueue() {
   const [sort, setSort] = useState('fit_score');
   const [order, setOrder] = useState('desc');
   const [selected, setSelected] = useState(() => new Set());
+  const [expanded, setExpanded] = useState(() => new Set());
   // Approving is the outward-facing, irreversible half of this page: it enrols
   // the company and arms a real cold email to a real business. Held behind a
   // confirm so a stray click — especially on a bulk selection — can't send.
@@ -220,9 +320,18 @@ function ReviewQueue() {
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(candidates.map((c) => c.id)));
 
+  const toggleExpand = (id) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const switchTab = (key) => {
     setTab(key);
     setSelected(new Set()); // selections don't carry across dispositions
+    setExpanded(new Set());
   };
 
   const runSingle = (id, decision) =>
@@ -374,6 +483,8 @@ function ReviewQueue() {
                     showActions={isPending}
                     onDecide={decide}
                     pendingId={review.isPending ? review.variables?.id : null}
+                    expanded={expanded.has(c.id)}
+                    onToggleExpand={toggleExpand}
                   />
                 ))}
               </tbody>
