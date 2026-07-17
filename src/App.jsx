@@ -28,6 +28,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const DailyActivity = lazy(() => import('./pages/DailyActivity'));
 const DialtoneConsole = lazy(() => import('./pages/DialtoneConsole'));
 const DialtoneHealth = lazy(() => import('./pages/DialtoneHealth'));
+const Icp = lazy(() => import('./pages/Icp'));
 const DialtoneInbox = lazy(() => import('./pages/DialtoneInbox'));
 const AiDrafts = lazy(() => import('./pages/AiDrafts'));
 const DomainHealth = lazy(() => import('./pages/DomainHealth'));
@@ -120,6 +121,7 @@ export default function App() {
           <Route path="/daily-activity" element={<DailyActivity />} />
           <Route path="/dialtone" element={<DialtoneConsole />} />
           <Route path="/dialtone/health" element={<DialtoneHealth />} />
+          <Route path="/dialtone/icp" element={<Icp />} />
           <Route path="/dialtone/inbox" element={<DialtoneInbox />} />
           <Route path="/dialtone/drafts" element={<AiDrafts />} />
           <Route path="/dialtone/discovery" element={<PlacesDiscovery />} />

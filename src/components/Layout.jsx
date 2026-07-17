@@ -39,6 +39,7 @@ import {
   PenLine,
   Globe,
   MapPin,
+  Target,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -76,6 +77,7 @@ const navSections = [
       { name: 'Replies', href: '/dialtone/inbox', icon: MailCheck },
       { name: 'AI Drafts', href: '/dialtone/drafts', icon: PenLine },
       { name: 'Prospecting', href: '/prospecting', icon: Radar },
+      { name: 'ICP', href: '/dialtone/icp', icon: Target },
       { name: 'Places Discovery', href: '/dialtone/discovery', icon: MapPin },
       { name: 'Health', href: '/dialtone/health', icon: Stethoscope },
       { name: 'Domains', href: '/deliverability/domains', icon: Globe },

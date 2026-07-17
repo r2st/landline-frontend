@@ -32,6 +32,7 @@ import {
   PenLine,
   Globe,
   MapPin,
+  Target,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -61,6 +62,7 @@ const COMMANDS = [
   { id: 'dialtone-health', label: 'Deliverability Health', hint: 'Danger signals & auto-pause', icon: Stethoscope, to: '/dialtone/health', keywords: 'dialtone health danger signals auto-pause paused resume bounce complaint rate threshold breach warn kill switch halted trip incident deliverability' },
   { id: 'dialtone-inbox', label: 'Dialtone Replies', hint: 'Cold-email replies, triaged by intent', icon: MailCheck, to: '/dialtone/inbox', keywords: 'dialtone replies inbox interested hot lead classified intent priority unread reclassify out of office unsubscribe wrong person draft suggested' },
   { id: 'dialtone-drafts', label: 'AI Draft Review', hint: 'Approve AI-composed first touches', icon: PenLine, to: '/dialtone/drafts', keywords: 'ai drafts review queue approve reject compose first touch generated copy static template pending gate' },
+  { id: 'icp', label: 'Ideal Customer Profile', hint: 'What every fit score is judged against', icon: Target, to: '/dialtone/icp', keywords: 'icp ideal customer profile weights industry size location exclusions scoring rubric fit learn relearn pin tune target' },
   { id: 'places-discovery', label: 'Places Discovery', hint: 'Find SMBs by category & location', icon: MapPin, to: '/dialtone/discovery', keywords: 'google places smb discovery search local business category location import staged results funnel india manufacturers' },
   { id: 'domain-health', label: 'Domain Health', hint: 'SPF, DKIM & DMARC per sending domain', icon: Globe, to: '/deliverability/domains', keywords: 'domain health spf dkim dmarc authentication blacklist dnsbl spamhaus sending domains recheck deliverability' },
   { id: 'calls', label: 'Cold Calling', hint: "Today's call queue & briefings", icon: Phone, to: '/calls', keywords: 'phone call queue dial briefing script cold' },
