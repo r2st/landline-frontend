@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Power, ShieldAlert, ShieldCheck, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
+import { useDangerSignals } from '../hooks/useDangerSignals';
+import { formatMetricValue, METRIC_LABELS } from '../lib/dangerSignals';
+import ResumeDialog from './ResumeDialog';
 import { cn } from '../lib/utils';
 import toast from 'react-hot-toast';
 
@@ -12,6 +16,18 @@ import toast from 'react-hot-toast';
  * requires an explicit confirmation because it stops every active sequence
  * enrollment immediately.
  *
+ * Resuming has two paths, and picking the wrong one defeats a safety rail:
+ *
+ *  - A *clean* manual pause resumes through `/system/sending-toggle`, which
+ *    simply flips the switch.
+ *  - An *auto-pause* (Dialtone halted itself on a danger signal) must resume
+ *    through `/dialtone/resume`, which re-checks live metrics, refuses to
+ *    resume into an active incident, and stamps the trip resolved. The toggle
+ *    does none of that, so using it here would drop the operator straight back
+ *    into the incident with the trip still open.
+ *
+ * Which path applies is decided by whether the rail reports an unresolved trip.
+ *
  * `compact` renders a single-row banner (used on the Daily Activity page);
  * the default renders a full card (used on Settings → System).
  */
@@ -21,6 +37,14 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
+  const [resuming, setResuming] = useState(false);
+
+  // The unresolved trip, if any, is what makes this an auto-pause rather than a
+  // manual one. If the rail itself is unreachable we deliberately do NOT assume
+  // "no trip" — see `railUnknown` below.
+  const { data: signals, isError: signalsError } = useDangerSignals();
+  const activeTrip = signals?.active_trip || null;
+  const railUnknown = signalsError;
 
   const load = useCallback(async () => {
     try {
@@ -41,6 +65,13 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
 
   const toggle = useCallback(
     async (enabled) => {
+      // Belt and braces: the UI never offers the plain toggle as a way out of an
+      // auto-pause, but if it ever did, this refuses rather than bypassing the
+      // re-check that /dialtone/resume performs.
+      if (enabled && activeTrip) {
+        setResuming(true);
+        return;
+      }
       setSaving(true);
       try {
         const { data } = await api.post('/system/sending-toggle', {
@@ -69,8 +100,15 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
         setSaving(false);
       }
     },
-    [onChange]
+    [onChange, activeTrip]
   );
+
+  // After an acknowledged resume the rail has flipped the switch server-side;
+  // re-read it so the card stops saying "paused".
+  const onResumed = useCallback(() => {
+    setResuming(false);
+    load();
+  }, [load]);
 
   if (loading) {
     return (
@@ -91,6 +129,11 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
   }
 
   const enabled = status?.enabled !== false;
+  // An auto-pause is a different thing from a manual one and gets a different
+  // way back. `railUnknown` means we couldn't ask — treated as "might be", so
+  // the operator is told the check didn't run rather than shown a green light.
+  const autoPaused = !enabled && Boolean(activeTrip);
+  const checkUnverified = !enabled && railUnknown;
 
   const StatusPill = (
     <span
@@ -108,21 +151,28 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
   // --- Compact banner (Daily Activity) ---
   if (compact) {
     return (
+      <>
       <div
         className={cn(
           'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-sm',
           enabled ? 'border-green-100 bg-green-50' : 'border-red-200 bg-red-50'
         )}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {enabled ? (
             <ShieldCheck className="h-5 w-5 text-green-600" />
           ) : (
             <ShieldAlert className="h-5 w-5 text-red-600" />
           )}
           {StatusPill}
-          {!enabled && status?.reason && (
-            <span className="text-xs text-red-600">— {status.reason}</span>
+          {autoPaused ? (
+            <span className="truncate text-xs text-red-700">
+              — auto-paused: {METRIC_LABELS[activeTrip.metric] || activeTrip.metric}{' '}
+              {formatMetricValue(activeTrip.metric, activeTrip.observed_value)} over{' '}
+              {formatMetricValue(activeTrip.metric, activeTrip.threshold)}
+            </span>
+          ) : (
+            !enabled && status?.reason && <span className="truncate text-xs text-red-600">— {status.reason}</span>
           )}
         </div>
         {enabled ? (
@@ -139,22 +189,22 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
             </button>
           )
         ) : (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => toggle(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
-            Resume Dialtone
-          </button>
+          <ResumeButton
+            size="sm"
+            saving={saving}
+            autoPaused={autoPaused}
+            onResume={() => (activeTrip ? setResuming(true) : toggle(true))}
+          />
         )}
       </div>
+      <ResumeDialog trip={activeTrip} open={resuming} onClose={onResumed} />
+      </>
     );
   }
 
   // --- Full card (Settings → System) ---
   return (
+    <>
     <div className={cn('rounded-xl border-2 bg-white p-6 shadow-sm', enabled ? 'border-gray-200' : 'border-red-300')}>
       <div className="mb-4 flex items-center gap-3">
         <div className={cn('flex h-10 w-10 items-center justify-center rounded-full', enabled ? 'bg-green-100' : 'bg-red-100')}>
@@ -194,17 +244,48 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
             </button>
           )
         ) : (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => toggle(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-            Resume Dialtone
-          </button>
+          <ResumeButton
+            size="md"
+            saving={saving}
+            autoPaused={autoPaused}
+            onResume={() => (activeTrip ? setResuming(true) : toggle(true))}
+          />
         )}
       </div>
+
+      {/* Dialtone stopped itself. Say what tripped and what resuming will
+          require, instead of leaving a bare "paused" and a green button. */}
+      {autoPaused && (
+        <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+            Auto-paused by a danger signal
+          </p>
+          <p className="mt-1 text-sm text-red-900">
+            {METRIC_LABELS[activeTrip.metric] || activeTrip.metric} reached{' '}
+            <span className="font-semibold">{formatMetricValue(activeTrip.metric, activeTrip.observed_value)}</span>{' '}
+            against a threshold of{' '}
+            <span className="font-semibold">{formatMetricValue(activeTrip.metric, activeTrip.threshold)}</span>
+            {activeTrip.scope === 'account' && activeTrip.account_email
+              ? ` on ${activeTrip.account_email}`
+              : ' across all senders'}
+            .
+          </p>
+          <p className="mt-1.5 text-xs text-red-700">
+            Resuming needs an acknowledgement, and the rail will re-check the live numbers first.{' '}
+            <Link to="/dialtone/health" className="font-medium underline hover:text-red-900">
+              See the signals
+            </Link>
+          </p>
+        </div>
+      )}
+
+      {checkUnverified && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          Dialtone is paused, but the danger-signal rail could not be reached — so this card cannot
+          tell you whether it paused itself or someone paused it. Resuming from here will not re-check
+          bounce or complaint rates.
+        </div>
+      )}
 
       {status?.today_sent != null && (
         <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
@@ -228,6 +309,42 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
         and every active enrollment is paused. Resuming reactivates exactly those paused enrollments.
       </div>
     </div>
+    <ResumeDialog trip={activeTrip} open={resuming} onClose={onResumed} />
+    </>
+  );
+}
+
+/**
+ * The way back from a pause.
+ *
+ * Module-level on purpose: defined inside the parent it would be a fresh
+ * component type on every render, so React would unmount and remount the button
+ * whenever the danger query resolved — losing focus and dropping the click that
+ * happened to land mid-swap.
+ *
+ * `autoPaused` picks the destination: a review dialog for a rail trip, the plain
+ * toggle for a clean manual pause.
+ */
+function ResumeButton({ size = 'sm', saving, autoPaused, onResume }) {
+  const small = size === 'sm';
+  return (
+    <button
+      type="button"
+      disabled={saving}
+      onClick={onResume}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-lg font-semibold text-white disabled:opacity-50',
+        autoPaused ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700',
+        small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm shadow-sm'
+      )}
+    >
+      {saving ? (
+        <Loader2 className={cn('animate-spin', small ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
+      ) : (
+        <Power className={small ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+      )}
+      {autoPaused ? 'Review & resume' : 'Resume Dialtone'}
+    </button>
   );
 }
 

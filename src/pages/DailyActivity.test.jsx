@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock the data hook so the page renders deterministically without a backend.
 const mockUseDailySummary = vi.fn();
@@ -8,10 +9,18 @@ vi.mock('../hooks/useReports', () => ({
   useDailySummary: (...args) => mockUseDailySummary(...args),
 }));
 
-// The embedded SendingKillSwitch banner fetches sending status on mount — stub
-// the API client so the page renders offline without hitting the network.
+// The embedded SendingKillSwitch banner fetches sending status on mount, and
+// asks the danger rail whether this is an auto-pause — stub both so the page
+// renders offline without hitting the network.
 vi.mock('../api/client', () => ({
   api: { get: vi.fn().mockResolvedValue({ data: { enabled: true } }), post: vi.fn() },
+  queryClient: { invalidateQueries: vi.fn() },
+  dangerSignalsApi: {
+    health: vi.fn().mockResolvedValue({ active_trip: null }),
+    events: vi.fn(),
+    test: vi.fn(),
+    resume: vi.fn(),
+  },
 }));
 
 // Recharts' ResponsiveContainer needs real layout; stub it so charts render at a
@@ -56,9 +65,11 @@ const SAMPLE = {
 
 const renderPage = () =>
   render(
-    <MemoryRouter>
-      <DailyActivity />
-    </MemoryRouter>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter>
+        <DailyActivity />
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 
 describe('DailyActivity page', () => {

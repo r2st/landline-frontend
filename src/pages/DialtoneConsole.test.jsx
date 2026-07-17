@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock the data hooks so the page renders deterministically without a backend.
 const mockConsole = vi.fn();
@@ -10,10 +11,18 @@ vi.mock('../hooks/useDialtone', () => ({
   useDialtoneActivity: (...a) => mockActivity(...a),
 }));
 
-// The embedded SendingKillSwitch banner fetches sending status on mount — stub
-// the API client so the page renders offline without hitting the network.
+// The embedded SendingKillSwitch banner fetches sending status on mount, and
+// asks the danger rail whether this is an auto-pause — stub both so the page
+// renders offline without hitting the network.
 vi.mock('../api/client', () => ({
   api: { get: vi.fn().mockResolvedValue({ data: { enabled: true } }), post: vi.fn() },
+  queryClient: { invalidateQueries: vi.fn() },
+  dangerSignalsApi: {
+    health: vi.fn().mockResolvedValue({ active_trip: null }),
+    events: vi.fn(),
+    test: vi.fn(),
+    resume: vi.fn(),
+  },
 }));
 
 import DialtoneConsole from './DialtoneConsole';
@@ -55,9 +64,11 @@ const FEED = {
 
 const renderPage = (path = '/dialtone') =>
   render(
-    <MemoryRouter initialEntries={[path]}>
-      <DialtoneConsole />
-    </MemoryRouter>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={[path]}>
+        <DialtoneConsole />
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 
 describe('DialtoneConsole page', () => {
@@ -92,10 +103,39 @@ describe('DialtoneConsole page', () => {
 
   it('links each tally to the activity log filtered to those events', () => {
     renderPage();
-    expect(screen.getByRole('link', { name: /^Sent: 8/ })).toHaveAttribute('href', '/dialtone?type=email_sent');
-    expect(screen.getByRole('link', { name: /^Leads found: 3/ })).toHaveAttribute('href', '/dialtone?type=lead_discovered');
+    // The tallies are scoped to the console's reporting day, so the drill-down
+    // carries that day too — an unbounded link would open every send ever and
+    // fail to reconcile with the number just clicked.
+    expect(screen.getByRole('link', { name: /^Sent: 8/ })).toHaveAttribute(
+      'href',
+      '/dialtone?type=email_sent&start=2026-07-15&end=2026-07-15'
+    );
+    expect(screen.getByRole('link', { name: /^Leads found: 3/ })).toHaveAttribute(
+      'href',
+      '/dialtone?type=lead_discovered&start=2026-07-15&end=2026-07-15'
+    );
     // Warm-up headroom isn't a count of events, so it stays inert.
     expect(screen.queryByRole('link', { name: /^Remaining/ })).toBeNull();
+  });
+
+  it('drills into exactly the day the tallies count', () => {
+    renderPage('/dialtone?type=email_sent&start=2026-07-15&end=2026-07-15');
+    // Round-trip: following a tile asks the feed for that one day, with `end`
+    // expanded so the day isn't truncated at midnight.
+    expect(mockActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        types: 'email_sent',
+        start: '2026-07-15',
+        end: '2026-07-15T23:59:59',
+      })
+    );
+  });
+
+  it('still links a tile when the console reports no date', () => {
+    mockConsole.mockReturnValue({ data: { ...CONSOLE, date: undefined }, isLoading: false, refetch: vi.fn() });
+    renderPage();
+    // Degrade to the unbounded link rather than emitting `start=undefined`.
+    expect(screen.getByRole('link', { name: /^Sent: 8/ })).toHaveAttribute('href', '/dialtone?type=email_sent');
   });
 
   it('applies a type filter arriving from the URL', () => {
