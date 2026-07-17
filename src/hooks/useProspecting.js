@@ -53,16 +53,97 @@ export function useProspectingRuns(limit = 25) {
   });
 }
 
+// The active ICP. Unlike the queue hooks above this does NOT swallow errors
+// into null: null is a real state here (nothing learned yet) and it drives the
+// "learn your ICP" empty state, so conflating it with a failed fetch would tell
+// an operator to re-learn a profile that already exists.
 export function useProspectingIcp() {
   return useQuery({
     queryKey: ['prospecting-icp'],
-    queryFn: async () => {
-      try {
-        return await prospectingApi.icp();
-      } catch {
-        return null;
-      }
+    queryFn: () => prospectingApi.icp(),
+    retry: false,
+  });
+}
+
+// The candidates a single run produced. Lazy — only fetched when a run is
+// expanded, since run history lists many and most are never opened.
+export function useRunCandidates(runId) {
+  return useQuery({
+    queryKey: ['run-candidates', runId],
+    queryFn: () => prospectingApi.runCandidates(runId),
+    enabled: Boolean(runId),
+    retry: false,
+  });
+}
+
+function invalidateIcp() {
+  queryClient.invalidateQueries({ queryKey: ['prospecting-icp'] });
+}
+
+// Pin ICP fields. The response is authoritative — the server re-applies every
+// override after writing, so what comes back is what the agent will score on.
+export function useUpdateIcp() {
+  return useMutation({
+    mutationFn: (body) => prospectingApi.updateIcp(body),
+    onSuccess: (data, body) => {
+      queryClient.setQueryData(['prospecting-icp'], data);
+      invalidateIcp();
+      toast.success(body?.unpin?.length ? 'Field released to the learner' : 'ICP updated');
     },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Could not save the ICP'),
+  });
+}
+
+// Refit from won deals. Pinned fields survive — the server carries them onto
+// the new profile — so the copy around this must not threaten otherwise.
+export function useLearnIcp() {
+  return useMutation({
+    mutationFn: () => prospectingApi.learnIcp(),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['prospecting-icp'], data);
+      invalidateIcp();
+      toast.success(
+        data?.learned_from_deal_count
+          ? `ICP refit from ${data.learned_from_deal_count} won deal(s)`
+          : 'ICP refit — no won deals yet, so defaults were used'
+      );
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Re-learn failed'),
+  });
+}
+
+// Trigger a prospecting run now. This spends Apollo/Places credits and can
+// enrol companies straight into outreach, so every caller gates it behind a
+// confirm rather than treating it as a refresh button.
+export function useTriggerRun() {
+  return useMutation({
+    mutationFn: (body) => prospectingApi.run(body),
+    onSuccess: (run) => {
+      invalidateQueue();
+      if (run?.status === 'failed') {
+        toast.error(`Run failed: ${run.error || 'no reason given'}`);
+        return;
+      }
+      const found = run?.companies_found ?? 0;
+      const queued = run?.companies_review_queue ?? 0;
+      const enrolled = run?.companies_enrolled ?? 0;
+      toast.success(
+        found
+          ? `Found ${found} — ${enrolled} enrolled, ${queued} waiting on you`
+          : 'Run finished — nothing new found'
+      );
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Could not start a run'),
+  });
+}
+
+// Company provenance: which candidate/run put this company in the pipeline.
+// `discovered_by_agent: false` is a real answer, not an error.
+export function useCompanyProvenance(companyId) {
+  return useQuery({
+    queryKey: ['company-provenance', companyId],
+    queryFn: () => prospectingApi.provenance(companyId),
+    enabled: Boolean(companyId),
     retry: false,
   });
 }

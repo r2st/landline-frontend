@@ -370,7 +370,17 @@ export const prospectingApi = {
     api.post(`/prospecting/candidates/${id}/reject`, null, { params: { reviewer } }).then(r => r.data),
   runs: (params) => api.get('/prospecting/runs', { params }).then(r => r.data),
   runCandidates: (runId) => api.get(`/prospecting/runs/${runId}/candidates`).then(r => r.data),
+  // Trigger a run now. `target_volume` caps how many companies it sources;
+  // `seed_candidates` skips sourcing entirely (unused by the UI).
+  run: (body) => api.post('/prospecting/run', body || {}).then(r => r.data),
   icp: () => api.get('/prospecting/icp').then(r => r.data),
+  // Pin ICP fields to human-chosen values. Only what's sent is pinned; `unpin`
+  // hands fields back to the learner. Pinned fields survive the weekly re-learn.
+  updateIcp: (body) => api.put('/prospecting/icp', body).then(r => r.data),
+  learnIcp: () => api.post('/prospecting/icp/learn').then(r => r.data),
+  // Why a company is in the pipeline: the candidate + run behind it.
+  provenance: (companyId) =>
+    api.get(`/prospecting/companies/${companyId}/provenance`).then(r => r.data),
 };
 
 // Email communication — unified inbox, lead threads, reply sending
