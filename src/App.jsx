@@ -31,6 +31,7 @@ const DialtoneHealth = lazy(() => import('./pages/DialtoneHealth'));
 const Icp = lazy(() => import('./pages/Icp'));
 const DialtoneInbox = lazy(() => import('./pages/DialtoneInbox'));
 const DialtoneAbTests = lazy(() => import('./pages/DialtoneAbTests'));
+const DialtoneSendTiming = lazy(() => import('./pages/DialtoneSendTiming'));
 const AiDrafts = lazy(() => import('./pages/AiDrafts'));
 const DomainHealth = lazy(() => import('./pages/DomainHealth'));
 const SenderHealth = lazy(() => import('./pages/SenderHealth'));
@@ -127,6 +128,7 @@ export default function App() {
           <Route path="/dialtone/icp" element={<Icp />} />
           <Route path="/dialtone/inbox" element={<DialtoneInbox />} />
           <Route path="/dialtone/ab-tests" element={<DialtoneAbTests />} />
+          <Route path="/dialtone/send-timing" element={<DialtoneSendTiming />} />
           <Route path="/dialtone/drafts" element={<AiDrafts />} />
           <Route path="/dialtone/discovery" element={<PlacesDiscovery />} />
           <Route path="/deliverability/domains" element={<DomainHealth />} />

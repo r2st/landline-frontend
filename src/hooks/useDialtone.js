@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { dialtoneApi } from '../api/client';
+import { dialtoneApi, sendTimingApi } from '../api/client';
 
 // Dialtone Console header — polls so the "live" feel holds up while the agent
 // works. Degrades to a safe empty shape if the backend isn't ready.
@@ -44,6 +44,66 @@ export function useDialtoneActivity(filters) {
     },
     refetchInterval: 30000,
     keepPreviousData: true,
+    retry: false,
+  });
+}
+
+// ── Smart Send-Time Optimization (Feature 6) ─────────────────────────
+// Each hook degrades to a safe empty/off shape so the results page always
+// renders — even before the backend ships or when the optimizer has no data.
+
+export function useSendTimingStatus() {
+  return useQuery({
+    queryKey: ['send-timing-status'],
+    queryFn: async () => {
+      try {
+        return await sendTimingApi.status();
+      } catch {
+        return null;
+      }
+    },
+    retry: false,
+  });
+}
+
+export function useSendTimingExperiment() {
+  return useQuery({
+    queryKey: ['send-timing-experiment'],
+    queryFn: async () => {
+      try {
+        return await sendTimingApi.experiment();
+      } catch {
+        return { arms: [], note: 'Experiment results are unavailable right now.' };
+      }
+    },
+    retry: false,
+  });
+}
+
+export function useSendTimingHeatmap() {
+  return useQuery({
+    queryKey: ['send-timing-heatmap'],
+    queryFn: async () => {
+      try {
+        return await sendTimingApi.heatmap();
+      } catch {
+        return { has_data: false, cells: [] };
+      }
+    },
+    retry: false,
+  });
+}
+
+export function useSendTimingContacts(limit = 20) {
+  return useQuery({
+    queryKey: ['send-timing-contacts', limit],
+    queryFn: async () => {
+      try {
+        return await sendTimingApi.contacts(limit);
+      } catch {
+        return { contacts: [], total: 0 };
+      }
+    },
     retry: false,
   });
 }
