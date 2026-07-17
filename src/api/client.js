@@ -359,6 +359,20 @@ export const dialtoneApi = {
   activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
 };
 
+// A/B testing for Dialtone sequence steps: the subject/body variants the agent
+// rotates through, their per-variant open/click/reply rates, the chi-squared
+// significance the engine computes, and the operator's manual winner override.
+export const abTestsApi = {
+  // List tests newest-first. `params` accepts { status } (running /
+  // insufficient_data / completed).
+  list: (params) => api.get('/dialtone/ab-tests', { params }).then(r => r.data),
+  // Full detail: per-variant stats, leader, confidence, significance.
+  get: (testId) => api.get(`/dialtone/ab-tests/${testId}`).then(r => r.data),
+  // Operator override — declare a winner by variant id or label.
+  declareWinner: (testId, body) =>
+    api.post(`/dialtone/ab-tests/${testId}/declare-winner`, body).then(r => r.data),
+};
+
 // Autonomous prospecting — the agent sources companies, scores them against the
 // learned ICP, and parks the borderline ones for a human call.
 export const prospectingApi = {
