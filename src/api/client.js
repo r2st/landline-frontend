@@ -409,6 +409,23 @@ export const abTestsApi = {
     api.post(`/dialtone/ab-tests/${testId}/declare-winner`, body).then(r => r.data),
 };
 
+// Orchestration policies (feature 2.2) — the guardrails the autonomous engine
+// runs within: cadence limits, allowed/required channels, human-review triggers.
+// A policy is either global (user_id null) or scoped to one rep. The list
+// endpoint returns a bare array; `setEnrollmentMode` flips one enrollment
+// between manual / assisted / autonomous.
+export const orchestrationApi = {
+  // All policies, newest-first. `active_only` narrows to live ones.
+  listPolicies: (params) => api.get('/orchestration/policies', { params }).then(r => r.data),
+  getPolicy: (id) => api.get(`/orchestration/policies/${id}`).then(r => r.data),
+  createPolicy: (data) => api.post('/orchestration/policies', data).then(r => r.data),
+  updatePolicy: (id, data) => api.patch(`/orchestration/policies/${id}`, data).then(r => r.data),
+  deletePolicy: (id) => api.delete(`/orchestration/policies/${id}`).then(r => r.data),
+  // Set an enrollment's orchestration mode: manual | assisted | autonomous.
+  setEnrollmentMode: (enrollmentId, mode) =>
+    api.post(`/orchestration/enrollments/${enrollmentId}/mode`, { mode }).then(r => r.data),
+};
+
 // Autonomous prospecting — the agent sources companies, scores them against the
 // learned ICP, and parks the borderline ones for a human call.
 export const prospectingApi = {
