@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { outreachApi, queryClient } from '../api/client';
+import { dialtoneApi, outreachApi, queryClient } from '../api/client';
 
 export function useSequences() {
   return useQuery({
@@ -8,6 +8,17 @@ export function useSequences() {
     queryFn: async () => {
       return await outreachApi.getSequences();
     },
+  });
+}
+
+// Per-sequence funnel analytics (Feature 4). Fetched lazily — only when a
+// sequence card is expanded — since it's a per-sequence detail call.
+export function useSequenceAnalytics(sequenceId, enabled = true) {
+  return useQuery({
+    queryKey: ['sequence-analytics', sequenceId],
+    queryFn: () => dialtoneApi.sequenceAnalytics(sequenceId),
+    enabled: Boolean(sequenceId) && enabled,
+    retry: false,
   });
 }
 

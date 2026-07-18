@@ -441,6 +441,9 @@ export const dialtoneApi = {
     }).then(r => r.data);
   },
   deleteSuppression: (id) => api.delete(`/dialtone/suppression/${id}`).then(r => r.data),
+  // Per-sequence analytics (Feature 4): per-step funnel counts + rates and the
+  // enrolled → deal conversion rate.
+  sequenceAnalytics: (id) => api.get(`/dialtone/sequences/${id}/analytics`).then(r => r.data),
 };
 
 // Per-sender calendar booking config. A sender with no `booking_url` falls back
