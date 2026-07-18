@@ -37,6 +37,14 @@ const CONFIG = {
   auto_followup_enabled: true,
   max_auto_followups_per_deal: 3,
   escalation_threshold_days: 14,
+  llm_model: 'meta-llama/llama-3.3-70b-instruct:free',
+  has_llm_api_key: false,
+  llm_model_choices: [
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'openai/gpt-oss-20b:free',
+    'openai/gpt-oss-120b:free',
+    'google/gemma-3-27b-it:free',
+  ],
   created_at: '2026-07-10T09:00:00Z',
   updated_at: '2026-07-16T09:00:00Z',
 };
@@ -152,7 +160,7 @@ describe('DealAgent', () => {
     );
   });
 
-  it('saves config changes', async () => {
+  it('saves config changes including the selected model', async () => {
     const user = userEvent.setup();
     mockUpdateConfig.mockResolvedValue(CONFIG);
     renderPage();
@@ -162,6 +170,55 @@ describe('DealAgent', () => {
     const payload = mockUpdateConfig.mock.calls[0][0];
     expect(payload).toHaveProperty('stale_thresholds');
     expect(payload).toHaveProperty('escalation_threshold_days', 14);
+    expect(payload).toHaveProperty('llm_model', 'meta-llama/llama-3.3-70b-instruct:free');
+    // No key typed → the key field is omitted, not sent blank.
+    expect(payload).not.toHaveProperty('llm_api_key');
+  });
+
+  it('renders the model dropdown from the config choices', async () => {
+    renderPage();
+    const select = await screen.findByLabelText('AI model');
+    expect(select).toHaveValue('meta-llama/llama-3.3-70b-instruct:free');
+    expect(within(select).getByRole('option', { name: /GPT-OSS 120B/i })).toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: /Gemma 3 27B/i })).toBeInTheDocument();
+  });
+
+  it('changes the model and sends it on save', async () => {
+    const user = userEvent.setup();
+    mockUpdateConfig.mockResolvedValue(CONFIG);
+    renderPage();
+    const select = await screen.findByLabelText('AI model');
+    await user.selectOptions(select, 'google/gemma-3-27b-it:free');
+    await user.click(screen.getByRole('button', { name: /Save settings/i }));
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+    expect(mockUpdateConfig.mock.calls[0][0]).toHaveProperty(
+      'llm_model', 'google/gemma-3-27b-it:free',
+    );
+  });
+
+  it('sends a newly typed API key on save', async () => {
+    const user = userEvent.setup();
+    mockUpdateConfig.mockResolvedValue({ ...CONFIG, has_llm_api_key: true });
+    renderPage();
+    const keyInput = await screen.findByLabelText('OpenRouter API key');
+    await user.type(keyInput, 'sk-or-newkey');
+    await user.click(screen.getByRole('button', { name: /Save settings/i }));
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+    expect(mockUpdateConfig.mock.calls[0][0]).toHaveProperty('llm_api_key', 'sk-or-newkey');
+  });
+
+  it('shows a "key set" badge and can clear the stored key', async () => {
+    const user = userEvent.setup();
+    mockGetConfig.mockResolvedValue({ ...CONFIG, has_llm_api_key: true });
+    mockUpdateConfig.mockResolvedValue({ ...CONFIG, has_llm_api_key: false });
+    renderPage();
+    expect(await screen.findByText('key set')).toBeInTheDocument();
+    // The only checkbox on the page is the "remove saved key" toggle.
+    const clear = screen.getByRole('checkbox');
+    await user.click(clear);
+    await user.click(screen.getByRole('button', { name: /Save settings/i }));
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+    expect(mockUpdateConfig.mock.calls[0][0]).toHaveProperty('llm_api_key', '');
   });
 
   it('shows recent activity for executed actions', async () => {

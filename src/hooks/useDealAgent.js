@@ -22,6 +22,21 @@ export const ACTION_TYPE_META = {
   escalation: { label: 'Escalation', hint: 'Raised to a manager' },
 };
 
+// Curated OpenRouter free-tier models for the config dropdown. The backend
+// returns its own `llm_model_choices` on the config, which the UI prefers; this
+// is the fallback list (and the source for labels).
+export const LLM_MODELS = [
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (free)' },
+  { id: 'openai/gpt-oss-20b:free', label: 'GPT-OSS 20B (free)' },
+  { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (free)' },
+  { id: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B (free)' },
+];
+
+// Human-readable label for a model id (falls back to the id itself).
+export function llmModelLabel(id) {
+  return LLM_MODELS.find((m) => m.id === id)?.label || id;
+}
+
 export const ACTION_STATUSES = [
   'pending',
   'approved',

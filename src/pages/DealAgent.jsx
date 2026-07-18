@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
   AlertTriangle, ArrowUpRight, Bot, Check, CheckCircle2, ChevronUp, Clock,
-  Loader2, Mail, Power, Sparkles, TrendingUp, X,
+  Cpu, KeyRound, Loader2, Mail, Power, Sparkles, TrendingUp, X,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import {
-  ACTION_TYPE_META, DEAL_STAGES,
+  ACTION_TYPE_META, DEAL_STAGES, LLM_MODELS, llmModelLabel,
   useApproveAction, useDealActions, useDealAgentConfig, useDealAgentStats,
   useDismissAction, useUpdateDealAgentConfig,
 } from '../hooks/useDealAgent';
@@ -341,14 +341,35 @@ function ConfigPanel({ config }) {
   const [autoFollowup, setAutoFollowup] = useState(config.auto_followup_enabled);
   const [maxFollowups, setMaxFollowups] = useState(config.max_auto_followups_per_deal);
   const [escalationDays, setEscalationDays] = useState(config.escalation_threshold_days);
+  const [llmModel, setLlmModel] = useState(config.llm_model || LLM_MODELS[0].id);
+  // The stored key is never returned — track only whether one exists, and the
+  // new value the user is typing (blank = leave unchanged, unless they clear).
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [clearKey, setClearKey] = useState(false);
+
+  // The backend's own model list wins when present, so a new model added
+  // server-side shows up without a frontend deploy.
+  const modelOptions = (config.llm_model_choices?.length
+    ? config.llm_model_choices.map((id) => ({ id, label: llmModelLabel(id) }))
+    : LLM_MODELS);
 
   const save = () => {
-    update.mutate({
+    const payload = {
       stale_thresholds: thresholds,
       auto_advance_enabled: autoAdvance,
       auto_followup_enabled: autoFollowup,
       max_auto_followups_per_deal: Number(maxFollowups),
       escalation_threshold_days: Number(escalationDays),
+      llm_model: llmModel,
+    };
+    // Only send the key when the user typed a new one, or explicitly cleared it.
+    if (apiKeyInput.trim()) payload.llm_api_key = apiKeyInput.trim();
+    else if (clearKey) payload.llm_api_key = '';
+    update.mutate(payload, {
+      onSuccess: () => {
+        setApiKeyInput('');
+        setClearKey(false);
+      },
     });
   };
 
@@ -422,6 +443,67 @@ function ConfigPanel({ config }) {
             onChange={(e) => setEscalationDays(e.target.value)}
             className="w-20 rounded-md border border-gray-300 px-2 py-1 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500"
           />
+        </label>
+      </div>
+
+      <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+          <Cpu className="h-3.5 w-3.5" />
+          AI model
+        </div>
+        <label className="block">
+          <span className="text-sm text-gray-700">OpenRouter model</span>
+          <select
+            aria-label="AI model"
+            value={llmModel}
+            onChange={(e) => setLlmModel(e.target.value)}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+          >
+            {modelOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="flex items-center gap-2 text-sm text-gray-700">
+            <KeyRound className="h-3.5 w-3.5 text-gray-400" />
+            OpenRouter API key
+            {config.has_llm_api_key && !clearKey && (
+              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
+                key set
+              </span>
+            )}
+          </span>
+          <input
+            type="password"
+            autoComplete="off"
+            aria-label="OpenRouter API key"
+            placeholder={config.has_llm_api_key ? 'Leave blank to keep current key' : 'sk-or-…'}
+            value={apiKeyInput}
+            onChange={(e) => {
+              setApiKeyInput(e.target.value);
+              if (e.target.value) setClearKey(false);
+            }}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+          />
+          <span className="mt-1 block text-xs text-gray-400">
+            Stored encrypted. Falls back to the org OpenRouter key when empty.
+          </span>
+          {config.has_llm_api_key && (
+            <label className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-500">
+              <input
+                type="checkbox"
+                checked={clearKey}
+                onChange={(e) => {
+                  setClearKey(e.target.checked);
+                  if (e.target.checked) setApiKeyInput('');
+                }}
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Remove the saved key
+            </label>
+          )}
         </label>
       </div>
 
