@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, Calendar, CheckCircle2, ChevronRight, ExternalLink, Gauge, Loader2, Mail,
-  Minus, Pencil, RefreshCw, RotateCcw, TrendingDown, TrendingUp,
+  Activity, AlertTriangle, Calendar, CheckCircle2, ChevronRight, ExternalLink, Flame, Gauge,
+  GraduationCap, Loader2, Mail, Minus, Pencil, RefreshCw, RotateCcw, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import {
   CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -10,6 +10,7 @@ import EmptyState from '../components/EmptyState';
 import { useAutomation } from '../hooks/useAutomation';
 import {
   useAssessSenders, useSenderBooking, useSenderHealth, useSenderHistory, useSetSenderBooking,
+  useWarmupPlans,
 } from '../hooks/useSenderHealth';
 import {
   THRESHOLDS, fmtPct, fmtRepDelta, fmtThrottle, reputationTone, senderWarnings, statusMeta,
@@ -27,6 +28,7 @@ import { cn, timeAgo } from '../lib/utils';
 export default function SenderHealth() {
   const { data, isLoading, isError, error, refetch, isFetching } = useSenderHealth();
   const { data: history } = useSenderHistory({ days: 30 });
+  const { data: warmupPlans } = useWarmupPlans();
   const { data: automation } = useAutomation();
   const assess = useAssessSenders();
 
@@ -43,6 +45,13 @@ export default function SenderHealth() {
     for (const s of history || []) map[s.account_id] = s.points || [];
     return map;
   }, [history]);
+
+  // Index warm-up plans by account so each row can show its own ramp progress.
+  const warmupByAccount = useMemo(() => {
+    const map = {};
+    for (const p of warmupPlans || []) map[p.account_id] = p;
+    return map;
+  }, [warmupPlans]);
 
   // Fleet-level roll-up of everything approaching or over a threshold, so the
   // operator sees the danger before scrolling the whole list.
@@ -105,6 +114,7 @@ export default function SenderHealth() {
                 key={`${s.account_type}:${s.account_id}`}
                 sender={s}
                 history={historyByAccount[s.account_id]}
+                warmup={warmupByAccount[s.account_id]}
                 globalBookingUrl={globalBookingUrl}
               />
             ))}
@@ -194,7 +204,7 @@ function RiskCallout({ atRisk }) {
   );
 }
 
-function SenderRow({ sender: s, history, globalBookingUrl }) {
+function SenderRow({ sender: s, history, warmup, globalBookingUrl }) {
   const [open, setOpen] = useState(false);
   const meta = statusMeta(s.status);
   const warnings = senderWarnings(s);
@@ -226,9 +236,12 @@ function SenderRow({ sender: s, history, globalBookingUrl }) {
             <Mail className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
             {s.account_email || <span className="text-gray-400">Unknown address</span>}
           </p>
-          <p className="text-xs text-gray-400">
-            {s.account_type} · {s.sent_7d} sent (7d) ·{' '}
-            {s.last_assessed ? `assessed ${timeAgo(s.last_assessed)}` : 'never assessed'}
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-400">
+            <span>
+              {s.account_type} · {s.sent_7d} sent (7d) ·{' '}
+              {s.last_assessed ? `assessed ${timeAgo(s.last_assessed)}` : 'never assessed'}
+            </span>
+            {warmup && <WarmupBadge warmup={warmup} />}
           </p>
         </div>
 
@@ -263,6 +276,11 @@ function SenderRow({ sender: s, history, globalBookingUrl }) {
           <div className={cn('h-full rounded-full', meta.bar)} style={{ width: `${repBar}%` }} />
         </div>
       </div>
+
+      {/* Warm-up progress — today's sends against the ramped daily cap. Only
+          shown while the account is still warming (graduated senders have no
+          cap to visualise). */}
+      {warmup && warmup.status !== 'graduated' && <WarmupProgress warmup={warmup} />}
 
       {warnings.length > 0 && (
         <div className="border-t border-gray-100 px-4 py-2.5">
@@ -430,6 +448,62 @@ function SenderBooking({ accountId, globalBookingUrl }) {
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+// Compact inline warm-up chip in the row subtitle. States: warming (ramp day +
+// cap), graduated (fully warmed), paused (held).
+function WarmupBadge({ warmup }) {
+  if (warmup.status === 'graduated') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700 ring-1 ring-inset ring-green-200">
+        <GraduationCap className="h-3 w-3" />
+        Warmed up
+      </span>
+    );
+  }
+  if (warmup.status === 'paused') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-inset ring-gray-200">
+        <Flame className="h-3 w-3" />
+        Warm-up paused
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+      <Flame className="h-3 w-3" />
+      Warming · day {warmup.current_day}
+    </span>
+  );
+}
+
+// Today's warm-up usage against the ramped daily cap, as a labelled bar. Shown
+// only for still-warming accounts (the cap is what constrains their sending).
+function WarmupProgress({ warmup }) {
+  const limit = Math.max(1, warmup.daily_limit || 0);
+  const used = Math.max(0, warmup.used_today || 0);
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const atCap = used >= limit;
+  return (
+    <div className="px-4 pb-3">
+      <div className="mb-1 flex items-center justify-between text-[11px]">
+        <span className="flex items-center gap-1 font-medium text-amber-700">
+          <Flame className="h-3 w-3" />
+          Warm-up day {warmup.current_day}
+          {warmup.status === 'paused' && ' (paused)'}
+        </span>
+        <span className={cn('tabular-nums', atCap ? 'font-semibold text-amber-700' : 'text-gray-500')}>
+          {used}/{limit} sent today
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-amber-100">
+        <div
+          className={cn('h-full rounded-full', atCap ? 'bg-amber-500' : 'bg-amber-400')}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }

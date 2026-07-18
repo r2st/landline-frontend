@@ -9,6 +9,7 @@ const mockAssess = vi.fn();
 const mockAutomation = vi.fn();
 const mockBookingGet = vi.fn();
 const mockBookingSet = vi.fn();
+const mockWarmup = vi.fn();
 vi.mock('../api/client', () => ({
   api: { get: vi.fn(), post: vi.fn() },
   queryClient: { invalidateQueries: vi.fn(), setQueryData: vi.fn() },
@@ -16,6 +17,9 @@ vi.mock('../api/client', () => ({
     senders: (...a) => mockSenders(...a),
     sendersHistory: (...a) => mockHistory(...a),
     assess: (...a) => mockAssess(...a),
+  },
+  dialtoneApi: {
+    warmupPlans: (...a) => mockWarmup(...a),
   },
   systemApi: {
     automation: (...a) => mockAutomation(...a),
@@ -94,6 +98,7 @@ describe('SenderHealth page', () => {
     vi.clearAllMocks();
     mockSenders.mockResolvedValue([HEALTHY, THROTTLED]);
     mockHistory.mockResolvedValue(HISTORY);
+    mockWarmup.mockResolvedValue([]);
     mockAssess.mockResolvedValue({ accounts_assessed: 2 });
     mockAutomation.mockResolvedValue({ flags: [], scheduling_link: 'https://calendly.com/apprend/intro' });
     mockBookingGet.mockResolvedValue({
@@ -232,5 +237,35 @@ describe('SenderHealth page', () => {
     await user.click(screen.getByRole('button', { name: /reset to global/i }));
     // Clearing the URL server-side is what "reset to global" means.
     expect(mockBookingSet).toHaveBeenCalledWith('acc-1', { booking_url: '' });
+  });
+
+  it('shows warm-up ramp day and daily-cap progress for a warming sender', async () => {
+    mockWarmup.mockResolvedValue([
+      {
+        account_id: 'acc-1', account_type: 'gmail', account_email: 'good@apprend.co',
+        current_day: 5, daily_limit: 10, status: 'warming', used_today: 4, remaining_today: 6,
+        start_date: '2026-07-13',
+      },
+    ]);
+    renderPage();
+    await screen.findByText('good@apprend.co');
+    // Ramp day badge + the today's-usage progress label.
+    expect(screen.getAllByText(/Warming · day 5/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/4\/10 sent today/i)).toBeInTheDocument();
+  });
+
+  it('marks a graduated sender as warmed up and draws no warm-up bar', async () => {
+    mockWarmup.mockResolvedValue([
+      {
+        account_id: 'acc-1', account_type: 'gmail', account_email: 'good@apprend.co',
+        current_day: 40, daily_limit: 200, status: 'graduated', used_today: 12, remaining_today: 188,
+        start_date: '2026-06-01',
+      },
+    ]);
+    renderPage();
+    await screen.findByText('good@apprend.co');
+    expect(screen.getByText(/Warmed up/i)).toBeInTheDocument();
+    // No "sent today" ramp bar for a graduated account.
+    expect(screen.queryByText(/sent today/i)).not.toBeInTheDocument();
   });
 });

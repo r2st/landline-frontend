@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { bookingApi, deliverabilityApi, queryClient } from '../api/client';
+import { bookingApi, deliverabilityApi, dialtoneApi, queryClient } from '../api/client';
 
 // Current per-account reputation. Like the danger-signals rail, this does NOT
 // swallow a failed fetch into an empty list: a page whose whole job is to show
@@ -29,6 +29,25 @@ export function useSenderHistory({ days = 30 } = {}) {
         return [];
       }
     },
+    retry: false,
+  });
+}
+
+// Warm-up plans (Feature 1) for every sending account. Merged onto the sender
+// rows by account_id to show each account's ramp day, daily cap, and progress.
+// Degrades to an empty list — a missing warm-up read should not blank the page.
+export function useWarmupPlans({ refetchInterval = 60000 } = {}) {
+  return useQuery({
+    queryKey: ['warmup-plans'],
+    queryFn: async () => {
+      try {
+        const data = await dialtoneApi.warmupPlans();
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    },
+    refetchInterval,
     retry: false,
   });
 }

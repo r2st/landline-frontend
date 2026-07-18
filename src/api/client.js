@@ -418,6 +418,13 @@ export const dialtoneApi = {
   // apollo, company, recent[] }. `recentLimit` caps the recent-activity strip.
   phoneEnrichment: (recentLimit = 8) =>
     api.get('/dialtone/phone-enrichment/summary', { params: { recent_limit: recentLimit } }).then(r => r.data),
+  // Warm-up plans (Feature 1): one per sending account, with today's usage.
+  // [{ account_id, account_type, account_email, current_day, daily_limit,
+  //    status, used_today, remaining_today, start_date }]
+  warmupPlans: () => api.get('/dialtone/warmup').then(r => r.data),
+  // Start a warm-up plan for a sender. `body` = { account_id, account_type?,
+  // start_date? }. 409 if the sender already has one.
+  createWarmupPlan: (body) => api.post('/dialtone/warmup', body).then(r => r.data),
 };
 
 // Per-sender calendar booking config. A sender with no `booking_url` falls back
