@@ -669,6 +669,23 @@ export const sentimentApi = {
   getSummary: (days = 30) => api.get('/sentiment/summary', { params: { days } }),
 };
 
+// --- Social Listening Agent ---
+// The buying-intent listening agent: config (with masked LLM key), the feed of
+// discovered signals, monitored companies, and stats. One config row per org
+// (resolved from the JWT), so no org_id is ever passed.
+export const socialListeningApi = {
+  getConfig: () => api.get('/social-listening-agent/config').then(r => r.data),
+  updateConfig: (data) => api.put('/social-listening-agent/config', data).then(r => r.data),
+  listSignals: (params) => api.get('/social-listening-agent/signals', { params }).then(r => r.data),
+  actionSignal: (id) => api.post(`/social-listening-agent/signals/${id}/action`).then(r => r.data),
+  dismissSignal: (id) => api.post(`/social-listening-agent/signals/${id}/dismiss`).then(r => r.data),
+  listMonitored: () => api.get('/social-listening-agent/monitored-companies').then(r => r.data),
+  addMonitored: (data) => api.post('/social-listening-agent/monitored-companies', data).then(r => r.data),
+  removeMonitored: (id) => api.delete(`/social-listening-agent/monitored-companies/${id}`).then(r => r.data),
+  getStats: () => api.get('/social-listening-agent/stats').then(r => r.data),
+  scanNow: () => api.post('/social-listening-agent/scan').then(r => r.data),
+};
+
 // --- Email Testing ---
 export const emailTestingApi = {
   getScenarios: () => api.get('/email-testing/scenarios'),
