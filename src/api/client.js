@@ -506,6 +506,21 @@ export const orchestrationApi = {
     api.post(`/orchestration/enrollments/${enrollmentId}/mode`, { mode }).then(r => r.data),
 };
 
+// Referral & Warm-Intro agent — config + ON/OFF toggle, the referral pipeline,
+// and the action queue (initial ask / follow-up / thank-you). All under
+// /referral-agent; config writes + action execution require org_admin.
+export const referralAgentApi = {
+  getConfig: () => api.get('/referral-agent/config').then(r => r.data),
+  updateConfig: (data) => api.put('/referral-agent/config', data).then(r => r.data),
+  listReferrals: (params) => api.get('/referral-agent/referrals', { params }).then(r => r.data),
+  createReferral: (data) => api.post('/referral-agent/referrals', data).then(r => r.data),
+  updateReferral: (id, data) => api.put(`/referral-agent/referrals/${id}`, data).then(r => r.data),
+  listActions: (params) => api.get('/referral-agent/actions', { params }).then(r => r.data),
+  approveAction: (id) => api.post(`/referral-agent/actions/${id}/approve`).then(r => r.data),
+  dismissAction: (id) => api.post(`/referral-agent/actions/${id}/dismiss`).then(r => r.data),
+  getStats: () => api.get('/referral-agent/stats').then(r => r.data),
+};
+
 // Autonomous prospecting — the agent sources companies, scores them against the
 // learned ICP, and parks the borderline ones for a human call.
 export const prospectingApi = {

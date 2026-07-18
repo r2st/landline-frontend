@@ -47,6 +47,7 @@ import {
   ShieldCheck,
   Bot,
   HeartHandshake,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -102,6 +103,7 @@ const navSections = [
     items: [
       { name: 'Deal Progression', href: '/agents/deals', icon: Bot },
       { name: 'Client Success', href: '/agents/client-success', icon: HeartHandshake },
+      { name: 'Referrals', href: '/agents/referrals', icon: UserPlus },
     ],
   },
   {
