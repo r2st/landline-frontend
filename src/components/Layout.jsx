@@ -49,6 +49,7 @@ import {
   Bot,
   HeartHandshake,
   UserPlus,
+  CalendarCheck,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -100,9 +101,11 @@ const navSections = [
     ],
   },
   {
+    // Autonomous agents that act on their own within guardrails.
     key: 'agents',
     label: 'Agents',
     items: [
+      { name: 'Meeting Booking', href: '/agents/booking', icon: CalendarCheck },
       { name: 'Deal Progression', href: '/agents/deals', icon: Bot },
       { name: 'Client Success', href: '/agents/client-success', icon: HeartHandshake },
       { name: 'Referrals', href: '/agents/referrals', icon: UserPlus },

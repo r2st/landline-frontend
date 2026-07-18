@@ -432,6 +432,24 @@ export const bookingApi = {
   set: (accountId, body) => api.put(`/dialtone/senders/${accountId}/booking`, body).then(r => r.data),
 };
 
+// Meeting Booking Agent — the autonomous scheduler that takes over once Dialtone
+// gets a positive reply: proposes calendar slots, handles the back-and-forth,
+// books the invite, and reminds. `config` is one row per org (lazily created);
+// config writes need org_admin. Distinct from `bookingApi` above, which is just
+// a per-sender scheduling *link* injected into follow-ups.
+export const meetingAgentApi = {
+  getConfig: () => api.get('/meeting-agent/config').then(r => r.data),
+  // `body` = subset of { is_active, calendar_account_id, default_meeting_duration_minutes,
+  // buffer_between_meetings_minutes, working_hours_start, working_hours_end, timezone,
+  // booking_window_days, max_daily_meetings, confirmation_template, reminder_template }.
+  updateConfig: (body) => api.put('/meeting-agent/config', body).then(r => r.data),
+  // `params` = { filter: all|upcoming|past, status, limit, offset }.
+  meetings: (params) => api.get('/meeting-agent/meetings', { params }).then(r => r.data),
+  meeting: (id) => api.get(`/meeting-agent/meetings/${id}`).then(r => r.data),
+  cancel: (id) => api.post(`/meeting-agent/meetings/${id}/cancel`).then(r => r.data),
+  stats: () => api.get('/meeting-agent/stats').then(r => r.data),
+};
+
 // Smart Send-Time Optimization (Feature 6) — read-only Console surfaces under
 // `/dialtone/send-timing`: the optimized-vs-control experiment, the global
 // day/hour heatmap, overall optimizer status, and top learned per-contact windows.
