@@ -25,6 +25,11 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
+let mockPlatform = { isPlatformAdmin: false, isImpersonating: false };
+vi.mock('../context/PlatformContext', () => ({
+  usePlatform: () => mockPlatform,
+}));
+
 import toast from 'react-hot-toast';
 import OrganizationSettings from './OrganizationSettings';
 
@@ -56,6 +61,7 @@ describe('OrganizationSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUser = { id: 'u1', role: 'org_admin', name: 'Admin' };
+    mockPlatform = { isPlatformAdmin: false, isImpersonating: false };
     mockGet.mockResolvedValue(ORG);
     mockUpdate.mockResolvedValue({ ...ORG, name: 'Renamed Inc' });
   });
@@ -94,6 +100,24 @@ describe('OrganizationSettings', () => {
 
     expect(await screen.findByText(/must be valid json/i)).toBeInTheDocument();
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('prompts a platform admin (no org context) to pick an org instead of erroring', async () => {
+    mockUser = { id: 'p1', role: 'platform_admin', name: 'Platform' };
+    mockPlatform = { isPlatformAdmin: true, isImpersonating: false };
+    renderPage();
+    expect(await screen.findByText(/no organization selected/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /platform dashboard/i })).toBeInTheDocument();
+    // Must not fire the doomed /org/settings request.
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('shows settings for a platform admin while impersonating an org', async () => {
+    mockUser = { id: 'p1', role: 'platform_admin', name: 'Platform' };
+    mockPlatform = { isPlatformAdmin: true, isImpersonating: true };
+    renderPage();
+    expect(await screen.findByDisplayValue('Apprend Technologies')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalled();
   });
 
   it('disables editing and hides save for non-admins', async () => {

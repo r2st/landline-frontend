@@ -8,6 +8,9 @@ vi.mock('../api/org', async () => {
   const actual = await vi.importActual('../api/org');
   return { ...actual, orgApi: { getUsage: (...a) => mockUsage(...a) } };
 });
+vi.mock('../context/PlatformContext', () => ({
+  usePlatform: () => ({ isPlatformAdmin: false, isImpersonating: false }),
+}));
 // recharts needs a real layout box; stub so charts render in jsdom.
 vi.mock('recharts', () => {
   const Passthrough = ({ children }) => <div>{children}</div>;

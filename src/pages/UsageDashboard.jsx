@@ -5,6 +5,8 @@ import {
 } from 'recharts';
 import { Loader2, ShieldAlert, Users, Mail, Sparkles, Contact2 } from 'lucide-react';
 import { orgApi } from '../api/org';
+import { usePlatform } from '../context/PlatformContext';
+import PlatformOrgPrompt from '../components/PlatformOrgPrompt';
 
 const PLAN_LABEL = {
   free: 'Free', starter: 'Starter', growth: 'Growth', pro: 'Pro', enterprise: 'Enterprise',
@@ -18,11 +20,19 @@ function monthLabel(ym) {
 }
 
 export default function UsageDashboard() {
+  const { isPlatformAdmin, isImpersonating } = usePlatform();
+  // Platform admins have no org of their own — skip the doomed /org/usage call.
+  const needsOrgContext = isPlatformAdmin && !isImpersonating;
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['org-usage'],
     queryFn: orgApi.getUsage,
+    enabled: !needsOrgContext,
   });
 
+  if (needsOrgContext) {
+    return <PlatformOrgPrompt noun="usage" />;
+  }
   if (isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-24 text-sm text-gray-500">

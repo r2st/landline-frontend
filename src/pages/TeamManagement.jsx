@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { Loader2, UserPlus, ShieldAlert, X, Trash2, Copy, Check, KeyRound } from 'lucide-react';
 import { orgApi, canManageOrg } from '../api/org';
 import { useAuth } from '../context/AuthContext';
+import { usePlatform } from '../context/PlatformContext';
+import PlatformOrgPrompt from '../components/PlatformOrgPrompt';
 import { AdminOnlyBadge } from './OrganizationSettings';
 
 export const ORG_ROLES = [
@@ -35,14 +37,19 @@ function formatDate(iso) {
 export default function TeamManagement() {
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
+  const { isPlatformAdmin, isImpersonating } = usePlatform();
   const canWrite = canManageOrg(currentUser);
   const [showInvite, setShowInvite] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null);
   const [invited, setInvited] = useState(null); // { email, temporary_password }
 
+  // Platform admins have no org of their own — skip the doomed /org/members call.
+  const needsOrgContext = isPlatformAdmin && !isImpersonating;
+
   const { data: members = [], isLoading, isError } = useQuery({
     queryKey: ['org-members'],
     queryFn: orgApi.listMembers,
+    enabled: !needsOrgContext,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['org-members'] });
@@ -81,6 +88,10 @@ export default function TeamManagement() {
   });
 
   const activeCount = members.filter((m) => m.is_active).length;
+
+  if (needsOrgContext) {
+    return <PlatformOrgPrompt noun="team members" />;
+  }
 
   return (
     <div className="space-y-8">

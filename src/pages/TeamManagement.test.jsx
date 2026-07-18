@@ -29,6 +29,10 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
+vi.mock('../context/PlatformContext', () => ({
+  usePlatform: () => ({ isPlatformAdmin: false, isImpersonating: false }),
+}));
+
 import TeamManagement from './TeamManagement';
 
 const MEMBERS = [

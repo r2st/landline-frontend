@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { Loader2, Building2, Palette, CreditCard, Braces, ShieldAlert, Lock } from 'lucide-react';
 import { orgApi, canManageOrg } from '../api/org';
 import { useAuth } from '../context/AuthContext';
+import { usePlatform } from '../context/PlatformContext';
+import PlatformOrgPrompt from '../components/PlatformOrgPrompt';
 
 // Branding keys we expose as a structured form; anything else lives in the raw
 // config JSON editor below.
@@ -22,11 +24,17 @@ const PLAN_LABEL = {
 export default function OrganizationSettings() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { isPlatformAdmin, isImpersonating } = usePlatform();
   const canWrite = canManageOrg(user);
+
+  // A platform admin has no org of their own; the /org/* endpoints 400 unless
+  // they're impersonating one. Skip the doomed request and prompt them to pick.
+  const needsOrgContext = isPlatformAdmin && !isImpersonating;
 
   const { data: org, isLoading, isError } = useQuery({
     queryKey: ['org-settings'],
     queryFn: orgApi.getSettings,
+    enabled: !needsOrgContext,
   });
 
   const [name, setName] = useState('');
@@ -93,6 +101,9 @@ export default function OrganizationSettings() {
     updateMutation.mutate({ name: name.trim(), industry: industry.trim() || null, branding: cleanBranding, config });
   };
 
+  if (needsOrgContext) {
+    return <PlatformOrgPrompt noun="organization settings" />;
+  }
   if (isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-24 text-sm text-gray-500">
