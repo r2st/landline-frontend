@@ -425,6 +425,22 @@ export const dialtoneApi = {
   // Start a warm-up plan for a sender. `body` = { account_id, account_type?,
   // start_date? }. 409 if the sender already has one.
   createWarmupPlan: (body) => api.post('/dialtone/warmup', body).then(r => r.data),
+  // Suppression list (Feature 2). Paginated do-not-contact list; `params`
+  // accepts { q, page, page_size }.
+  suppressionList: (params) => api.get('/dialtone/suppression', { params }).then(r => r.data),
+  // Add one address by hand. `body` = { email, reason? }.
+  addSuppression: (body) => api.post('/dialtone/suppression', body).then(r => r.data),
+  // Bulk CSV/text upload. `reason` is the default for rows without one. Returns
+  // { added, duplicates, invalid, total }.
+  importSuppression: (file, reason = 'unsubscribe') => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/dialtone/suppression/import', form, {
+      params: { reason },
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+  deleteSuppression: (id) => api.delete(`/dialtone/suppression/${id}`).then(r => r.data),
 };
 
 // Per-sender calendar booking config. A sender with no `booking_url` falls back

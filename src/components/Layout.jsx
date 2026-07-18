@@ -50,6 +50,7 @@ import {
   HeartHandshake,
   UserPlus,
   CalendarCheck,
+  ShieldOff,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -97,6 +98,7 @@ const navSections = [
       { name: 'Places Discovery', href: '/dialtone/discovery', icon: MapPin },
       { name: 'Health', href: '/dialtone/health', icon: Stethoscope },
       { name: 'Senders', href: '/dialtone/senders', icon: Gauge },
+      { name: 'Suppression', href: '/dialtone/suppression', icon: ShieldOff },
       { name: 'Domains', href: '/deliverability/domains', icon: Globe },
     ],
   },

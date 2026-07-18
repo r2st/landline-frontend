@@ -38,6 +38,7 @@ const ReferralAgent = lazy(() => import('./pages/ReferralAgent'));
 const DomainHealth = lazy(() => import('./pages/DomainHealth'));
 const SenderHealth = lazy(() => import('./pages/SenderHealth'));
 const SocialListening = lazy(() => import('./pages/SocialListening'));
+const DialtoneSuppression = lazy(() => import('./pages/DialtoneSuppression'));
 const PlacesDiscovery = lazy(() => import('./pages/PlacesDiscovery'));
 const Inbox = lazy(() => import('./pages/Inbox'));
 const Knowledge = lazy(() => import('./pages/Knowledge'));
@@ -141,6 +142,7 @@ export default function App() {
           <Route path="/dialtone" element={<DialtoneConsole />} />
           <Route path="/dialtone/health" element={<DialtoneHealth />} />
           <Route path="/dialtone/senders" element={<SenderHealth />} />
+          <Route path="/dialtone/suppression" element={<DialtoneSuppression />} />
           <Route path="/dialtone/icp" element={<Icp />} />
           <Route path="/dialtone/inbox" element={<DialtoneInbox />} />
           <Route path="/dialtone/ab-tests" element={<DialtoneAbTests />} />
