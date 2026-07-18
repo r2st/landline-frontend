@@ -46,6 +46,7 @@ import {
   SlidersHorizontal,
   ShieldCheck,
   Bot,
+  HeartHandshake,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -100,6 +101,7 @@ const navSections = [
     label: 'Agents',
     items: [
       { name: 'Deal Progression', href: '/agents/deals', icon: Bot },
+      { name: 'Client Success', href: '/agents/client-success', icon: HeartHandshake },
     ],
   },
   {

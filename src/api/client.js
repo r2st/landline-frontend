@@ -676,3 +676,28 @@ export const dealAgentApi = {
   dismissAction: (id) => api.post(`/deal-agent/actions/${id}/dismiss`).then(r => r.data),
   stats: () => api.get('/deal-agent/stats').then(r => r.data),
 };
+
+// ─── Client Success Agent ────────────────────────────────────────────────────
+// The autonomous client-success agent: watches per-client health and enqueues
+// proactive plays (AI check-ins, escalations, review calls, celebrations). The
+// config carries the master on/off switch and the per-agent OpenRouter model +
+// key. The raw key is write-only — reads return only `llm_api_key_set` + a hint.
+export const clientSuccessAgentApi = {
+  // Current org's config (a default row is created on first read).
+  getConfig: () => api.get('/client-success-agent/config').then(r => r.data),
+  // Update config (org_admin). `llm_api_key`: omit to leave unchanged, '' to
+  // clear (fall back to the org key), any value to set. Sending `is_active`
+  // flips the master switch.
+  updateConfig: (body) => api.put('/client-success-agent/config', body).then(r => r.data),
+  // Action queue, newest-first. `params`: { action_type, status, contact_id,
+  // limit, offset }. Returns { actions, total }.
+  listActions: (params) => api.get('/client-success-agent/actions', { params }).then(r => r.data),
+  // Approve a pending action (sends the check-in / marks the play done).
+  approveAction: (id) => api.post(`/client-success-agent/actions/${id}/approve`).then(r => r.data),
+  // Dismiss a pending action (drops it from the queue).
+  dismissAction: (id) => api.post(`/client-success-agent/actions/${id}/dismiss`).then(r => r.data),
+  // Dashboard roll-up: clients monitored, check-ins sent, escalations, etc.
+  stats: () => api.get('/client-success-agent/stats').then(r => r.data),
+  // Clients sorted by current health (lowest first) with trend arrows.
+  healthOverview: (params) => api.get('/client-success-agent/health-overview', { params }).then(r => r.data),
+};

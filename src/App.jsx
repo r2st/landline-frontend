@@ -51,6 +51,7 @@ const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const OrganizationSettings = lazy(() => import('./pages/OrganizationSettings'));
 const TeamManagement = lazy(() => import('./pages/TeamManagement'));
 const UsageDashboard = lazy(() => import('./pages/UsageDashboard'));
+const ClientSuccessAgent = lazy(() => import('./pages/ClientSuccessAgent'));
 const Platform = lazy(() => import('./pages/Platform'));
 const PlatformOrganizationDetail = lazy(() => import('./pages/PlatformOrganizationDetail'));
 
@@ -144,6 +145,7 @@ export default function App() {
           <Route path="/dialtone/policies" element={<DialtonePolicies />} />
           <Route path="/dialtone/drafts" element={<AiDrafts />} />
           <Route path="/dialtone/discovery" element={<PlacesDiscovery />} />
+          <Route path="/agents/client-success" element={<ClientSuccessAgent />} />
           <Route path="/deliverability/domains" element={<DomainHealth />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/knowledge" element={<Knowledge />} />
