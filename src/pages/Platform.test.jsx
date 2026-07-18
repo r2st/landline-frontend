@@ -6,13 +6,19 @@ import { MemoryRouter } from 'react-router-dom';
 // Mock the data hooks so the page renders deterministically without a backend.
 const mockCreate = vi.fn();
 const mockStart = vi.fn();
+const mockPromote = vi.fn();
+const mockDemote = vi.fn();
 let orgsState = { data: [], isLoading: false, isError: false };
 let statsState = { data: null, isLoading: false };
+let adminsState = { data: [], isLoading: false };
 
 vi.mock('../hooks/usePlatform', () => ({
   usePlatformStats: () => statsState,
   useOrganizations: () => orgsState,
   useCreateOrganization: () => ({ mutate: mockCreate, isPending: false }),
+  usePlatformAdmins: () => adminsState,
+  usePromoteAdmin: () => ({ mutate: mockPromote, isPending: false }),
+  useDemoteAdmin: () => ({ mutate: mockDemote, isPending: false }),
 }));
 
 vi.mock('../context/PlatformContext', () => ({
@@ -44,6 +50,11 @@ function renderPage() {
   );
 }
 
+const ADMINS = [
+  { id: 'pa-1', name: 'Root', email: 'root@landline.app', role: 'platform_admin', is_active: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: 'pa-2', name: 'Ops', email: 'ops@landline.app', role: 'platform_admin', is_active: true, created_at: '2026-02-01T00:00:00Z' },
+];
+
 describe('Platform dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -55,6 +66,7 @@ describe('Platform dashboard', () => {
       },
       isLoading: false,
     };
+    adminsState = { data: ADMINS, isLoading: false };
   });
 
   it('renders platform-wide stats', () => {
@@ -73,7 +85,8 @@ describe('Platform dashboard', () => {
     renderPage();
     expect(screen.getByText('Acme Corp')).toBeInTheDocument();
     expect(screen.getByText('Beta LLC')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
+    // "Active" also appears in the admins panel now, so just assert presence.
+    expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getByText('Inactive')).toBeInTheDocument();
   });
 
@@ -112,5 +125,43 @@ describe('Platform dashboard', () => {
     orgsState = { data: [], isLoading: false, isError: false };
     renderPage();
     expect(screen.getByText('No organizations yet')).toBeInTheDocument();
+  });
+
+  it('lists platform administrators', () => {
+    renderPage();
+    expect(screen.getByText('Platform administrators')).toBeInTheDocument();
+    expect(screen.getByText('root@landline.app')).toBeInTheDocument();
+    expect(screen.getByText('ops@landline.app')).toBeInTheDocument();
+  });
+
+  it('promotes a user by email', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /promote to platform admin/i }));
+    const emailInput = await screen.findByPlaceholderText('person@company.com');
+    await user.type(emailInput, 'newadmin@acme.com');
+    await user.click(screen.getByRole('button', { name: /^promote$/i }));
+    expect(mockPromote).toHaveBeenCalledWith('newadmin@acme.com', expect.any(Object));
+  });
+
+  it('demotes an admin, requiring an org to be picked', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    // Open the demote modal for the first admin (row button).
+    await user.click(screen.getAllByRole('button', { name: /^demote$/i })[0]);
+    await screen.findByLabelText('Organization');
+    // The modal submit is the only "Demote" button with type=submit.
+    const submit = screen
+      .getAllByRole('button', { name: /^demote$/i })
+      .find((b) => b.getAttribute('type') === 'submit');
+    // Org not yet selected → submit disabled, mutation not called.
+    expect(submit).toBeDisabled();
+    // Pick an org, then submit.
+    await user.selectOptions(screen.getByLabelText('Organization'), 'org-1');
+    await user.click(submit);
+    expect(mockDemote).toHaveBeenCalledWith(
+      { userId: 'pa-1', orgId: 'org-1' },
+      expect.any(Object)
+    );
   });
 });

@@ -91,3 +91,50 @@ export function useDeactivateOrganization() {
       toast.error(e?.response?.data?.detail || e?.message || 'Could not deactivate organization'),
   });
 }
+
+// The roster of platform_admin accounts, for the dashboard's admin panel.
+// `options.enabled` gates the fetch (platform admins only; paused while
+// impersonating so a scoped token doesn't 403 the platform endpoint).
+export function usePlatformAdmins(options = {}) {
+  const { enabled = true } = options;
+  return useQuery({
+    queryKey: ['platform-admins'],
+    queryFn: async () => {
+      const data = await platformApi.listAdmins();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled,
+    retry: false,
+  });
+}
+
+// Elevate a user (by email) to platform_admin. Refreshes the admin roster,
+// the org list, and the stats since org membership changed.
+export function usePromoteAdmin() {
+  return useMutation({
+    mutationFn: (email) => platformApi.promoteAdmin(email),
+    onSuccess: (user) => {
+      queryClient.invalidateQueries({ queryKey: ['platform-admins'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-orgs'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-stats'] });
+      toast.success(`${user.email} is now a platform admin`);
+    },
+    onError: (e) =>
+      toast.error(e?.response?.data?.detail || e?.message || 'Could not promote user'),
+  });
+}
+
+// Demote a platform_admin back to org_admin, reassigning to an org.
+export function useDemoteAdmin() {
+  return useMutation({
+    mutationFn: ({ userId, orgId }) => platformApi.demoteAdmin(userId, orgId),
+    onSuccess: (user) => {
+      queryClient.invalidateQueries({ queryKey: ['platform-admins'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-orgs'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-stats'] });
+      toast.success(`${user.email} demoted to org admin`);
+    },
+    onError: (e) =>
+      toast.error(e?.response?.data?.detail || e?.message || 'Could not demote admin'),
+  });
+}

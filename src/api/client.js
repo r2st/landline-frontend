@@ -531,6 +531,13 @@ export const platformApi = {
   // interceptor sends the ADMIN's token (never a stale impersonation token).
   impersonate: (userId) =>
     api.post(`/platform/impersonate/${userId}`, null, { _skipImpersonation: true }).then(r => r.data),
+  // Every platform_admin account, for the dashboard's admin roster.
+  listAdmins: () => api.get('/platform/admins').then(r => r.data),
+  // Elevate an existing user (by email) to platform_admin; clears their org.
+  promoteAdmin: (email) => api.post('/platform/promote-admin', { email }).then(r => r.data),
+  // Demote a platform_admin back to org_admin, reassigning them to `orgId`.
+  demoteAdmin: (userId, orgId) =>
+    api.post('/platform/demote-admin', { user_id: userId, org_id: orgId }).then(r => r.data),
 };
 
 // Orchestration policies (feature 2.2) — the guardrails the autonomous engine

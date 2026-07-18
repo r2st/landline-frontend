@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Building2, Users, MailCheck, Plus, Loader2, ShieldCheck, X, Eye,
-  CheckCircle2, XCircle, ChevronRight,
+  CheckCircle2, XCircle, ChevronRight, ShieldPlus, ShieldMinus, UserCog,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
-import { usePlatformStats, useOrganizations, useCreateOrganization } from '../hooks/usePlatform';
+import {
+  usePlatformStats, useOrganizations, useCreateOrganization,
+  usePlatformAdmins, usePromoteAdmin, useDemoteAdmin,
+} from '../hooks/usePlatform';
 import { usePlatform } from '../context/PlatformContext';
 import { cn } from '../lib/utils';
 
@@ -59,6 +62,7 @@ function PlanBadge({ plan }) {
 
 export default function Platform() {
   const [showCreate, setShowCreate] = useState(false);
+  const [showPromote, setShowPromote] = useState(false);
   const { data: stats, isLoading: statsLoading } = usePlatformStats();
   const { data: orgs = [], isLoading, isError } = useOrganizations();
   const { startImpersonation, isPlatformAdmin } = usePlatform();
@@ -86,14 +90,24 @@ export default function Platform() {
             view as any org for debugging.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
-        >
-          <Plus className="h-4 w-4" />
-          New organization
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPromote(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3.5 py-2 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-50"
+          >
+            <ShieldPlus className="h-4 w-4" />
+            Promote to Platform Admin
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+          >
+            <Plus className="h-4 w-4" />
+            New organization
+          </button>
+        </div>
       </div>
 
       {/* Platform-wide roll-up */}
@@ -193,7 +207,217 @@ export default function Platform() {
         </div>
       )}
 
+      {/* Platform administrators roster */}
+      <PlatformAdminsPanel orgs={orgs} />
+
       <CreateOrgModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <PromoteAdminModal open={showPromote} onClose={() => setShowPromote(false)} />
+    </div>
+  );
+}
+
+function PlatformAdminsPanel({ orgs }) {
+  const { data: admins = [], isLoading } = usePlatformAdmins();
+  const [demoteTarget, setDemoteTarget] = useState(null);
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
+        <UserCog className="h-4 w-4 text-indigo-500" />
+        <h2 className="text-sm font-semibold text-gray-900">Platform administrators</h2>
+        <span className="text-xs text-gray-400">({admins.length})</span>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10 text-gray-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      ) : admins.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-gray-400">No platform admins.</p>
+      ) : (
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-2.5">Name</th>
+              <th className="px-4 py-2.5">Email</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {admins.map((a) => (
+              <tr key={a.id} className="text-sm hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-medium text-gray-900">{a.name}</td>
+                <td className="px-4 py-2.5 text-gray-600">{a.email}</td>
+                <td className="px-4 py-2.5">
+                  {a.is_active ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400">
+                      <XCircle className="h-3.5 w-3.5" /> Inactive
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setDemoteTarget(a)}
+                      className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                    >
+                      <ShieldMinus className="h-3.5 w-3.5" /> Demote
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <DemoteAdminModal
+        admin={demoteTarget}
+        orgs={orgs}
+        onClose={() => setDemoteTarget(null)}
+      />
+    </section>
+  );
+}
+
+function PromoteAdminModal({ open, onClose }) {
+  const [email, setEmail] = useState('');
+  const promote = usePromoteAdmin();
+
+  if (!open) return null;
+
+  const submit = (e) => {
+    e.preventDefault();
+    const value = email.trim();
+    if (!value) return;
+    promote.mutate(value, {
+      onSuccess: () => {
+        setEmail('');
+        onClose();
+      },
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <ShieldPlus className="h-5 w-5 text-indigo-500" /> Promote to Platform Admin
+          </h2>
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-gray-500">
+          Enter the email of an existing user. They'll gain full platform access and be
+          detached from their current organization.
+        </p>
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label htmlFor="promote-email" className="block text-sm font-medium text-gray-700">Email</label>
+            <input
+              id="promote-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoFocus
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              placeholder="person@company.com"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={promote.isPending || !email.trim()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {promote.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Promote
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DemoteAdminModal({ admin, orgs, onClose }) {
+  const [orgId, setOrgId] = useState('');
+  const demote = useDemoteAdmin();
+
+  // Reset the org selection whenever a different admin is targeted.
+  useEffect(() => {
+    setOrgId('');
+  }, [admin?.id]);
+
+  if (!admin) return null;
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!orgId) return;
+    demote.mutate(
+      { userId: admin.id, orgId },
+      { onSuccess: () => onClose() }
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <ShieldMinus className="h-5 w-5 text-amber-500" /> Demote platform admin
+          </h2>
+          <button type="button" onClick={onClose} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-gray-500">
+          <span className="font-medium text-gray-700">{admin.email}</span> will become an
+          org admin. Pick the organization to assign them to.
+        </p>
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label htmlFor="demote-org" className="block text-sm font-medium text-gray-700">Organization</label>
+            <select
+              id="demote-org"
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              required
+              autoFocus
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+            >
+              <option value="" disabled>Select an organization…</option>
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={demote.isPending || !orgId}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {demote.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Demote
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
