@@ -664,3 +664,15 @@ export const emailTestingApi = {
   getExchange: (id) => api.get(`/email-testing/exchanges/${id}`),
   deleteExchange: (id) => api.delete(`/email-testing/exchanges/${id}`),
 };
+
+// --- Deal Progression Agent ---
+// Watches the pipeline and nudges stalled deals: drafts follow-ups, suggests
+// next steps, advances stages off signals, and escalates rotting deals.
+export const dealAgentApi = {
+  getConfig: () => api.get('/deal-agent/config').then(r => r.data),
+  updateConfig: (data) => api.put('/deal-agent/config', data).then(r => r.data),
+  listActions: (params) => api.get('/deal-agent/actions', { params }).then(r => r.data),
+  approveAction: (id) => api.post(`/deal-agent/actions/${id}/approve`).then(r => r.data),
+  dismissAction: (id) => api.post(`/deal-agent/actions/${id}/dismiss`).then(r => r.data),
+  stats: () => api.get('/deal-agent/stats').then(r => r.data),
+};

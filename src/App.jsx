@@ -43,6 +43,7 @@ const Calls = lazy(() => import('./pages/Calls'));
 const Investors = lazy(() => import('./pages/Investors'));
 const InvestorDetail = lazy(() => import('./pages/InvestorDetail'));
 const SentimentDashboard = lazy(() => import('./pages/SentimentDashboard'));
+const DealAgent = lazy(() => import('./pages/DealAgent'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
@@ -150,6 +151,7 @@ export default function App() {
           <Route path="/investors" element={<Investors />} />
           <Route path="/investors/:id" element={<InvestorDetail />} />
           <Route path="/sentiment" element={<SentimentDashboard />} />
+          <Route path="/agents/deals" element={<DealAgent />} />
           <Route
             path="/admin/users"
             element={

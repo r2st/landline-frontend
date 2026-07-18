@@ -45,6 +45,7 @@ import {
   Clock,
   SlidersHorizontal,
   ShieldCheck,
+  Bot,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -92,6 +93,13 @@ const navSections = [
       { name: 'Health', href: '/dialtone/health', icon: Stethoscope },
       { name: 'Senders', href: '/dialtone/senders', icon: Gauge },
       { name: 'Domains', href: '/deliverability/domains', icon: Globe },
+    ],
+  },
+  {
+    key: 'agents',
+    label: 'Agents',
+    items: [
+      { name: 'Deal Progression', href: '/agents/deals', icon: Bot },
     ],
   },
   {
