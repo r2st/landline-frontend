@@ -510,21 +510,6 @@ export const sendTimingApi = {
     api.get(`/dialtone/send-timing/contacts/${contactId}`).then(r => r.data),
 };
 
-// Smart Send-Time Optimization (Feature 6) — read-only Console surfaces under
-// `/dialtone/send-timing`: the optimized-vs-control experiment, the global
-// day/hour heatmap, overall optimizer status, and top learned per-contact windows.
-export const sendTimingApi = {
-  // Optimized-vs-control arms: per-arm open/reply rates, lift, z-test confidence.
-  experiment: () => api.get('/dialtone/send-timing/experiment').then(r => r.data),
-  // Full (day-of-week, hour) grid of open rates for the heatmap.
-  heatmap: () => api.get('/dialtone/send-timing/heatmap').then(r => r.data),
-  // Overall status: enabled flag, config, and how many contacts have profiles.
-  status: () => api.get('/dialtone/send-timing/status').then(r => r.data),
-  // Top learned contacts (by opens) with their computed optimal send windows.
-  contacts: (limit = 20) =>
-    api.get('/dialtone/send-timing/contacts', { params: { limit } }).then(r => r.data),
-};
-
 // A/B testing for Dialtone sequence steps: the subject/body variants the agent
 // rotates through, their per-variant open/click/reply rates, the chi-squared
 // significance the engine computes, and the operator's manual winner override.
