@@ -554,6 +554,16 @@ export const sentimentApi = {
   getSummary: (days = 30) => api.get('/sentiment/summary', { params: { days } }),
 };
 
+// --- GDPR data-subject requests ---
+// Compliance surface for the right-to-access (export) and right-to-erasure
+// (erase) obligations. Both are keyed by the data subject's email. Export
+// returns everything held about that contact; erase is destructive and
+// irreversible, so the UI gates it behind a typed confirmation.
+export const gdprApi = {
+  export: (email) => api.get(`/gdpr/export/${encodeURIComponent(email)}`).then(r => r.data),
+  erase: (email) => api.post(`/gdpr/erase/${encodeURIComponent(email)}`).then(r => r.data),
+};
+
 // --- Email Testing ---
 export const emailTestingApi = {
   getScenarios: () => api.get('/email-testing/scenarios'),

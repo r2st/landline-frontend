@@ -46,6 +46,7 @@ const SentimentDashboard = lazy(() => import('./pages/SentimentDashboard'));
 const Login = lazy(() => import('./pages/Login'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const GdprControls = lazy(() => import('./pages/GdprControls'));
 
 function NotFound() {
   return (
@@ -136,6 +137,7 @@ export default function App() {
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/unified-inbox" element={<UnifiedInbox />} />
           <Route path="/knowledge" element={<Knowledge />} />
+          <Route path="/gdpr" element={<GdprControls />} />
           <Route path="/calls" element={<Calls />} />
           <Route path="/investors" element={<Investors />} />
           <Route path="/investors/:id" element={<InvestorDetail />} />

@@ -43,6 +43,7 @@ import {
   Target,
   Beaker,
   Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -137,6 +138,7 @@ const navSections = [
     label: 'Resources',
     items: [
       { name: 'Knowledge Base', href: '/knowledge', icon: BookOpen },
+      { name: 'GDPR Requests', href: '/gdpr', icon: ShieldCheck },
     ],
   },
 ];

@@ -36,6 +36,7 @@ import {
   Target,
   Beaker,
   Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -74,6 +75,7 @@ const COMMANDS = [
   { id: 'domain-health', label: 'Domain Health', hint: 'SPF, DKIM & DMARC per sending domain', icon: Globe, to: '/deliverability/domains', keywords: 'domain health spf dkim dmarc authentication blacklist dnsbl spamhaus sending domains recheck deliverability' },
   { id: 'calls', label: 'Cold Calling', hint: "Today's call queue & briefings", icon: Phone, to: '/calls', keywords: 'phone call queue dial briefing script cold' },
   { id: 'knowledge', label: 'Knowledge Base', hint: 'Contacts, guidelines & strategy', icon: BookOpen, to: '/knowledge', keywords: 'guidelines strategy industry playbook docs ai config contacts' },
+  { id: 'gdpr', label: 'GDPR Data Requests', hint: 'Export or erase a contact by email', icon: ShieldCheck, to: '/gdpr', keywords: 'gdpr data subject request export erasure erase delete right to access right to be forgotten privacy compliance contact email dsar' },
   { id: 'investors', label: 'Go to Investors', hint: 'Fundraising pipeline & investor CRM', icon: Landmark, to: '/investors', keywords: 'investor fundraise fundraising vc venture capital pipeline funnel seed series check raise' },
 ];
 
