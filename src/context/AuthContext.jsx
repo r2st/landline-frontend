@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authApi } from '../api/auth';
 import { tokenStore } from '../api/authToken';
+import { isManager, isOrgAdmin, isPlatformAdmin } from '../lib/roles';
 
 const AuthContext = createContext(null);
 
@@ -19,6 +20,17 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const data = await authApi.login(email, password);
+    tokenStore.set(data.access_token, data.refresh_token);
+    setMustChangePassword(!!data.must_change_password);
+    const profile = await authApi.me();
+    setUser(profile);
+    return data;
+  }, []);
+
+  // Public sign-up: create an org + first admin, then log straight in with the
+  // returned tokens (mirrors `login`).
+  const register = useCallback(async (fields) => {
+    const data = await authApi.register(fields);
     tokenStore.set(data.access_token, data.refresh_token);
     setMustChangePassword(!!data.must_change_password);
     const profile = await authApi.me();
@@ -78,19 +90,26 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const value = useMemo(
-    () => ({
+  const value = useMemo(() => {
+    const role = user?.role;
+    // Role flags mirror the backend hierarchy (see lib/roles.js): a higher role
+    // always satisfies a lower-role check. Legacy role strings are normalized.
+    const admin = isOrgAdmin(role);
+    return {
       user,
       isAuthenticated: !!user,
-      isAdmin: user?.role === 'admin',
+      isAdmin: admin,
+      isPlatformAdmin: isPlatformAdmin(role),
+      isManager: isManager(role),
+      canManageOrg: admin,
       mustChangePassword,
       loading,
       login,
+      register,
       logout,
       changePassword,
-    }),
-    [user, mustChangePassword, loading, login, logout, changePassword]
-  );
+    };
+  }, [user, mustChangePassword, loading, login, register, logout, changePassword]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

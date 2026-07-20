@@ -8,6 +8,22 @@ export const authApi = {
       .post('/auth/login', { email, password }, { _skipAuthRefresh: true })
       .then((r) => r.data),
 
+  // Public self-service sign-up: creates an organization + its first admin and
+  // returns the same token payload as login.
+  register: ({ orgName, adminEmail, password, adminName }) =>
+    api
+      .post(
+        '/auth/register',
+        {
+          org_name: orgName,
+          admin_email: adminEmail,
+          password,
+          ...(adminName ? { admin_name: adminName } : {}),
+        },
+        { _skipAuthRefresh: true },
+      )
+      .then((r) => r.data),
+
   refresh: (refreshToken) =>
     api
       .post('/auth/refresh', { refresh_token: refreshToken }, { _skipAuthRefresh: true })

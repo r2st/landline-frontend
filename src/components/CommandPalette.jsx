@@ -29,6 +29,7 @@ import {
   Radar,
   Stethoscope,
   Gauge,
+  Ear,
   MailCheck,
   PenLine,
   Globe,
@@ -37,6 +38,7 @@ import {
   Beaker,
   Clock,
   ShieldCheck,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -66,10 +68,13 @@ const COMMANDS = [
   { id: 'dialtone-console', label: 'Dialtone Console', hint: 'Live activity log for the cold-email agent', icon: Radio, to: '/dialtone', keywords: 'dialtone console activity log live realtime agent emails opens clicks replies bounces errors leads warmup engagement feed' },
   { id: 'dialtone-health', label: 'Deliverability Health', hint: 'Danger signals & auto-pause', icon: Stethoscope, to: '/dialtone/health', keywords: 'dialtone health danger signals auto-pause paused resume bounce complaint rate threshold breach warn kill switch halted trip incident deliverability' },
   { id: 'sender-health', label: 'Sender Health', hint: 'Per-account reputation, bounce & throttle', icon: Gauge, to: '/dialtone/senders', keywords: 'sender health reputation score bounce complaint rate throttle factor mailbox account gmail smtp deliverability degrading recovering trend per-account senders' },
+  { id: 'social-listening', label: 'Social Listening Agent', hint: 'Public buying-intent signals → warm leads', icon: Ear, to: '/agents/social-listening', keywords: 'social listening agent signals buying intent funding expansion leadership change product launch hiring job posting news warm lead monitor company relevance dialtone enroll llm openrouter' },
   { id: 'dialtone-inbox', label: 'Dialtone Replies', hint: 'Cold-email replies, triaged by intent', icon: MailCheck, to: '/dialtone/inbox', keywords: 'dialtone replies inbox interested hot lead classified intent priority unread reclassify out of office unsubscribe wrong person draft suggested' },
   { id: 'dialtone-drafts', label: 'AI Draft Review', hint: 'Approve AI-composed first touches', icon: PenLine, to: '/dialtone/drafts', keywords: 'ai drafts review queue approve reject compose first touch generated copy static template pending gate' },
   { id: 'dialtone-ab-tests', label: 'A/B Test Results', hint: 'Variant open/click/reply rates & winners', icon: Beaker, to: '/dialtone/ab-tests', keywords: 'ab a/b test experiment variant subject body open rate click reply rate winner declare significance chi-squared confidence split bandit results dashboard' },
   { id: 'dialtone-send-timing', label: 'Send-Time Optimization', hint: 'Optimized vs control lift, best times & per-contact windows', icon: Clock, to: '/dialtone/send-timing', keywords: 'send time timing optimization optimizer optimal window schedule best day hour heatmap experiment optimized control arm lift open rate reply rate z-test confidence significance timezone contact profile when to send' },
+  { id: 'dialtone-policies', label: 'Orchestration Policies', hint: 'Cadence limits, channels & human-review guardrails', icon: SlidersHorizontal, to: '/dialtone/policies', keywords: 'orchestration policy policies guardrails cadence max daily total touches min hours between channels allowed required email linkedin phone human review triggers pricing objection referral legal enrollment mode manual assisted autonomous active paused autonomous engine rules conditions' },
+  { id: 'deal-agent', label: 'Deal Progression Agent', hint: 'Nudges stalled deals: follow-ups, suggestions & escalations', icon: GitBranch, to: '/agents/deals', keywords: 'deal progression agent stalled pipeline nudge follow-up followup suggestion next best action stage advance auto-advance escalation at-risk at risk manager review approve dismiss thresholds staleness autonomous' },
   { id: 'icp', label: 'Ideal Customer Profile', hint: 'What every fit score is judged against', icon: Target, to: '/dialtone/icp', keywords: 'icp ideal customer profile weights industry size location exclusions scoring rubric fit learn relearn pin tune target' },
   { id: 'places-discovery', label: 'Places Discovery', hint: 'Find SMBs by category & location', icon: MapPin, to: '/dialtone/discovery', keywords: 'google places smb discovery search local business category location import staged results funnel india manufacturers' },
   { id: 'domain-health', label: 'Domain Health', hint: 'SPF, DKIM & DMARC per sending domain', icon: Globe, to: '/deliverability/domains', keywords: 'domain health spf dkim dmarc authentication blacklist dnsbl spamhaus sending domains recheck deliverability' },
@@ -77,6 +82,9 @@ const COMMANDS = [
   { id: 'knowledge', label: 'Knowledge Base', hint: 'Contacts, guidelines & strategy', icon: BookOpen, to: '/knowledge', keywords: 'guidelines strategy industry playbook docs ai config contacts' },
   { id: 'gdpr', label: 'GDPR Data Requests', hint: 'Export or erase a contact by email', icon: ShieldCheck, to: '/gdpr', keywords: 'gdpr data subject request export erasure erase delete right to access right to be forgotten privacy compliance contact email dsar' },
   { id: 'investors', label: 'Go to Investors', hint: 'Fundraising pipeline & investor CRM', icon: Landmark, to: '/investors', keywords: 'investor fundraise fundraising vc venture capital pipeline funnel seed series check raise' },
+  { id: 'org-settings', label: 'Organization Settings', hint: 'Name, branding, plan & config', icon: Building2, to: '/settings/organization', keywords: 'organization org settings name industry branding logo billing plan config jsonb white-label tenant' },
+  { id: 'org-team', label: 'Team Management', hint: 'Members, roles & invites', icon: Users, to: '/settings/team', keywords: 'team members users roles invite remove admin manager agent org organization seats' },
+  { id: 'org-usage', label: 'Usage Dashboard', hint: 'Contacts, emails & AI usage', icon: BarChart3, to: '/settings/usage', keywords: 'usage stats contacts emails sent ai calls limit billing quota trends charts organization org' },
 ];
 
 function scoreMatch(text, q) {

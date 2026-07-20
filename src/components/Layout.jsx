@@ -43,13 +43,22 @@ import {
   Target,
   Beaker,
   Clock,
+  Ear,
+  SlidersHorizontal,
   ShieldCheck,
+  Bot,
+  HeartHandshake,
+  UserPlus,
+  CalendarCheck,
+  ShieldOff,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import CommandPalette from './CommandPalette';
 import ViewAsSwitcher from './ViewAsSwitcher';
+import OrgSwitcher from './OrgSwitcher';
+import ImpersonationBanner from './ImpersonationBanner';
 import Logo, { LogoMark } from './Logo';
 
 // Sidebar navigation, grouped to match a salesperson's daily flow:
@@ -82,12 +91,26 @@ const navSections = [
       { name: 'AI Drafts', href: '/dialtone/drafts', icon: PenLine },
       { name: 'A/B Tests', href: '/dialtone/ab-tests', icon: Beaker },
       { name: 'Send Timing', href: '/dialtone/send-timing', icon: Clock },
+      { name: 'Policies', href: '/dialtone/policies', icon: SlidersHorizontal },
       { name: 'Prospecting', href: '/prospecting', icon: Radar },
+      { name: 'Social Listening', href: '/agents/social-listening', icon: Ear },
       { name: 'ICP', href: '/dialtone/icp', icon: Target },
       { name: 'Places Discovery', href: '/dialtone/discovery', icon: MapPin },
       { name: 'Health', href: '/dialtone/health', icon: Stethoscope },
       { name: 'Senders', href: '/dialtone/senders', icon: Gauge },
+      { name: 'Suppression', href: '/dialtone/suppression', icon: ShieldOff },
       { name: 'Domains', href: '/deliverability/domains', icon: Globe },
+    ],
+  },
+  {
+    // Autonomous agents that act on their own within guardrails.
+    key: 'agents',
+    label: 'Agents',
+    items: [
+      { name: 'Meeting Booking', href: '/agents/booking', icon: CalendarCheck },
+      { name: 'Deal Progression', href: '/agents/deals', icon: Bot },
+      { name: 'Client Success', href: '/agents/client-success', icon: HeartHandshake },
+      { name: 'Referrals', href: '/agents/referrals', icon: UserPlus },
     ],
   },
   {
@@ -143,9 +166,23 @@ const navSections = [
   },
 ];
 
+// Platform admin section — cross-org management, shown only to platform_admin
+// users (SaaS Phase 2). Prepended to the nav so the "god view" sits at the top.
+const platformSection = {
+  key: 'platform',
+  label: 'Platform',
+  items: [
+    { name: 'Organizations', href: '/platform', icon: ShieldCheck, end: true },
+  ],
+};
+
 // Flatten all nav items for finding current page name
 const allNavItems = [
   ...navSections.flatMap(s => s.items),
+  { name: 'Organization', href: '/settings/organization', icon: Building2 },
+  { name: 'Team', href: '/settings/team', icon: Users },
+  { name: 'Usage', href: '/settings/usage', icon: BarChart3 },
+  ...platformSection.items,
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -153,7 +190,12 @@ const NAV_PREFS_KEY = 'landline.nav.collapsedSections';
 
 export default function Layout({ children }) {
   const location = useLocation();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, isPlatformAdmin, logout } = useAuth();
+  // Platform admins get an extra top-level nav section for cross-org management.
+  const sections = useMemo(
+    () => (isPlatformAdmin ? [platformSection, ...navSections] : navSections),
+    [isPlatformAdmin]
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -189,7 +231,7 @@ export default function Layout({ children }) {
   // Always reveal the section that owns the current route so the active page is
   // never hidden inside a collapsed group (e.g. after a command-palette jump).
   useEffect(() => {
-    const active = navSections.find((s) =>
+    const active = sections.find((s) =>
       s.items.some((it) => isActivePath(it.href, it.end))
     );
     if (active && collapsed[active.key]) {
@@ -261,7 +303,7 @@ export default function Layout({ children }) {
     if (path === '/settings') {
       return [{ label: 'Workspace' }, { label: 'Settings', href: '/settings' }];
     }
-    for (const section of navSections) {
+    for (const section of sections) {
       const item = section.items.find((it) => isActivePath(it.href, it.end));
       if (item) {
         return [{ label: section.label }, { label: item.name, href: item.href }];
@@ -330,7 +372,7 @@ export default function Layout({ children }) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {navSections.map((section) => {
+        {sections.map((section) => {
           const isCollapsed = !!collapsed[section.key];
           const hasActive = section.items.some((it) => isActivePath(it.href, it.end));
           const sectionHasBadge =
@@ -378,7 +420,10 @@ export default function Layout({ children }) {
       </nav>
 
       <div className="border-t border-gray-200 px-3 py-3">
-        <NavLink item={{ name: 'Settings', href: '/settings', icon: Settings }} />
+        <NavLink item={{ name: 'Settings', href: '/settings', icon: Settings, end: true }} />
+        <NavLink item={{ name: 'Organization', href: '/settings/organization', icon: Building2 }} />
+        <NavLink item={{ name: 'Team', href: '/settings/team', icon: Users }} />
+        <NavLink item={{ name: 'Usage', href: '/settings/usage', icon: BarChart3 }} />
         {isAdmin && (
           <NavLink item={{ name: 'Users', href: '/admin/users', icon: UserCog }} />
         )}
@@ -460,6 +505,8 @@ export default function Layout({ children }) {
 
       {/* Main content */}
       <main className="pt-14 lg:pt-0 lg:pl-60">
+        {/* Platform-admin impersonation banner (only while "viewing as" an org). */}
+        <ImpersonationBanner />
         {/* Desktop top utility bar */}
         <header className="sticky top-0 z-20 hidden h-14 items-center gap-4 border-b border-gray-200 bg-white/80 px-8 backdrop-blur lg:flex">
           <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -493,6 +540,7 @@ export default function Layout({ children }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-2">
+            <OrgSwitcher />
             <ViewAsSwitcher />
             <button
               type="button"

@@ -6,9 +6,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Mock the data hooks so the page renders deterministically without a backend.
 const mockConsole = vi.fn();
 const mockActivity = vi.fn();
+const mockPhone = vi.fn();
 vi.mock('../hooks/useDialtone', () => ({
   useDialtoneConsole: (...a) => mockConsole(...a),
   useDialtoneActivity: (...a) => mockActivity(...a),
+  usePhoneEnrichment: (...a) => mockPhone(...a),
 }));
 
 // The embedded SendingKillSwitch banner fetches sending status on mount, and
@@ -75,6 +77,14 @@ describe('DialtoneConsole page', () => {
   beforeEach(() => {
     mockConsole.mockReturnValue({ data: CONSOLE, isLoading: false, refetch: vi.fn(), isFetching: false });
     mockActivity.mockReturnValue({ data: FEED, isLoading: false });
+    mockPhone.mockReturnValue({
+      data: {
+        enriched: 12, attempts: 20, hit_rate: 0.6, apollo: 9, company: 3,
+        recent: [
+          { contact_id: 'c-9', contact_name: 'Rita Vance', company_name: 'Vance Tooling', phone: '216-555-7777', source: 'apollo', source_label: 'direct dial', enriched_at: '2026-07-15T09:00:00Z' },
+        ],
+      },
+    });
   });
 
   it('renders the console header, warm-up progress and today tallies', () => {
@@ -93,6 +103,27 @@ describe('DialtoneConsole page', () => {
     expect(screen.getByText('Email sent to John Smith')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe replied')).toBeInTheDocument();
     expect(screen.getByText('john@acme.com')).toBeInTheDocument();
+  });
+
+  it('renders the phone-enrichment summary card with hit rate and source split', () => {
+    renderPage();
+    expect(screen.getByText('Phone enrichment')).toBeInTheDocument();
+    // Hit rate 0.6 → 60%.
+    expect(screen.getByText('60')).toBeInTheDocument();
+    // Source split labels + counts. "Direct dial" appears both as the split
+    // label and on the recent row's chip, so allow multiples.
+    expect(screen.getAllByText(/Direct dial/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Company line/i)).toBeInTheDocument();
+    // Recent find surfaced.
+    expect(screen.getByText('Rita Vance')).toBeInTheDocument();
+  });
+
+  it('shows the enrichment card empty state when nothing is enriched', () => {
+    mockPhone.mockReturnValue({
+      data: { enriched: 0, attempts: 0, hit_rate: 0, apollo: 0, company: 0, recent: [] },
+    });
+    renderPage();
+    expect(screen.getByText(/no numbers found yet/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when the feed is empty', () => {

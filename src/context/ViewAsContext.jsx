@@ -9,11 +9,10 @@ import React, {
 import { authApi } from '../api/auth';
 import { queryClient } from '../api/client';
 import { viewAsStore } from '../api/viewAs';
+import { isManager } from '../lib/roles';
 import { useAuth } from './AuthContext';
 
 const ViewAsContext = createContext(null);
-
-const PRIVILEGED_ROLES = ['admin', 'manager'];
 
 /**
  * Owns the admin/manager "View as" selection.
@@ -25,7 +24,9 @@ const PRIVILEGED_ROLES = ['admin', 'manager'];
  */
 export function ViewAsProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
-  const isPrivileged = !!user && PRIVILEGED_ROLES.includes(user.role);
+  // Managers and above (org_manager, org_admin, platform_admin) can "View as"
+  // other team members; agents only ever see their own data.
+  const isPrivileged = !!user && isManager(user.role);
 
   // `null` = own data, 'all' = everyone, or a user id string.
   const [viewAs, setViewAsState] = useState(() => viewAsStore.get());

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { contactsApi, queryClient } from '../api/client';
 import { getInitials, contactPhones, formatDate, phonesToPayload } from '../lib/utils';
+import ContactSendTiming from './ContactSendTiming';
 
 const fullName = (c) =>
   [c?.first_name, c?.last_name].filter(Boolean).join(' ').trim() || c?.email || 'Unknown';
@@ -262,6 +263,7 @@ export default function ContactDetailModal({ contactId, initial, onClose, embedd
                   )}
                 </div>
               </div>
+              <ContactSendTiming contactId={contactId} />
             </div>
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Card Image</p>
@@ -502,6 +504,9 @@ export default function ContactDetailModal({ contactId, initial, onClose, embedd
                   )}
                 </div>
               </div>
+
+              {/* Smart Send-Time — when this contact is most likely to open. */}
+              <ContactSendTiming contactId={contactId} />
             </div>
 
             {/* Right: scanned card image */}

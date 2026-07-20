@@ -32,9 +32,13 @@ const Icp = lazy(() => import('./pages/Icp'));
 const DialtoneInbox = lazy(() => import('./pages/DialtoneInbox'));
 const DialtoneAbTests = lazy(() => import('./pages/DialtoneAbTests'));
 const DialtoneSendTiming = lazy(() => import('./pages/DialtoneSendTiming'));
+const DialtonePolicies = lazy(() => import('./pages/DialtonePolicies'));
 const AiDrafts = lazy(() => import('./pages/AiDrafts'));
+const ReferralAgent = lazy(() => import('./pages/ReferralAgent'));
 const DomainHealth = lazy(() => import('./pages/DomainHealth'));
 const SenderHealth = lazy(() => import('./pages/SenderHealth'));
+const SocialListening = lazy(() => import('./pages/SocialListening'));
+const DialtoneSuppression = lazy(() => import('./pages/DialtoneSuppression'));
 const PlacesDiscovery = lazy(() => import('./pages/PlacesDiscovery'));
 const Inbox = lazy(() => import('./pages/Inbox'));
 const UnifiedInbox = lazy(() => import('./pages/UnifiedInbox'));
@@ -43,10 +47,19 @@ const Calls = lazy(() => import('./pages/Calls'));
 const Investors = lazy(() => import('./pages/Investors'));
 const InvestorDetail = lazy(() => import('./pages/InvestorDetail'));
 const SentimentDashboard = lazy(() => import('./pages/SentimentDashboard'));
+const DealAgent = lazy(() => import('./pages/DealAgent'));
 const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const GdprControls = lazy(() => import('./pages/GdprControls'));
+const OrganizationSettings = lazy(() => import('./pages/OrganizationSettings'));
+const TeamManagement = lazy(() => import('./pages/TeamManagement'));
+const UsageDashboard = lazy(() => import('./pages/UsageDashboard'));
+const ClientSuccessAgent = lazy(() => import('./pages/ClientSuccessAgent'));
+const BookingAgent = lazy(() => import('./pages/BookingAgent'));
+const Platform = lazy(() => import('./pages/Platform'));
+const PlatformOrganizationDetail = lazy(() => import('./pages/PlatformOrganizationDetail'));
 
 function NotFound() {
   return (
@@ -91,6 +104,7 @@ export default function App() {
       <Routes>
         {/* Public / auth routes — rendered without the app layout. */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route
           path="/change-password"
           element={
@@ -116,6 +130,9 @@ export default function App() {
           <Route path="/groups" element={<Groups />} />
           <Route path="/news" element={<NewsFeed />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/organization" element={<OrganizationSettings />} />
+          <Route path="/settings/team" element={<TeamManagement />} />
+          <Route path="/settings/usage" element={<UsageDashboard />} />
           <Route path="/demos" element={<Demos />} />
           <Route path="/scan" element={<CardScanner />} />
           <Route path="/contacts" element={<Contacts />} />
@@ -127,12 +144,18 @@ export default function App() {
           <Route path="/dialtone" element={<DialtoneConsole />} />
           <Route path="/dialtone/health" element={<DialtoneHealth />} />
           <Route path="/dialtone/senders" element={<SenderHealth />} />
+          <Route path="/dialtone/suppression" element={<DialtoneSuppression />} />
           <Route path="/dialtone/icp" element={<Icp />} />
           <Route path="/dialtone/inbox" element={<DialtoneInbox />} />
           <Route path="/dialtone/ab-tests" element={<DialtoneAbTests />} />
           <Route path="/dialtone/send-timing" element={<DialtoneSendTiming />} />
+          <Route path="/dialtone/policies" element={<DialtonePolicies />} />
           <Route path="/dialtone/drafts" element={<AiDrafts />} />
           <Route path="/dialtone/discovery" element={<PlacesDiscovery />} />
+          <Route path="/agents/booking" element={<BookingAgent />} />
+          <Route path="/agents/client-success" element={<ClientSuccessAgent />} />
+          <Route path="/agents/referrals" element={<ReferralAgent />} />
+          <Route path="/agents/social-listening" element={<SocialListening />} />
           <Route path="/deliverability/domains" element={<DomainHealth />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/unified-inbox" element={<UnifiedInbox />} />
@@ -142,11 +165,29 @@ export default function App() {
           <Route path="/investors" element={<Investors />} />
           <Route path="/investors/:id" element={<InvestorDetail />} />
           <Route path="/sentiment" element={<SentimentDashboard />} />
+          <Route path="/agents/deals" element={<DealAgent />} />
           <Route
             path="/admin/users"
             element={
-              <ProtectedRoute requireRole="admin">
+              <ProtectedRoute requireRole="org_admin">
                 <AdminUsers />
+              </ProtectedRoute>
+            }
+          />
+          {/* Platform Admin (SaaS Phase 2) — platform_admin role only. */}
+          <Route
+            path="/platform"
+            element={
+              <ProtectedRoute requireRole="platform_admin">
+                <Platform />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/platform/organizations/:id"
+            element={
+              <ProtectedRoute requireRole="platform_admin">
+                <PlatformOrganizationDetail />
               </ProtectedRoute>
             }
           />

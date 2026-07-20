@@ -26,8 +26,13 @@ import {
   AlertTriangle,
   DollarSign,
 } from 'lucide-react';
+import {
+  Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis,
+} from 'recharts';
 import EmptyState from '../components/EmptyState';
-import { useSequences, useCreateSequence, useUpdateSequenceStatus, useDeleteSequence } from '../hooks/useOutreach';
+import {
+  useSequences, useCreateSequence, useUpdateSequenceStatus, useDeleteSequence, useSequenceAnalytics,
+} from '../hooks/useOutreach';
 import { useDealAttribution } from '../hooks/useDeals';
 import { formatNumber, cn } from '../lib/utils';
 
@@ -680,8 +685,172 @@ function SequenceCard({ sequence, onDuplicate, onDelete, isBestPerformer }) {
 
           {/* Enrollment dashboard */}
           <EnrollmentSection enrolledCount={enrolledCount} />
+
+          {/* Per-step funnel analytics (Feature 4) — fetched lazily on expand. */}
+          <SequenceAnalyticsSection sequenceId={sequence.id} enabled={expanded} />
         </>
       )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  SequenceAnalyticsSection -- per-step funnel + conversion (Feature 4)       */
+/* -------------------------------------------------------------------------- */
+
+function pct(fraction) {
+  return `${(safeNum(fraction) * 100).toFixed(1)}%`;
+}
+
+function SequenceAnalyticsSection({ sequenceId, enabled }) {
+  const { data, isLoading, isError } = useSequenceAnalytics(sequenceId, enabled);
+
+  if (isLoading) {
+    return (
+      <div className="border-t border-gray-100 px-5 py-6 text-sm text-gray-400">
+        Loading analytics…
+      </div>
+    );
+  }
+  if (isError || !data) {
+    return (
+      <div className="border-t border-gray-100 px-5 py-4 text-sm text-gray-400">
+        Analytics couldn't load for this sequence.
+      </div>
+    );
+  }
+
+  const steps = Array.isArray(data.steps) ? data.steps : [];
+  // Funnel data: the "reach" at each step is that step's sent count, with the
+  // engagement it produced layered on. Drop-off is sent[n] vs sent[n-1].
+  const funnel = steps.map((s, i) => {
+    const prevSent = i > 0 ? safeNum(steps[i - 1].sent) : null;
+    const dropOff = prevSent && prevSent > 0
+      ? Math.max(0, 1 - safeNum(s.sent) / prevSent)
+      : null;
+    return {
+      name: `Step ${s.step_number}`,
+      sent: safeNum(s.sent),
+      opened: safeNum(s.opened),
+      replied: safeNum(s.replied),
+      dropOff,
+      step: s,
+    };
+  });
+
+  const anyActivity = funnel.some((f) => f.sent > 0);
+
+  return (
+    <div className="space-y-5 border-t border-gray-100 bg-gray-50/50 px-5 py-4">
+      <div className="flex items-center gap-2">
+        <BarChart3 className="h-4 w-4 text-indigo-500" />
+        <h4 className="text-sm font-semibold text-gray-700">Analytics</h4>
+      </div>
+
+      {/* Outcome tiles */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <AnalyticsTile label="Enrolled" value={formatNumber(data.total_enrollments)} />
+        <AnalyticsTile label="Replied" value={formatNumber(data.replied_enrollments)} />
+        <AnalyticsTile label="Deals" value={formatNumber(data.deals_attributed)} />
+        <AnalyticsTile
+          label="Conversion"
+          value={pct(data.conversion_rate)}
+          hint="enrolled → deal"
+          highlight
+        />
+      </div>
+
+      {!anyActivity ? (
+        <p className="rounded-lg border border-dashed border-gray-200 bg-white px-3 py-4 text-center text-sm text-gray-400">
+          No sends yet — the funnel fills in once this sequence starts delivering.
+        </p>
+      ) : (
+        <>
+          {/* Funnel: sends per step, drop-off between steps. */}
+          <div>
+            <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Funnel — sends per step
+            </h5>
+            <div className="h-48 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={funnel} margin={{ top: 16, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <RTooltip contentStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="sent" radius={[4, 4, 0, 0]} name="Sent">
+                    {funnel.map((f, i) => (
+                      <Cell key={f.name} fill={i === 0 ? '#4338ca' : '#6366f1'} />
+                    ))}
+                    <LabelList dataKey="sent" position="top" style={{ fontSize: 11, fill: '#6b7280' }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Per-step rate table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-400">
+                  <th className="py-2 pr-3 font-medium">Step</th>
+                  <th className="px-3 py-2 font-medium">Sent</th>
+                  <th className="px-3 py-2 font-medium">Open</th>
+                  <th className="px-3 py-2 font-medium">Click</th>
+                  <th className="px-3 py-2 font-medium">Reply</th>
+                  <th className="px-3 py-2 font-medium">Bounce</th>
+                  <th className="px-3 py-2 font-medium">Drop-off</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.map((f) => (
+                  <tr key={f.name} className="border-b border-gray-100 last:border-0">
+                    <td className="py-2 pr-3 font-medium text-gray-800">
+                      {f.name}
+                      {f.step.label && (
+                        <span className="ml-1.5 text-xs font-normal text-gray-400">
+                          · {f.step.label}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums text-gray-700">{formatNumber(f.sent)}</td>
+                    <td className="px-3 py-2 tabular-nums text-gray-700">{pct(f.step.open_rate)}</td>
+                    <td className="px-3 py-2 tabular-nums text-gray-700">{pct(f.step.click_rate)}</td>
+                    <td className="px-3 py-2 tabular-nums text-gray-700">{pct(f.step.reply_rate)}</td>
+                    <td className={cn(
+                      'px-3 py-2 tabular-nums',
+                      safeNum(f.step.bounce_rate) > 0 ? 'text-red-600' : 'text-gray-700'
+                    )}>
+                      {pct(f.step.bounce_rate)}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums text-gray-500">
+                      {f.dropOff == null ? '—' : pct(f.dropOff)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AnalyticsTile({ label, value, hint, highlight }) {
+  return (
+    <div
+      className={cn(
+        'rounded-lg border p-3',
+        highlight ? 'border-indigo-200 bg-indigo-50/60' : 'border-gray-200 bg-white'
+      )}
+    >
+      <div className={cn('text-lg font-bold tabular-nums', highlight ? 'text-indigo-700' : 'text-gray-900')}>
+        {value}
+      </div>
+      <div className="text-[11px] uppercase tracking-wide text-gray-400">{label}</div>
+      {hint && <div className="text-[10px] text-gray-400">{hint}</div>}
     </div>
   );
 }

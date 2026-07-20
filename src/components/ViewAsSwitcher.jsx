@@ -1,6 +1,7 @@
 import React from 'react';
 import { Eye } from 'lucide-react';
 import { useViewAs } from '../context/ViewAsContext';
+import { ROLES, ROLE_LABEL, normalizeRole } from '../lib/roles';
 
 /**
  * Admin/manager "View as" switcher. Lets a privileged user scope every
@@ -36,12 +37,16 @@ export default function ViewAsSwitcher() {
         <option value="">My data</option>
         <option value="all">All users</option>
         {members.length > 0 && <option disabled>──────────</option>}
-        {members.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name || m.email}
-            {m.role && m.role !== 'agent' ? ` (${m.role})` : ''}
-          </option>
-        ))}
+        {members.map((m) => {
+          const role = normalizeRole(m.role);
+          // Only annotate elevated roles; a plain agent needs no suffix.
+          const suffix = role && role !== ROLES.ORG_AGENT ? ` (${ROLE_LABEL[role] || role})` : '';
+          return (
+            <option key={m.id} value={m.id}>
+              {(m.name || m.email) + suffix}
+            </option>
+          );
+        })}
       </select>
     </label>
   );

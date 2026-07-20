@@ -23,6 +23,24 @@ export function useDialtoneConsole() {
   });
 }
 
+// Warm-lead phone-enrichment roll-up for the Console card. Degrades to a safe
+// zeroed shape so the card renders "nothing enriched yet" rather than blanking
+// out when the backend isn't ready.
+export function usePhoneEnrichment(recentLimit = 8) {
+  return useQuery({
+    queryKey: ['dialtone-phone-enrichment', recentLimit],
+    queryFn: async () => {
+      try {
+        return await dialtoneApi.phoneEnrichment(recentLimit);
+      } catch {
+        return { enriched: 0, attempts: 0, hit_rate: 0, apollo: 0, company: 0, recent: [] };
+      }
+    },
+    refetchInterval: 60000,
+    retry: false,
+  });
+}
+
 // Dialtone activity feed. `filters` is passed straight through as query params
 // ({ start, end, types, status, contact_id, q, page, page_size }). Degrades to
 // an empty feed so the page always renders.
@@ -49,6 +67,7 @@ export function useDialtoneActivity(filters) {
 }
 
 // ── Smart Send-Time Optimization (Feature 6) ─────────────────────────────────
+// ── Smart Send-Time Optimization (Feature 6) ─────────────────────────
 // Each hook degrades to a safe empty/off shape so the results page always
 // renders — even before the backend ships or when the optimizer has no data.
 

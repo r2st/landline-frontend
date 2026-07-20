@@ -269,4 +269,49 @@ describe('DialtoneInbox page', () => {
     renderPage();
     expect(await screen.findByText(/no replies here/i)).toBeInTheDocument();
   });
+
+  it('shows the bounce breakdown with diagnostic codes for a bounce reply', async () => {
+    const user = userEvent.setup();
+    const BOUNCE = {
+      ...OOO,
+      id: 'r3',
+      reply_classification: 'bounce',
+      from_email: 'mailer-daemon@googlemail.com',
+      subject: 'Delivery Status Notification (Failure)',
+    };
+    mockInbox.mockResolvedValue({ items: [BOUNCE], total: 1, page: 1, page_size: 50 });
+    mockDetail.mockResolvedValue({
+      ...BOUNCE,
+      body_text: 'Your message could not be delivered.',
+      bounce: {
+        category: 'hard',
+        status_code: '5.1.1',
+        diagnostic: '550 5.1.1 The email account that you tried to reach does not exist.',
+        recipient: 'sam@woodcraft.com',
+        bounce_count: 1,
+        last_bounced_at: '2026-07-16T10:00:00Z',
+        suppressed: true,
+      },
+    });
+    renderPage();
+    await user.click(await screen.findByText('Sam Ellis'));
+
+    const drawer = within(await screen.findByRole('dialog', { name: /reply detail/i }));
+    expect(await drawer.findByText(/delivery failed/i)).toBeInTheDocument();
+    // Hard-bounce category is surfaced as a chip.
+    expect(drawer.getByText(/hard bounce/i)).toBeInTheDocument();
+    // The DSN status + diagnostic codes are shown verbatim.
+    expect(drawer.getByText('5.1.1')).toBeInTheDocument();
+    expect(drawer.getByText(/does not exist/i)).toBeInTheDocument();
+    expect(drawer.getByText('sam@woodcraft.com')).toBeInTheDocument();
+  });
+
+  it('does not show a bounce breakdown for a non-bounce reply', async () => {
+    const user = userEvent.setup();
+    mockDetail.mockResolvedValue({ ...HOT, body_text: 'Interested!', bounce: null });
+    renderPage();
+    await user.click(await screen.findByText('Dana Reed'));
+    await screen.findByText('Interested!');
+    expect(screen.queryByText(/delivery failed/i)).not.toBeInTheDocument();
+  });
 });

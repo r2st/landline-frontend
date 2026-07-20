@@ -2,6 +2,7 @@ import axios from 'axios';
 import { QueryClient } from '@tanstack/react-query';
 import { tokenStore } from './authToken';
 import { viewAsStore } from './viewAs';
+import { impersonationStore } from './impersonation';
 
 const baseURL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
@@ -15,7 +16,13 @@ export const api = axios.create({
 // Attach auth to every request: a JWT bearer token when logged in, plus the
 // legacy VITE_API_KEY (kept for backward compatibility during the transition).
 api.interceptors.request.use((config) => {
-  const token = tokenStore.getAccess();
+  // Platform-admin impersonation wins: when "viewing as" an org, send that org
+  // user's scoped token so every read is naturally isolated to their org. The
+  // admin's own session stays intact in tokenStore for when they exit. Skipped
+  // for the impersonate call itself (marked _skipImpersonation) so a stale/expired
+  // impersonation token can't block minting a fresh one.
+  const impToken = config._skipImpersonation ? null : impersonationStore.getToken();
+  const token = impToken || tokenStore.getAccess();
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
   }
@@ -40,6 +47,41 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
     const status = error.response?.status;
+
+    // If an impersonation token has gone stale (401), drop back to the admin's
+    // own session rather than refreshing (there's no refresh token for the
+    // impersonated user) or logging the admin out. The next request runs as the
+    // platform admin again; the banner/context react to the cleared store.
+    if (
+      status === 401 &&
+      original &&
+      !original._skipImpersonation &&
+      impersonationStore.getToken()
+    ) {
+      impersonationStore.clear();
+      return Promise.reject(error);
+    }
+
+    // An organization (or account) deactivated mid-session makes the backend
+    // return 403 "…deactivated" on EVERY request. Left unhandled the user would
+    // sit on a wall of errors, so end the session and route back to login
+    // (which shows the deactivation message). Scoped to the deactivation detail
+    // so ordinary permission 403s (e.g. an agent hitting an admin route) are
+    // untouched. While impersonating, drop back to the admin's own session
+    // instead of logging the admin out.
+    if (
+      status === 403 &&
+      original &&
+      !original._skipAuthRefresh &&
+      /deactivated/i.test(error.response?.data?.detail || '')
+    ) {
+      if (impersonationStore.getToken()) {
+        impersonationStore.clear();
+      } else {
+        tokenStore.runLogout();
+      }
+      return Promise.reject(error);
+    }
 
     if (
       status === 401 &&
@@ -261,6 +303,16 @@ export const deliverabilityApi = {
     api.get('/deliverability/senders/history', { params: { days } }).then(r => r.data),
   // Re-assess every sending account now (recomputes reputation + throttle).
   assess: () => api.post('/deliverability/assess').then(r => r.data),
+  // Pre-send spam-filter risk scan for a draft. Returns
+  // { spam_score 0-100, risk: 'low'|'medium'|'high', issues[], suggestions[] }.
+  // `use_ai` blends a Claude assessment on top of the heuristics.
+  scanContent: ({ subject = '', body, hasUnsubscribe = true, useAi = false }) =>
+    api.post('/deliverability/scan-content', {
+      subject,
+      body,
+      has_unsubscribe: hasUnsubscribe,
+      use_ai: useAi,
+    }).then(r => r.data),
   domainAuth: (domain, dkimSelector) =>
     api.get('/deliverability/domain-auth', { params: { domain, dkim_selector: dkimSelector || undefined } }).then(r => r.data),
 };
@@ -375,6 +427,87 @@ export const dialtoneApi = {
   // Chronological event stream. `params` accepts { start, end, types, status,
   // contact_id, q, page, page_size }.
   activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
+  // Warm-lead phone-enrichment roll-up: { enriched, attempts, hit_rate,
+  // apollo, company, recent[] }. `recentLimit` caps the recent-activity strip.
+  phoneEnrichment: (recentLimit = 8) =>
+    api.get('/dialtone/phone-enrichment/summary', { params: { recent_limit: recentLimit } }).then(r => r.data),
+  // Warm-up plans (Feature 1): one per sending account, with today's usage.
+  // [{ account_id, account_type, account_email, current_day, daily_limit,
+  //    status, used_today, remaining_today, start_date }]
+  warmupPlans: () => api.get('/dialtone/warmup').then(r => r.data),
+  // Start a warm-up plan for a sender. `body` = { account_id, account_type?,
+  // start_date? }. 409 if the sender already has one.
+  createWarmupPlan: (body) => api.post('/dialtone/warmup', body).then(r => r.data),
+  // Suppression list (Feature 2). Paginated do-not-contact list; `params`
+  // accepts { q, page, page_size }.
+  suppressionList: (params) => api.get('/dialtone/suppression', { params }).then(r => r.data),
+  // Add one address by hand. `body` = { email, reason? }.
+  addSuppression: (body) => api.post('/dialtone/suppression', body).then(r => r.data),
+  // Bulk CSV/text upload. `reason` is the default for rows without one. Returns
+  // { added, duplicates, invalid, total }.
+  importSuppression: (file, reason = 'unsubscribe') => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/dialtone/suppression/import', form, {
+      params: { reason },
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+  deleteSuppression: (id) => api.delete(`/dialtone/suppression/${id}`).then(r => r.data),
+  // Per-sequence analytics (Feature 4): per-step funnel counts + rates and the
+  // enrolled → deal conversion rate.
+  sequenceAnalytics: (id) => api.get(`/dialtone/sequences/${id}/analytics`).then(r => r.data),
+};
+
+// Per-sender calendar booking config. A sender with no `booking_url` falls back
+// to the global `scheduling_link` (from systemApi.automation), so clearing the
+// URL is how you "reset to global". `account_id` is the same id the Sender
+// Health list (`/deliverability/senders`) returns.
+export const bookingApi = {
+  get: (accountId) => api.get(`/dialtone/senders/${accountId}/booking`).then(r => r.data),
+  // `body` = { booking_url?, booking_provider?, booking_auto_inject? }. An empty
+  // string clears the URL (resets to global). The URL is validated server-side
+  // (https + known-scheduler-host allowlist); a bad one returns 400.
+  set: (accountId, body) => api.put(`/dialtone/senders/${accountId}/booking`, body).then(r => r.data),
+};
+
+// Meeting Booking Agent — the autonomous scheduler that takes over once Dialtone
+// gets a positive reply: proposes calendar slots, handles the back-and-forth,
+// books the invite, and reminds. `config` is one row per org (lazily created);
+// config writes need org_admin. Distinct from `bookingApi` above, which is just
+// a per-sender scheduling *link* injected into follow-ups.
+export const meetingAgentApi = {
+  getConfig: () => api.get('/meeting-agent/config').then(r => r.data),
+  // `body` = subset of { is_active, calendar_account_id, default_meeting_duration_minutes,
+  // buffer_between_meetings_minutes, working_hours_start, working_hours_end, timezone,
+  // booking_window_days, max_daily_meetings, confirmation_template, reminder_template }.
+  updateConfig: (body) => api.put('/meeting-agent/config', body).then(r => r.data),
+  // `params` = { filter: all|upcoming|past, status, limit, offset }.
+  meetings: (params) => api.get('/meeting-agent/meetings', { params }).then(r => r.data),
+  meeting: (id) => api.get(`/meeting-agent/meetings/${id}`).then(r => r.data),
+  cancel: (id) => api.post(`/meeting-agent/meetings/${id}/cancel`).then(r => r.data),
+  stats: () => api.get('/meeting-agent/stats').then(r => r.data),
+};
+
+// Smart Send-Time Optimization (Feature 6) — read-only Console surfaces under
+// `/dialtone/send-timing`: the optimized-vs-control experiment, the global
+// day/hour heatmap, overall optimizer status, and top learned per-contact windows.
+export const sendTimingApi = {
+  // Optimized-vs-control arms: per-arm open/reply rates, lift, z-test confidence.
+  experiment: () => api.get('/dialtone/send-timing/experiment').then(r => r.data),
+  // Full (day-of-week, hour) grid of open rates for the heatmap.
+  heatmap: () => api.get('/dialtone/send-timing/heatmap').then(r => r.data),
+  // Overall status: enabled flag, config, and how many contacts have profiles.
+  status: () => api.get('/dialtone/send-timing/status').then(r => r.data),
+  // Top learned contacts (by opens) with their computed optimal send windows.
+  contacts: (limit = 20) =>
+    api.get('/dialtone/send-timing/contacts', { params: { limit } }).then(r => r.data),
+  // A single contact's resolved timezone, engagement profile, computed optimal
+  // window, and next optimal send slot. Returns { contact_id, email, timezone,
+  // tz_source, profile, window: { dow_preference[], hour_start, hour_end,
+  // confidence, source }, next_send_at }.
+  contact: (contactId) =>
+    api.get(`/dialtone/send-timing/contacts/${contactId}`).then(r => r.data),
 };
 
 // Smart Send-Time Optimization (Feature 6) — read-only Console surfaces under
@@ -404,6 +537,67 @@ export const abTestsApi = {
   // Operator override — declare a winner by variant id or label.
   declareWinner: (testId, body) =>
     api.post(`/dialtone/ab-tests/${testId}/declare-winner`, body).then(r => r.data),
+};
+
+// Platform Admin — cross-org management (platform_admin role only; SaaS Phase 2).
+// The god-view over every tenant: organization CRUD, platform-wide stats, and
+// impersonation to "view as" any org for debugging.
+export const platformApi = {
+  // Platform-wide roll-up: total/active orgs, total users, total emails sent.
+  stats: () => api.get('/platform/stats').then(r => r.data),
+  // Every organization with per-org user + usage counts. `active_only` narrows.
+  listOrganizations: (params) => api.get('/platform/organizations', { params }).then(r => r.data),
+  // One org's detail: config, branding, users, and usage stats.
+  getOrganization: (id) => api.get(`/platform/organizations/${id}`).then(r => r.data),
+  // Provision a new organization.
+  createOrganization: (body) => api.post('/platform/organizations', body).then(r => r.data),
+  // Update name / slug / plan / config / branding / active state.
+  updateOrganization: (id, body) => api.put(`/platform/organizations/${id}`, body).then(r => r.data),
+  // Soft-deactivate (is_active=False; data retained).
+  deactivateOrganization: (id) => api.delete(`/platform/organizations/${id}`).then(r => r.data),
+  // Mint a JWT scoped to a user's org+role for debugging. Marked so the request
+  // interceptor sends the ADMIN's token (never a stale impersonation token).
+  impersonate: (userId) =>
+    api.post(`/platform/impersonate/${userId}`, null, { _skipImpersonation: true }).then(r => r.data),
+  // Every platform_admin account, for the dashboard's admin roster.
+  listAdmins: () => api.get('/platform/admins').then(r => r.data),
+  // Elevate an existing user (by email) to platform_admin; clears their org.
+  promoteAdmin: (email) => api.post('/platform/promote-admin', { email }).then(r => r.data),
+  // Demote a platform_admin back to org_admin, reassigning them to `orgId`.
+  demoteAdmin: (userId, orgId) =>
+    api.post('/platform/demote-admin', { user_id: userId, org_id: orgId }).then(r => r.data),
+};
+
+// Orchestration policies (feature 2.2) — the guardrails the autonomous engine
+// runs within: cadence limits, allowed/required channels, human-review triggers.
+// A policy is either global (user_id null) or scoped to one rep. The list
+// endpoint returns a bare array; `setEnrollmentMode` flips one enrollment
+// between manual / assisted / autonomous.
+export const orchestrationApi = {
+  // All policies, newest-first. `active_only` narrows to live ones.
+  listPolicies: (params) => api.get('/orchestration/policies', { params }).then(r => r.data),
+  getPolicy: (id) => api.get(`/orchestration/policies/${id}`).then(r => r.data),
+  createPolicy: (data) => api.post('/orchestration/policies', data).then(r => r.data),
+  updatePolicy: (id, data) => api.patch(`/orchestration/policies/${id}`, data).then(r => r.data),
+  deletePolicy: (id) => api.delete(`/orchestration/policies/${id}`).then(r => r.data),
+  // Set an enrollment's orchestration mode: manual | assisted | autonomous.
+  setEnrollmentMode: (enrollmentId, mode) =>
+    api.post(`/orchestration/enrollments/${enrollmentId}/mode`, { mode }).then(r => r.data),
+};
+
+// Referral & Warm-Intro agent — config + ON/OFF toggle, the referral pipeline,
+// and the action queue (initial ask / follow-up / thank-you). All under
+// /referral-agent; config writes + action execution require org_admin.
+export const referralAgentApi = {
+  getConfig: () => api.get('/referral-agent/config').then(r => r.data),
+  updateConfig: (data) => api.put('/referral-agent/config', data).then(r => r.data),
+  listReferrals: (params) => api.get('/referral-agent/referrals', { params }).then(r => r.data),
+  createReferral: (data) => api.post('/referral-agent/referrals', data).then(r => r.data),
+  updateReferral: (id, data) => api.put(`/referral-agent/referrals/${id}`, data).then(r => r.data),
+  listActions: (params) => api.get('/referral-agent/actions', { params }).then(r => r.data),
+  approveAction: (id) => api.post(`/referral-agent/actions/${id}/approve`).then(r => r.data),
+  dismissAction: (id) => api.post(`/referral-agent/actions/${id}/dismiss`).then(r => r.data),
+  getStats: () => api.get('/referral-agent/stats').then(r => r.data),
 };
 
 // Autonomous prospecting — the agent sources companies, scores them against the
@@ -564,6 +758,23 @@ export const gdprApi = {
   erase: (email) => api.post(`/gdpr/erase/${encodeURIComponent(email)}`).then(r => r.data),
 };
 
+// --- Social Listening Agent ---
+// The buying-intent listening agent: config (with masked LLM key), the feed of
+// discovered signals, monitored companies, and stats. One config row per org
+// (resolved from the JWT), so no org_id is ever passed.
+export const socialListeningApi = {
+  getConfig: () => api.get('/social-listening-agent/config').then(r => r.data),
+  updateConfig: (data) => api.put('/social-listening-agent/config', data).then(r => r.data),
+  listSignals: (params) => api.get('/social-listening-agent/signals', { params }).then(r => r.data),
+  actionSignal: (id) => api.post(`/social-listening-agent/signals/${id}/action`).then(r => r.data),
+  dismissSignal: (id) => api.post(`/social-listening-agent/signals/${id}/dismiss`).then(r => r.data),
+  listMonitored: () => api.get('/social-listening-agent/monitored-companies').then(r => r.data),
+  addMonitored: (data) => api.post('/social-listening-agent/monitored-companies', data).then(r => r.data),
+  removeMonitored: (id) => api.delete(`/social-listening-agent/monitored-companies/${id}`).then(r => r.data),
+  getStats: () => api.get('/social-listening-agent/stats').then(r => r.data),
+  scanNow: () => api.post('/social-listening-agent/scan').then(r => r.data),
+};
+
 // --- Email Testing ---
 export const emailTestingApi = {
   getScenarios: () => api.get('/email-testing/scenarios'),
@@ -573,4 +784,41 @@ export const emailTestingApi = {
   getExchanges: (params) => api.get('/email-testing/exchanges', { params }),
   getExchange: (id) => api.get(`/email-testing/exchanges/${id}`),
   deleteExchange: (id) => api.delete(`/email-testing/exchanges/${id}`),
+};
+
+// --- Deal Progression Agent ---
+// Watches the pipeline and nudges stalled deals: drafts follow-ups, suggests
+// next steps, advances stages off signals, and escalates rotting deals.
+export const dealAgentApi = {
+  getConfig: () => api.get('/deal-agent/config').then(r => r.data),
+  updateConfig: (data) => api.put('/deal-agent/config', data).then(r => r.data),
+  listActions: (params) => api.get('/deal-agent/actions', { params }).then(r => r.data),
+  approveAction: (id) => api.post(`/deal-agent/actions/${id}/approve`).then(r => r.data),
+  dismissAction: (id) => api.post(`/deal-agent/actions/${id}/dismiss`).then(r => r.data),
+  stats: () => api.get('/deal-agent/stats').then(r => r.data),
+};
+
+// ─── Client Success Agent ────────────────────────────────────────────────────
+// The autonomous client-success agent: watches per-client health and enqueues
+// proactive plays (AI check-ins, escalations, review calls, celebrations). The
+// config carries the master on/off switch and the per-agent OpenRouter model +
+// key. The raw key is write-only — reads return only `llm_api_key_set` + a hint.
+export const clientSuccessAgentApi = {
+  // Current org's config (a default row is created on first read).
+  getConfig: () => api.get('/client-success-agent/config').then(r => r.data),
+  // Update config (org_admin). `llm_api_key`: omit to leave unchanged, '' to
+  // clear (fall back to the org key), any value to set. Sending `is_active`
+  // flips the master switch.
+  updateConfig: (body) => api.put('/client-success-agent/config', body).then(r => r.data),
+  // Action queue, newest-first. `params`: { action_type, status, contact_id,
+  // limit, offset }. Returns { actions, total }.
+  listActions: (params) => api.get('/client-success-agent/actions', { params }).then(r => r.data),
+  // Approve a pending action (sends the check-in / marks the play done).
+  approveAction: (id) => api.post(`/client-success-agent/actions/${id}/approve`).then(r => r.data),
+  // Dismiss a pending action (drops it from the queue).
+  dismissAction: (id) => api.post(`/client-success-agent/actions/${id}/dismiss`).then(r => r.data),
+  // Dashboard roll-up: clients monitored, check-ins sent, escalations, etc.
+  stats: () => api.get('/client-success-agent/stats').then(r => r.data),
+  // Clients sorted by current health (lowest first) with trend arrows.
+  healthOverview: (params) => api.get('/client-success-agent/health-overview', { params }).then(r => r.data),
 };

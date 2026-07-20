@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Loader2, Mail, Lock } from 'lucide-react';
 import Logo from '../components/Logo';
@@ -121,8 +121,11 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-gray-400">
-          Landline v1.0 &middot; Contact your administrator for access.
+        <p className="mt-6 text-center text-sm text-gray-500">
+          New here?{' '}
+          <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-700">
+            Create an organization
+          </Link>
         </p>
       </div>
     </div>

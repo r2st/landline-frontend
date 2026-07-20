@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const mockList = vi.fn();
 const mockApprove = vi.fn();
 const mockReject = vi.fn();
+const mockScanContent = vi.fn();
 vi.mock('../api/client', () => ({
   api: { get: vi.fn(), post: vi.fn() },
   queryClient: { invalidateQueries: vi.fn() },
@@ -13,6 +14,9 @@ vi.mock('../api/client', () => ({
     list: (...a) => mockList(...a),
     approve: (...a) => mockApprove(...a),
     reject: (...a) => mockReject(...a),
+  },
+  deliverabilityApi: {
+    scanContent: (...a) => mockScanContent(...a),
   },
 }));
 vi.mock('react-hot-toast', () => ({
@@ -52,6 +56,12 @@ describe('AiDrafts page', () => {
     mockList.mockResolvedValue([DRAFT]);
     mockApprove.mockResolvedValue({ ...DRAFT, status: 'approved' });
     mockReject.mockResolvedValue({ ...DRAFT, status: 'rejected' });
+    mockScanContent.mockResolvedValue({
+      spam_score: 60,
+      risk: 'high',
+      issues: ['spam-trigger phrases: free, guarantee', '4 exclamation marks'],
+      suggestions: ['Rephrase or remove salesy trigger phrases.'],
+    });
   });
 
   it('asks for the pending queue by default', async () => {
@@ -157,5 +167,55 @@ describe('AiDrafts page', () => {
 
     await user.click(screen.getByRole('button', { name: 'Approved' }));
     expect(mockList).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'approved' }));
+  });
+
+  it('scans the draft copy for spam risk on demand', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(DRAFT.subject);
+
+    // Nothing is scanned until the operator asks — checking is opt-in.
+    expect(mockScanContent).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /check spam risk/i }));
+    expect(mockScanContent).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: DRAFT.subject, body: DRAFT.body })
+    );
+  });
+
+  it('shows the risk band, score, and specific triggers inline', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(DRAFT.subject);
+
+    await user.click(screen.getByRole('button', { name: /check spam risk/i }));
+    expect(await screen.findByText(/high spam risk/i)).toBeInTheDocument();
+    expect(screen.getByText(/score 60\/100/i)).toBeInTheDocument();
+    // The exact triggers the scanner flagged, not just a band.
+    expect(screen.getByText(/spam-trigger phrases: free, guarantee/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 exclamation marks/i)).toBeInTheDocument();
+    expect(screen.getByText(/rephrase or remove salesy trigger phrases/i)).toBeInTheDocument();
+  });
+
+  it('says a clean draft is clean rather than showing an empty result', async () => {
+    const user = userEvent.setup();
+    mockScanContent.mockResolvedValue({
+      spam_score: 0, risk: 'low', issues: [], suggestions: [],
+    });
+    renderPage();
+    await screen.findByText(DRAFT.subject);
+
+    await user.click(screen.getByRole('button', { name: /check spam risk/i }));
+    expect(await screen.findByText(/low spam risk/i)).toBeInTheDocument();
+    expect(screen.getByText(/no spam triggers found/i)).toBeInTheDocument();
+  });
+
+  it('surfaces a failed scan instead of a silent no-op', async () => {
+    const user = userEvent.setup();
+    mockScanContent.mockRejectedValue(new Error('boom'));
+    renderPage();
+    await screen.findByText(DRAFT.subject);
+
+    await user.click(screen.getByRole('button', { name: /check spam risk/i }));
+    expect(await screen.findByText(/scan failed/i)).toBeInTheDocument();
   });
 });
