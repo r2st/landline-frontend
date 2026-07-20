@@ -9,6 +9,7 @@ const mockStats = vi.fn();
 const mockDetail = vi.fn();
 const mockReclassify = vi.fn();
 const mockMarkRead = vi.fn();
+const mockSend = vi.fn();
 vi.mock('../api/client', () => ({
   api: { get: vi.fn(), post: vi.fn() },
   queryClient: { invalidateQueries: vi.fn(), setQueryData: vi.fn() },
@@ -18,6 +19,9 @@ vi.mock('../api/client', () => ({
     detail: (...a) => mockDetail(...a),
     reclassify: (...a) => mockReclassify(...a),
     markRead: (...a) => mockMarkRead(...a),
+  },
+  smartReplyApi: {
+    send: (...a) => mockSend(...a),
   },
 }));
 vi.mock('react-hot-toast', () => ({
@@ -144,11 +148,58 @@ describe('DialtoneInbox page', () => {
     await user.click(await screen.findByText('Dana Reed'));
 
     expect(await screen.findByText(/suggested reply/i)).toBeInTheDocument();
-    expect(screen.getByText('Thursday works — 2pm ET?')).toBeInTheDocument();
+    // The draft is editable before send — subject and body land in form fields.
+    expect(screen.getByDisplayValue('Thursday works — 2pm ET?')).toBeInTheDocument();
     expect(screen.getByText(/schedule meeting/i)).toBeInTheDocument();
-    // The draft is a draft. Nothing on this page sends it, so it must not imply
-    // it already went.
-    expect(screen.getByText(/nothing has been sent/i)).toBeInTheDocument();
+    // Until approved, nothing goes out.
+    expect(screen.getByText(/nothing is sent until you approve/i)).toBeInTheDocument();
+  });
+
+  it('approves and sends the (possibly edited) draft', async () => {
+    const user = userEvent.setup();
+    mockDetail.mockResolvedValue({
+      ...HOT,
+      body_text: "Yes — we'd be interested.",
+      suggested_draft: {
+        intent: 'interested',
+        confidence: 0.9,
+        draft_reply: { subject: 'Re: quick question', body: 'Thursday works — 2pm ET?' },
+        should_send: true,
+      },
+    });
+    mockSend.mockResolvedValue({ ok: true });
+    renderPage();
+    await user.click(await screen.findByText('Dana Reed'));
+
+    // Edit the body, then approve.
+    const bodyField = await screen.findByLabelText(/reply body/i);
+    await user.clear(bodyField);
+    await user.type(bodyField, 'Thursday at 3pm ET works.');
+    await user.click(screen.getByRole('button', { name: /approve & send/i }));
+
+    expect(mockSend).toHaveBeenCalledWith({
+      replyId: 'r1',
+      subject: 'Re: quick question',
+      body: 'Thursday at 3pm ET works.',
+    });
+  });
+
+  it('shows a sent confirmation instead of the editor once dispatched', async () => {
+    const user = userEvent.setup();
+    mockDetail.mockResolvedValue({
+      ...HOT,
+      body_text: 'Interested!',
+      reply_sent_at: '2026-07-16T12:00:00Z',
+      suggested_draft: {
+        intent: 'interested',
+        draft_reply: { subject: 'Re: quick question', body: 'Thursday works.' },
+      },
+    });
+    renderPage();
+    await user.click(await screen.findByText('Dana Reed'));
+
+    expect(await screen.findByText(/reply sent/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approve & send/i })).not.toBeInTheDocument();
   });
 
   it('says the drafter failed rather than showing a blank card', async () => {

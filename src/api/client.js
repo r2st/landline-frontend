@@ -256,6 +256,11 @@ export const reportsApi = {
 // Deliverability — sender health + sending-domain SPF/DKIM/DMARC checks
 export const deliverabilityApi = {
   senders: () => api.get('/deliverability/senders').then(r => r.data),
+  // Per-account reputation trend from the append-only snapshot table.
+  sendersHistory: (days = 30) =>
+    api.get('/deliverability/senders/history', { params: { days } }).then(r => r.data),
+  // Re-assess every sending account now (recomputes reputation + throttle).
+  assess: () => api.post('/deliverability/assess').then(r => r.data),
   domainAuth: (domain, dkimSelector) =>
     api.get('/deliverability/domain-auth', { params: { domain, dkim_selector: dkimSelector || undefined } }).then(r => r.data),
 };
@@ -315,6 +320,19 @@ export const repliesApi = {
   markRead: (replyId) => api.post(`/dialtone/inbox/${replyId}/read`).then(r => r.data),
 };
 
+// Smart reply — dispatch an operator-approved (and optionally edited) response
+// to a classified reply. The detail route drafts the copy; this actually sends
+// it. `body` = { reply_id, subject, body } — the subject/body are what the
+// operator approved, which may differ from the AI's original draft.
+export const smartReplyApi = {
+  send: ({ replyId, subject, body }) =>
+    api.post('/smart-reply/send', {
+      reply_id: replyId,
+      subject,
+      body,
+    }).then(r => r.data),
+};
+
 // AI drafts — the human review gate on AI-composed first touches. The first N
 // AI emails per sequence are parked here instead of sent. Approving dispatches
 // the AI's copy; rejecting sends the static template it would have replaced
@@ -357,6 +375,21 @@ export const dialtoneApi = {
   // Chronological event stream. `params` accepts { start, end, types, status,
   // contact_id, q, page, page_size }.
   activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
+};
+
+// Smart Send-Time Optimization (Feature 6) — read-only Console surfaces under
+// `/dialtone/send-timing`: the optimized-vs-control experiment, the global
+// day/hour heatmap, overall optimizer status, and top learned per-contact windows.
+export const sendTimingApi = {
+  // Optimized-vs-control arms: per-arm open/reply rates, lift, z-test confidence.
+  experiment: () => api.get('/dialtone/send-timing/experiment').then(r => r.data),
+  // Full (day-of-week, hour) grid of open rates for the heatmap.
+  heatmap: () => api.get('/dialtone/send-timing/heatmap').then(r => r.data),
+  // Overall status: enabled flag, config, and how many contacts have profiles.
+  status: () => api.get('/dialtone/send-timing/status').then(r => r.data),
+  // Top learned contacts (by opens) with their computed optimal send windows.
+  contacts: (limit = 20) =>
+    api.get('/dialtone/send-timing/contacts', { params: { limit } }).then(r => r.data),
 };
 
 // A/B testing for Dialtone sequence steps: the subject/body variants the agent

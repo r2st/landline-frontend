@@ -35,12 +35,14 @@ import {
   Radio,
   Radar,
   Stethoscope,
+  Gauge,
   MailCheck,
   PenLine,
   Globe,
   MapPin,
   Target,
   Beaker,
+  Clock,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -78,10 +80,12 @@ const navSections = [
       { name: 'Replies', href: '/dialtone/inbox', icon: MailCheck },
       { name: 'AI Drafts', href: '/dialtone/drafts', icon: PenLine },
       { name: 'A/B Tests', href: '/dialtone/ab-tests', icon: Beaker },
+      { name: 'Send Timing', href: '/dialtone/send-timing', icon: Clock },
       { name: 'Prospecting', href: '/prospecting', icon: Radar },
       { name: 'ICP', href: '/dialtone/icp', icon: Target },
       { name: 'Places Discovery', href: '/dialtone/discovery', icon: MapPin },
       { name: 'Health', href: '/dialtone/health', icon: Stethoscope },
+      { name: 'Senders', href: '/dialtone/senders', icon: Gauge },
       { name: 'Domains', href: '/deliverability/domains', icon: Globe },
     ],
   },

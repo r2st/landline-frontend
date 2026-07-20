@@ -28,12 +28,14 @@ import {
   Radio,
   Radar,
   Stethoscope,
+  Gauge,
   MailCheck,
   PenLine,
   Globe,
   MapPin,
   Target,
   Beaker,
+  Clock,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -61,9 +63,11 @@ const COMMANDS = [
   { id: 'daily-activity', label: 'Daily Activity', hint: "Autonomous agent's daily summary", icon: Activity, to: '/daily-activity', keywords: 'daily activity summary agent autonomous digest emails sent bounces replies briefing' },
   { id: 'dialtone-console', label: 'Dialtone Console', hint: 'Live activity log for the cold-email agent', icon: Radio, to: '/dialtone', keywords: 'dialtone console activity log live realtime agent emails opens clicks replies bounces errors leads warmup engagement feed' },
   { id: 'dialtone-health', label: 'Deliverability Health', hint: 'Danger signals & auto-pause', icon: Stethoscope, to: '/dialtone/health', keywords: 'dialtone health danger signals auto-pause paused resume bounce complaint rate threshold breach warn kill switch halted trip incident deliverability' },
+  { id: 'sender-health', label: 'Sender Health', hint: 'Per-account reputation, bounce & throttle', icon: Gauge, to: '/dialtone/senders', keywords: 'sender health reputation score bounce complaint rate throttle factor mailbox account gmail smtp deliverability degrading recovering trend per-account senders' },
   { id: 'dialtone-inbox', label: 'Dialtone Replies', hint: 'Cold-email replies, triaged by intent', icon: MailCheck, to: '/dialtone/inbox', keywords: 'dialtone replies inbox interested hot lead classified intent priority unread reclassify out of office unsubscribe wrong person draft suggested' },
   { id: 'dialtone-drafts', label: 'AI Draft Review', hint: 'Approve AI-composed first touches', icon: PenLine, to: '/dialtone/drafts', keywords: 'ai drafts review queue approve reject compose first touch generated copy static template pending gate' },
   { id: 'dialtone-ab-tests', label: 'A/B Test Results', hint: 'Variant open/click/reply rates & winners', icon: Beaker, to: '/dialtone/ab-tests', keywords: 'ab a/b test experiment variant subject body open rate click reply rate winner declare significance chi-squared confidence split bandit results dashboard' },
+  { id: 'dialtone-send-timing', label: 'Send-Time Optimization', hint: 'Optimized vs control lift, best times & per-contact windows', icon: Clock, to: '/dialtone/send-timing', keywords: 'send time timing optimization optimizer optimal window schedule best day hour heatmap experiment optimized control arm lift open rate reply rate z-test confidence significance timezone contact profile when to send' },
   { id: 'icp', label: 'Ideal Customer Profile', hint: 'What every fit score is judged against', icon: Target, to: '/dialtone/icp', keywords: 'icp ideal customer profile weights industry size location exclusions scoring rubric fit learn relearn pin tune target' },
   { id: 'places-discovery', label: 'Places Discovery', hint: 'Find SMBs by category & location', icon: MapPin, to: '/dialtone/discovery', keywords: 'google places smb discovery search local business category location import staged results funnel india manufacturers' },
   { id: 'domain-health', label: 'Domain Health', hint: 'SPF, DKIM & DMARC per sending domain', icon: Globe, to: '/deliverability/domains', keywords: 'domain health spf dkim dmarc authentication blacklist dnsbl spamhaus sending domains recheck deliverability' },

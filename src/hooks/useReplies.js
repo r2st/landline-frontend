@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { queryClient, repliesApi } from '../api/client';
+import { queryClient, repliesApi, smartReplyApi } from '../api/client';
 
 // Dialtone's intent-classified reply queue. Errors are surfaced rather than
 // folded into an empty list: "no hot leads" and "the inbox is broken" are very
@@ -70,5 +70,21 @@ export function useMarkReplyRead() {
     onSuccess: () => invalidateInbox(),
     // Silent: marking read is incidental to opening a reply, and a toast for it
     // would fire on every click.
+  });
+}
+
+// Approve-and-send: dispatch the (possibly operator-edited) suggested reply.
+// Unlike reclassify/markRead this actually leaves the building, so it refreshes
+// the reply detail (which now carries the sent state) as well as the inbox.
+export function useSendSmartReply() {
+  return useMutation({
+    mutationFn: ({ replyId, subject, body }) =>
+      smartReplyApi.send({ replyId, subject, body }),
+    onSuccess: (data, { replyId }) => {
+      queryClient.invalidateQueries({ queryKey: ['dialtone-reply', replyId] });
+      invalidateInbox();
+      toast.success('Reply sent');
+    },
+    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Could not send reply'),
   });
 }

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertTriangle, Building2, Flame, Loader2, Mail, MailCheck, RefreshCw, Sparkles, User, X,
+  AlertTriangle, Building2, CheckCircle2, Flame, Loader2, Mail, MailCheck, RefreshCw,
+  Send, Sparkles, User, X,
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState';
 import {
   useDialtoneInbox, useInboxStats, useMarkReplyRead, useReclassifyReply, useReplyDetail,
+  useSendSmartReply,
 } from '../hooks/useReplies';
 import { cn, timeAgo } from '../lib/utils';
 
@@ -355,7 +357,12 @@ function ReplyDrawer({ replyId, onClose }) {
               </pre>
             </div>
 
-            <SuggestedDraft draft={reply.suggested_draft} classification={reply.reply_classification} />
+            <SuggestedDraft
+              replyId={replyId}
+              draft={reply.suggested_draft}
+              classification={reply.reply_classification}
+              alreadySent={Boolean(reply.reply_sent_at || reply.handled_action === 'sent')}
+            />
 
             <div>
               <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
@@ -387,7 +394,24 @@ function ReplyDrawer({ replyId, onClose }) {
 
 // The server drafts a reply only for `interested`, and only on demand. Be
 // explicit about why there's nothing here rather than rendering a blank space.
-function SuggestedDraft({ draft, classification }) {
+//
+// The draft is editable before it goes out: the AI's copy is a starting point,
+// and "Approve & Send" dispatches whatever the operator actually approved (via
+// POST /smart-reply/send), not necessarily the original text.
+function SuggestedDraft({ replyId, draft, classification, alreadySent }) {
+  const body = draft?.draft_reply || {};
+  const [subject, setSubject] = useState(body.subject || '');
+  const [text, setText] = useState(body.body || '');
+  const send = useSendSmartReply();
+
+  // Re-seed the editable fields whenever a different reply's draft loads —
+  // otherwise the drawer would show the previous reply's edited text.
+  useEffect(() => {
+    setSubject(body.subject || '');
+    setText(body.body || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replyId, body.subject, body.body]);
+
   if (classification !== 'interested') return null;
 
   if (!draft || draft.error) {
@@ -406,7 +430,26 @@ function SuggestedDraft({ draft, classification }) {
     );
   }
 
-  const body = draft.draft_reply || {};
+  if (alreadySent) {
+    return (
+      <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm">
+        <p className="flex items-center gap-1.5 font-medium text-green-800">
+          <CheckCircle2 className="h-4 w-4" />
+          Reply sent
+        </p>
+        <p className="mt-1 text-xs text-green-700">
+          This reply has already been approved and dispatched.
+        </p>
+      </div>
+    );
+  }
+
+  const canSend = text.trim().length > 0 && !send.isPending;
+
+  const handleSend = () => {
+    if (!canSend) return;
+    send.mutate({ replyId, subject: subject.trim(), body: text.trim() });
+  };
 
   return (
     <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-3">
@@ -416,14 +459,27 @@ function SuggestedDraft({ draft, classification }) {
       </h3>
       {draft.summary && <p className="mt-1 text-xs text-indigo-800">{draft.summary}</p>}
 
-      {body.subject && (
-        <p className="mt-2 text-sm font-medium text-gray-900">{body.subject}</p>
-      )}
-      {body.body && (
-        <pre className="mt-1.5 whitespace-pre-wrap break-words rounded-lg bg-white p-3 font-sans text-sm text-gray-800">
-          {body.body}
-        </pre>
-      )}
+      {/* Editable before send — the operator owns the final copy. */}
+      <label className="mt-2 block">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-indigo-700">Subject</span>
+        <input
+          type="text"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          placeholder="(no subject)"
+          className="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+      </label>
+      <label className="mt-2 block">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-indigo-700">Message</span>
+        <textarea
+          rows={6}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          aria-label="Reply body"
+          className="mt-1 w-full whitespace-pre-wrap rounded-lg border border-indigo-200 bg-white px-3 py-2 font-sans text-sm text-gray-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+      </label>
 
       <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-indigo-800">
         {draft.suggested_action && (
@@ -440,11 +496,24 @@ function SuggestedDraft({ draft, classification }) {
         )}
       </dl>
 
-      {/* This is a draft, not a send. Nothing on this page dispatches it — say so
-          rather than letting the card imply it already went out. */}
-      <p className="mt-2 text-[11px] text-indigo-700">
-        Nothing has been sent. Copy this into your reply from the Inbox, or edit it there first.
-      </p>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <p className="text-[11px] text-indigo-700">
+          Nothing is sent until you approve. Edit the copy above first if you like.
+        </p>
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={!canSend}
+          className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {send.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+          Approve &amp; Send
+        </button>
+      </div>
     </div>
   );
 }
