@@ -37,6 +37,7 @@ const DomainHealth = lazy(() => import('./pages/DomainHealth'));
 const SenderHealth = lazy(() => import('./pages/SenderHealth'));
 const PlacesDiscovery = lazy(() => import('./pages/PlacesDiscovery'));
 const Inbox = lazy(() => import('./pages/Inbox'));
+const UnifiedInbox = lazy(() => import('./pages/UnifiedInbox'));
 const Knowledge = lazy(() => import('./pages/Knowledge'));
 const Calls = lazy(() => import('./pages/Calls'));
 const Investors = lazy(() => import('./pages/Investors'));
@@ -133,6 +134,7 @@ export default function App() {
           <Route path="/dialtone/discovery" element={<PlacesDiscovery />} />
           <Route path="/deliverability/domains" element={<DomainHealth />} />
           <Route path="/inbox" element={<Inbox />} />
+          <Route path="/unified-inbox" element={<UnifiedInbox />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/calls" element={<Calls />} />
           <Route path="/investors" element={<Investors />} />

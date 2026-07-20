@@ -107,6 +107,7 @@ const navSections = [
     label: 'Outreach',
     items: [
       { name: 'Inbox', href: '/inbox', icon: Inbox },
+      { name: 'Unified Inbox', href: '/unified-inbox', icon: MailCheck },
       { name: 'Campaigns', href: '/outreach', icon: Send },
       { name: 'Calls', href: '/calls', icon: Phone },
       { name: 'Sequences', href: '/sequences', icon: ListOrdered },

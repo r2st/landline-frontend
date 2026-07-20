@@ -49,6 +49,7 @@ const COMMANDS = [
   { id: 'add-company', label: 'Add a company', hint: 'Create a company manually', icon: Plus, to: '/companies', keywords: 'new create lead' },
   { id: 'scan', label: 'Scan a business card', hint: 'Add a contact from a photo', icon: CreditCard, to: '/scan', keywords: 'card contact ocr photo' },
   { id: 'inbox', label: 'Go to Inbox', hint: 'All email conversations', icon: Inbox, to: '/inbox', keywords: 'email inbox messages threads replies conversations' },
+  { id: 'unified-inbox', label: 'Unified Inbox', hint: 'Every reply across Gmail, SMTP & Dialtone', icon: MailCheck, to: '/unified-inbox', keywords: 'unified inbox all mailboxes gmail smtp dialtone replies combined merged reply queue status replied unreplied filter search everything one place' },
   { id: 'compose', label: 'Compose & send outreach', hint: 'Email Campaigns', icon: Send, to: '/outreach', keywords: 'email send campaign template message' },
   { id: 'import', label: 'Import from CSV', hint: 'Bulk-add companies & contacts', icon: Upload, to: '/import', keywords: 'csv upload bulk' },
   { id: 'pipeline', label: 'View pipeline', hint: 'Kanban board of all stages', icon: GitBranch, to: '/pipeline', keywords: 'kanban board stage deals' },
