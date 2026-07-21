@@ -3,6 +3,7 @@ import {
   AlertTriangle, Check, FileText, Loader2, PenLine, RefreshCw, ShieldAlert,
   ShieldCheck, Sparkles, X,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import { useAiDrafts, useReviewDraft } from '../hooks/useAiDrafts';
@@ -81,6 +82,7 @@ export default function AiDrafts() {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
             <PenLine className="h-6 w-6 text-indigo-500" />
             AI Draft Review
+            <HelpIcon articleId="ai-drafts" />
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             First touches the agent wrote itself, held back for a human read. Approving sends the

@@ -3,6 +3,8 @@ import {
   AlertTriangle, Ban, Building2, Check, Loader2, Lock, MapPin, Pencil,
   RefreshCw, Sparkles, Target, Unlock, Users, X,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
+import InfoTooltip from '../components/InfoTooltip';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useLearnIcp, useProspectingIcp, useUpdateIcp } from '../hooks/useProspecting';
 import { cn, timeAgo } from '../lib/utils';
@@ -217,6 +219,7 @@ function Header({ onLearn, learning }) {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <Target className="h-6 w-6 text-indigo-500" />
           Ideal Customer Profile
+          <HelpIcon articleId="icp-scoring" />
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-gray-500">
           The rubric every fit score is judged against. The agent learns it from your won deals —
@@ -261,6 +264,13 @@ function FieldCard({ field, value, pinned }) {
                   Learned
                 </span>
               )}
+              <InfoTooltip
+                text={
+                  pinned
+                    ? 'Pinned: locked to your value. The Monday relearn from won deals leaves it alone.'
+                    : 'Learned: the weekly relearn from won deals can change this. Pin it to make it stick.'
+                }
+              />
             </h2>
             <p className="mt-0.5 text-xs text-gray-500">{field.blurb}</p>
           </div>

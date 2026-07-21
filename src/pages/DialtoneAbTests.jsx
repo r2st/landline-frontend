@@ -3,6 +3,7 @@ import {
   ArrowLeft, Award, BarChart3, Beaker, CheckCircle2, ChevronRight, Crown,
   Loader2, RefreshCw, ShieldCheck, Sparkles, TrendingUp,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -62,6 +63,7 @@ function Header({ onRefresh, refreshing }) {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <Beaker className="h-6 w-6 text-indigo-500" />
           A/B Test Results
+          <HelpIcon articleId="ab-testing" />
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Every subject/body experiment Dialtone is running — per-variant open, click and reply

@@ -51,6 +51,8 @@ import {
   UserPlus,
   CalendarCheck,
   ShieldOff,
+  LifeBuoy,
+  Sparkle,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -162,6 +164,8 @@ const navSections = [
     items: [
       { name: 'Knowledge Base', href: '/knowledge', icon: BookOpen },
       { name: 'GDPR Requests', href: '/gdpr', icon: ShieldCheck },
+      { name: 'Features', href: '/features', icon: Sparkle },
+      { name: 'Help Center', href: '/help', icon: LifeBuoy },
     ],
   },
 ];
@@ -551,6 +555,14 @@ export default function Layout({ children }) {
               <span>Search…</span>
               <kbd className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-gray-400">⌘K</kbd>
             </button>
+            <Link
+              to="/help"
+              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Help Center"
+              title="Help Center"
+            >
+              <LifeBuoy className="h-5 w-5" />
+            </Link>
             <Link
               to="/inbox"
               className="relative rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"

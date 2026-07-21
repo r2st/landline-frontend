@@ -4,6 +4,7 @@ import {
   AlertTriangle, Building2, CheckCircle2, Flame, Loader2, Mail, MailCheck, RefreshCw,
   Send, Sparkles, User, X,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import EmptyState from '../components/EmptyState';
 import {
   useDialtoneInbox, useInboxStats, useMarkReplyRead, useReclassifyReply, useReplyDetail,
@@ -71,6 +72,7 @@ export default function DialtoneInbox() {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
             <MailCheck className="h-6 w-6 text-indigo-500" />
             Dialtone Replies
+            <HelpIcon articleId="reply-triage" />
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             Every reply to the agent's cold outreach, sorted by what the sender actually meant.

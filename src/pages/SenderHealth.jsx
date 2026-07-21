@@ -3,6 +3,7 @@ import {
   Activity, AlertTriangle, Calendar, CheckCircle2, ChevronRight, ExternalLink, Flame, Gauge,
   GraduationCap, Loader2, Mail, Minus, Pencil, RefreshCw, RotateCcw, TrendingDown, TrendingUp,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import {
   CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -133,6 +134,7 @@ function Header({ onRefresh, refreshing, onAssess, assessing }) {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <Gauge className="h-6 w-6 text-indigo-500" />
           Sender Health
+          <HelpIcon articleId="sender-health" />
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Reputation, bounce and complaint rates for every mailbox Dialtone sends from — and how

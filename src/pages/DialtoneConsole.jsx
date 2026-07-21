@@ -5,6 +5,7 @@ import {
   Ban, UserPlus, Send, Gauge, ShieldCheck, RefreshCw, Search, Filter, X, ChevronRight,
   ChevronDown, Phone,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import EmptyState from '../components/EmptyState';
 import SafeHtml from '../components/SafeHtml';
 import SendingKillSwitch from '../components/SendingKillSwitch';
@@ -499,6 +500,7 @@ export default function DialtoneConsole() {
               <span className="relative inline-flex h-3 w-3 rounded-full bg-indigo-500" />
             </span>
             Dialtone Console
+            <HelpIcon articleId="dialtone-console" />
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             Live activity log — everything the autonomous cold-email agent is doing

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import {
   AlertTriangle, Loader2, Plus, Search, ShieldOff, Trash2, Upload,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import EmptyState from '../components/EmptyState';
 import {
   useAddSuppression, useDeleteSuppression, useImportSuppression, useSuppressionList,
@@ -106,6 +107,7 @@ function Header({ total }) {
       <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
         <ShieldOff className="h-6 w-6 text-indigo-500" />
         Suppression List
+        <HelpIcon articleId="suppression" />
       </h1>
       <p className="mt-1 text-sm text-gray-500">
         {total.toLocaleString()} address{total === 1 ? '' : 'es'} that Dialtone will never contact.

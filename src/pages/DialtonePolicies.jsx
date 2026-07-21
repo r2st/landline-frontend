@@ -4,6 +4,8 @@ import {
   Pause, Pencil, Play, Plus, RefreshCw, ShieldAlert, SlidersHorizontal, Trash2,
   User, Users, X,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
+import InfoTooltip from '../components/InfoTooltip';
 import EmptyState from '../components/EmptyState';
 import {
   HUMAN_REVIEW_TRIGGERS, ORCHESTRATION_CHANNELS, ORCHESTRATION_MODES,
@@ -89,6 +91,7 @@ function PolicyList({ onSelect, onCreate }) {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
             <SlidersHorizontal className="h-6 w-6 text-indigo-500" />
             Orchestration Policies
+            <HelpIcon articleId="orchestration-policies" />
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
             The guardrails Dialtone's autonomous orchestrator runs within — cadence limits,
@@ -334,9 +337,21 @@ function PolicyDetail({ policyId, onBack }) {
       {/* Rules & conditions */}
       <div className="grid gap-4 md:grid-cols-2">
         <RulesCard title="Cadence guardrails" icon={Gauge}>
-          <Rule label="Max touches per day" value={policy.max_daily_touches} />
-          <Rule label="Max touches total" value={policy.max_total_touches} />
-          <Rule label="Min hours between touches" value={`${policy.min_hours_between_touches}h`} />
+          <Rule
+            label="Max touches per day"
+            value={policy.max_daily_touches}
+            tip="The most messages the agent may send one contact in a single day, across all channels."
+          />
+          <Rule
+            label="Max touches total"
+            value={policy.max_total_touches}
+            tip="The lifetime cap on touches per contact before the agent stops reaching out."
+          />
+          <Rule
+            label="Min hours between touches"
+            value={`${policy.min_hours_between_touches}h`}
+            tip="The minimum gap between two touches so a contact never gets messaged back to back."
+          />
         </RulesCard>
 
         <RulesCard title="Channels" icon={Globe}>
@@ -408,10 +423,13 @@ function RulesCard({ title, icon: Icon, className, children }) {
   );
 }
 
-function Rule({ label, value }) {
+function Rule({ label, value, tip }) {
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-gray-500">{label}</span>
+      <span className="flex items-center gap-1 text-gray-500">
+        {label}
+        {tip && <InfoTooltip text={tip} />}
+      </span>
       <span className="font-medium text-gray-900">{value}</span>
     </div>
   );

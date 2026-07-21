@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   AlertTriangle, Download, Loader2, Search, ShieldCheck, Trash2, X,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import toast from 'react-hot-toast';
 import { useGdprExport, useGdprErase } from '../hooks/useGdpr';
 import { isLikelyEmail, summarizeExport } from '../lib/gdpr';
@@ -72,6 +73,7 @@ export default function GdprControls() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <ShieldCheck className="h-6 w-6 text-indigo-500" />
           GDPR Data Requests
+          <HelpIcon articleId="gdpr" />
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Look up a contact by email to fulfil a right-to-access (export) or right-to-erasure request.

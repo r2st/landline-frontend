@@ -60,6 +60,8 @@ const ClientSuccessAgent = lazy(() => import('./pages/ClientSuccessAgent'));
 const BookingAgent = lazy(() => import('./pages/BookingAgent'));
 const Platform = lazy(() => import('./pages/Platform'));
 const PlatformOrganizationDetail = lazy(() => import('./pages/PlatformOrganizationDetail'));
+const HelpPage = lazy(() => import('./pages/HelpPage'));
+const FeaturesPage = lazy(() => import('./pages/FeaturesPage'));
 
 function NotFound() {
   return (
@@ -160,6 +162,9 @@ export default function App() {
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/unified-inbox" element={<UnifiedInbox />} />
           <Route path="/knowledge" element={<Knowledge />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/help/:articleId" element={<HelpPage />} />
+          <Route path="/features" element={<FeaturesPage />} />
           <Route path="/gdpr" element={<GdprControls />} />
           <Route path="/calls" element={<Calls />} />
           <Route path="/investors" element={<Investors />} />

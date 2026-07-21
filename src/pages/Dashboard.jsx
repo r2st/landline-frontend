@@ -34,6 +34,7 @@ import ScoreBadge from '../components/ScoreBadge';
 import EmptyState from '../components/EmptyState';
 import SmartSuggestions from '../components/SmartSuggestions';
 import ClientHealthAlerts from '../components/ClientHealthAlerts';
+import GettingStarted from '../components/GettingStarted';
 import { useDashboardMetrics, useRecentActivity, useTopLeads, useEmailTrends, useUpcomingTasks, useKPIs } from '../hooks/useDashboard';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { buildGreeting } from '../lib/greeting';
@@ -520,6 +521,9 @@ function Dashboard() {
     <div className="space-y-6">
       {/* Welcome Header */}
       <WelcomeHeader kpis={kpis} trends={trends} />
+
+      {/* Getting-started checklist for new users (self-dismissing). */}
+      <GettingStarted />
 
       {/* Quick Stats Row (KPIs) */}
       <QuickStatsRow kpis={kpis} metricsLoading={metricsLoading} />

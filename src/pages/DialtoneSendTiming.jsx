@@ -2,6 +2,7 @@ import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Clock, Loader2, Power,
   RefreshCw, Sparkles, TrendingUp, Users,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import EmptyState from '../components/EmptyState';
 import {
   useSendTimingContacts, useSendTimingExperiment, useSendTimingHeatmap,
@@ -61,6 +62,7 @@ function Header({ onRefresh, refreshing }) {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <Clock className="h-6 w-6 text-indigo-500" />
           Send-Time Optimization
+          <HelpIcon articleId="send-timing" />
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Whether holding each email for the recipient's best local moment beats sending on the

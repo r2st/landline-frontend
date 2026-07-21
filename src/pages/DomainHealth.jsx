@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Globe, Info, Loader2, RefreshCw, ShieldX, XCircle,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import EmptyState from '../components/EmptyState';
 import { useDomainDetail, useDomains, useRecheckDomain } from '../hooks/useDomainHealth';
 import { cn, timeAgo } from '../lib/utils';
@@ -62,6 +63,7 @@ export default function DomainHealth() {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
             <Globe className="h-6 w-6 text-indigo-500" />
             Domain Health
+            <HelpIcon articleId="domain-authentication" />
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             Whether the domains Dialtone sends from can actually be trusted by a receiving

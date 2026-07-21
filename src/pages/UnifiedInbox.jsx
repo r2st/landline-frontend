@@ -4,6 +4,7 @@ import {
   AlertTriangle, ArrowDownLeft, ArrowUpRight, Building2, ChevronDown, Flame, Inbox as InboxIcon,
   Loader2, MailCheck, RefreshCw, Search, Send, Sparkles,
 } from 'lucide-react';
+import HelpIcon from '../components/HelpIcon';
 import toast from 'react-hot-toast';
 import EmptyState from '../components/EmptyState';
 import SafeHtml from '../components/SafeHtml';
@@ -72,6 +73,7 @@ export default function UnifiedInbox() {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
             <MailCheck className="h-6 w-6 text-indigo-500" />
             Unified Inbox
+            <HelpIcon articleId="unified-inbox" />
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             Every reply across every mailbox — Gmail, SMTP, and Dialtone's triaged queue — in one place.
