@@ -176,6 +176,8 @@ export const emailApi = {
   deleteTemplate: (id) => api.delete(`/email-templates/${id}`).then(r => r.data),
   setDefault: (id) => api.post(`/email-templates/${id}/set-default`).then(r => r.data),
   preview: (data) => api.post('/email-templates/preview', data).then(r => r.data),
+  // Saved HTML signatures (default first). Surfaced in the reply composer.
+  getSignatures: () => api.get('/email-signatures').then(r => r.data),
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
   sendTest: (data) => api.post('/email-templates/send-test', data).then(r => r.data),
@@ -618,6 +620,31 @@ export const emailHistoryApi = {
   getThread: (threadId) => api.get(`/emails/thread/${encodeURIComponent(threadId)}`).then(r => r.data),
   sendReply: (emailId, data) => api.post(`/emails/reply/${emailId}`, data).then(r => r.data),
   triggerSync: () => api.post('/emails/sync').then(r => r.data),
+  // Conversation Intelligence — momentum, unresolved objections, recommended
+  // next action, and a suggested next message. `refresh` re-runs the analysis.
+  getThreadIntelligence: (threadId, { refresh = false } = {}) =>
+    api.get(`/emails/thread/${encodeURIComponent(threadId)}/intelligence`, {
+      params: refresh ? { refresh: true } : {},
+    }).then(r => r.data),
+  // Per-thread read state (P0-1) and archive (P0-2). Read is mailbox-scoped
+  // server-side; archive is per-user thread state.
+  markThreadRead: (threadId) =>
+    api.post(`/emails/thread/${encodeURIComponent(threadId)}/read`).then(r => r.data),
+  markThreadUnread: (threadId) =>
+    api.post(`/emails/thread/${encodeURIComponent(threadId)}/unread`).then(r => r.data),
+  archiveThread: (threadId) =>
+    api.post(`/emails/thread/${encodeURIComponent(threadId)}/archive`).then(r => r.data),
+  unarchiveThread: (threadId) =>
+    api.post(`/emails/thread/${encodeURIComponent(threadId)}/unarchive`).then(r => r.data),
+  // Bulk actions (P1-3). `thread_ids` is the selection.
+  bulkMarkRead: (threadIds, isRead = true) =>
+    api.post('/emails/threads/read', { thread_ids: threadIds }, {
+      params: { is_read: isRead },
+    }).then(r => r.data),
+  bulkArchive: (threadIds, isArchived = true) =>
+    api.post('/emails/threads/archive', { thread_ids: threadIds }, {
+      params: { is_archived: isArchived },
+    }).then(r => r.data),
 };
 
 // Gmail OAuth — connect a Google account so outreach sends from the user's own

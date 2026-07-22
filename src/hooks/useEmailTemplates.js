@@ -15,6 +15,14 @@ export function useEmailTemplates() {
   });
 }
 
+// Saved HTML signatures (default first) — surfaced in the reply composer.
+export function useEmailSignatures() {
+  return useQuery({
+    queryKey: ['email-signatures'],
+    queryFn: async () => await emailApi.getSignatures(),
+  });
+}
+
 export function useCreateTemplate() {
   return useMutation({
     mutationFn: async (data) => await emailApi.createTemplate(data),

@@ -46,3 +46,52 @@ export function useTriggerSync() {
     },
   });
 }
+
+// Conversation Intelligence for a thread — momentum, objections, recommended
+// action, suggested next message. Lazy: only fetched when `enabled`.
+export function useThreadIntelligence(threadId, { enabled = false } = {}) {
+  return useQuery({
+    queryKey: ['thread-intelligence', threadId],
+    queryFn: () => emailHistoryApi.getThreadIntelligence(threadId),
+    enabled: !!threadId && enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Mark a single thread read/unread (P0-1). Invalidates the inbox so the unread
+// dot clears without a manual refresh.
+export function useMarkThreadRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ threadId, read = true }) =>
+      read
+        ? emailHistoryApi.markThreadRead(threadId)
+        : emailHistoryApi.markThreadUnread(threadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['email-inbox'] }),
+  });
+}
+
+// Archive / unarchive a single thread (P0-2).
+export function useArchiveThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ threadId, archived = true }) =>
+      archived
+        ? emailHistoryApi.archiveThread(threadId)
+        : emailHistoryApi.unarchiveThread(threadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['email-inbox'] }),
+  });
+}
+
+// Bulk mark-read / archive across a selection of threads (P1-3).
+export function useBulkThreadAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, threadIds }) => {
+      if (action === 'read') return emailHistoryApi.bulkMarkRead(threadIds, true);
+      if (action === 'archive') return emailHistoryApi.bulkArchive(threadIds, true);
+      throw new Error(`Unknown bulk action: ${action}`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['email-inbox'] }),
+  });
+}
