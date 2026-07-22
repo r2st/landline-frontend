@@ -22,6 +22,31 @@ export function useEmailInbox(params = {}) {
   });
 }
 
+// Lightweight "needs reply" count for the sidebar / bell badge. Reuses the
+// existing needs_reply filter and reads only the total, so it's a cheap poll.
+// Fails soft to 0 so a hiccup never renders a broken badge.
+export function useInboxUnread() {
+  const { data } = useQuery({
+    queryKey: ['inbox-unread'],
+    queryFn: async () => {
+      try {
+        const res = await emailHistoryApi.getInbox({
+          page: 1,
+          per_page: 1,
+          filter: 'needs_reply',
+        });
+        return res?.total || 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 60000,
+    refetchInterval: 60000,
+    retry: false,
+  });
+  return data || 0;
+}
+
 export function useEmailThread(threadId) {
   return useQuery({
     queryKey: ['email-thread', threadId],
@@ -89,13 +114,15 @@ export function useArchiveThread() {
   });
 }
 
-// Bulk mark-read / archive across a selection of threads (P1-3).
+// Bulk mark-read / archive across a selection of threads (P1-3). `value`
+// controls the direction so the same mutation can undo itself (mark-unread /
+// unarchive); it defaults to true (the forward action).
 export function useBulkThreadAction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ action, threadIds }) => {
-      if (action === 'read') return emailHistoryApi.bulkMarkRead(threadIds, true);
-      if (action === 'archive') return emailHistoryApi.bulkArchive(threadIds, true);
+    mutationFn: ({ action, threadIds, value = true }) => {
+      if (action === 'read') return emailHistoryApi.bulkMarkRead(threadIds, value);
+      if (action === 'archive') return emailHistoryApi.bulkArchive(threadIds, value);
       throw new Error(`Unknown bulk action: ${action}`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['email-inbox'] }),

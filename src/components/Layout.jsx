@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
+import { useInboxUnread } from '../hooks/useEmailHistory';
 import { useAuth } from '../context/AuthContext';
 import CommandPalette from './CommandPalette';
 import ViewAsSwitcher from './ViewAsSwitcher';
@@ -282,6 +283,9 @@ export default function Layout({ children }) {
     });
   }, [recentSends]);
 
+  // Numeric "needs reply" count for the Inbox nav item and the bell badge.
+  const inboxUnread = useInboxUnread();
+
   const currentPage = allNavItems.find((item) => isActivePath(item.href, item.end));
 
   // Section-aware breadcrumb trail. Non-final segments with an `href` render as
@@ -329,7 +333,7 @@ export default function Layout({ children }) {
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  const NavLink = ({ item, showBadge }) => {
+  const NavLink = ({ item, showBadge, count = 0 }) => {
     const isActive = isActivePath(item.href, item.end);
     return (
       <Link
@@ -351,9 +355,16 @@ export default function Layout({ children }) {
           )}
         />
         {item.name}
-        {showBadge && (
+        {count > 0 ? (
+          <span
+            className="ml-auto inline-flex min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+            aria-label={`${count} conversations need a reply`}
+          >
+            {count > 99 ? '99+' : count}
+          </span>
+        ) : showBadge ? (
           <span className="ml-auto h-2 w-2 rounded-full bg-red-500 flex-shrink-0" />
-        )}
+        ) : null}
       </Link>
     );
   };
@@ -413,6 +424,7 @@ export default function Layout({ children }) {
                       key={item.name}
                       item={item}
                       showBadge={item.name === 'Inbox' && hasNewReplies}
+                      count={item.name === 'Inbox' ? inboxUnread : 0}
                     />
                   ))}
                 </div>
@@ -565,13 +577,17 @@ export default function Layout({ children }) {
             <Link
               to="/inbox"
               className="relative rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-              aria-label="Email replies"
-              title={hasNewReplies ? 'New replies in the last 24h' : 'Email inbox'}
+              aria-label={inboxUnread > 0 ? `${inboxUnread} conversations need a reply` : 'Email inbox'}
+              title={inboxUnread > 0 ? `${inboxUnread} conversations need a reply` : 'Email inbox'}
             >
               <Bell className="h-5 w-5" />
-              {hasNewReplies && (
+              {inboxUnread > 0 ? (
+                <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-indigo-600 px-1 py-0.5 text-[10px] font-semibold leading-none text-white ring-2 ring-white">
+                  {inboxUnread > 99 ? '99+' : inboxUnread}
+                </span>
+              ) : hasNewReplies ? (
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-              )}
+              ) : null}
             </Link>
           </div>
         </header>

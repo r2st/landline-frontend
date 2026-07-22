@@ -41,7 +41,7 @@ vi.mock('../api/client', () => ({
   smtpApi: { accounts: (...a) => mockSmtpAccounts(...a) },
 }));
 vi.mock('react-hot-toast', () => ({
-  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }),
 }));
 vi.mock('../components/SafeHtml', () => ({
   default: ({ html }) => <div data-testid="safe-html">{html}</div>,
@@ -68,10 +68,11 @@ function makeThread(overrides = {}) {
         direction: 'received',
         from_email: 'lead@acme.com',
         to_email: 'us@company.com',
+        contact_name: 'Dana Lead',
         subject: 'Pilot proposal',
         body_html: '<p>Interested</p>',
         body_text: 'Interested',
-        snippet: 'Interested',
+        snippet: 'Interested in a pilot',
         status: 'received',
         is_read: false,
         reply_classification: null,
@@ -211,18 +212,38 @@ describe('Inbox tabs & filters', () => {
   });
 });
 
-describe('Inbox thread actions', () => {
-  it('marks the thread read on expand', async () => {
+describe('Inbox two-pane layout', () => {
+  it('shows the "select a conversation" placeholder until a thread is opened', async () => {
     mockGetInbox.mockResolvedValue({ ...EMPTY_INBOX, threads: [makeThread()], total: 1 });
     renderInbox();
 
-    const expandBtn = await screen.findByRole('button', { name: /Pilot proposal/i });
-    await userEvent.click(expandBtn);
-
-    await waitFor(() => expect(mockMarkRead).toHaveBeenCalledWith('thread-1'));
+    expect(await screen.findByText('Select a conversation')).toBeInTheDocument();
   });
 
-  it('archives a thread from its card', async () => {
+  it('marks the thread read and opens it in the detail pane on select', async () => {
+    mockGetInbox.mockResolvedValue({ ...EMPTY_INBOX, threads: [makeThread()], total: 1 });
+    renderInbox();
+
+    const row = await screen.findByRole('button', { name: /Pilot proposal/i });
+    await userEvent.click(row);
+
+    await waitFor(() => expect(mockMarkRead).toHaveBeenCalledWith('thread-1'));
+    // Detail pane now shows a reply composer.
+    expect(await screen.findByLabelText('Reply body')).toBeInTheDocument();
+  });
+
+  it('renders a skeleton while the inbox is loading', async () => {
+    let resolve;
+    mockGetInbox.mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderInbox();
+
+    expect(await screen.findByTestId('inbox-skeleton')).toBeInTheDocument();
+    resolve(EMPTY_INBOX);
+  });
+});
+
+describe('Inbox thread actions', () => {
+  it('archives a thread from its row', async () => {
     mockGetInbox.mockResolvedValue({ ...EMPTY_INBOX, threads: [makeThread()], total: 1 });
     renderInbox();
 
@@ -232,7 +253,7 @@ describe('Inbox thread actions', () => {
     await waitFor(() => expect(mockArchive).toHaveBeenCalledWith('thread-1'));
   });
 
-  it('renders a classification chip on the thread card', async () => {
+  it('renders a classification chip on the thread row', async () => {
     mockGetInbox.mockResolvedValue({
       ...EMPTY_INBOX,
       threads: [makeThread({ classification: 'interested' })],
@@ -240,8 +261,14 @@ describe('Inbox thread actions', () => {
     });
     renderInbox();
 
-    // Query by the chip's title to avoid colliding with body/snippet text.
     expect(await screen.findByTitle('Reply classified: Interested')).toBeInTheDocument();
+  });
+
+  it('shows a "Needs attention" status pill for an unanswered inbound', async () => {
+    mockGetInbox.mockResolvedValue({ ...EMPTY_INBOX, threads: [makeThread()], total: 1 });
+    renderInbox();
+
+    expect(await screen.findByText('Needs attention')).toBeInTheDocument();
   });
 });
 
@@ -249,7 +276,10 @@ describe('Inbox bulk actions', () => {
   it('bulk-archives the selected threads', async () => {
     mockGetInbox.mockResolvedValue({
       ...EMPTY_INBOX,
-      threads: [makeThread({ gmail_thread_id: 'thread-1' }), makeThread({ gmail_thread_id: 'thread-2', subject: 'Second' })],
+      threads: [
+        makeThread({ gmail_thread_id: 'thread-1' }),
+        makeThread({ gmail_thread_id: 'thread-2', subject: 'Second' }),
+      ],
       total: 2,
     });
     renderInbox();
@@ -269,26 +299,56 @@ describe('Inbox composer', () => {
     mockGetInbox.mockResolvedValue({ ...EMPTY_INBOX, threads: [makeThread()], total: 1 });
     renderInbox();
 
-    const expandBtn = await screen.findByRole('button', { name: /Pilot proposal/i });
-    await userEvent.click(expandBtn);
+    await userEvent.click(await screen.findByRole('button', { name: /Pilot proposal/i }));
 
     const templateSelect = await screen.findByLabelText('Insert template');
     await userEvent.selectOptions(templateSelect, 't1');
 
-    const textarea = screen.getByPlaceholderText('Write your reply...');
-    await waitFor(() => expect(textarea.value).toContain('quick intro'));
+    const editor = screen.getByLabelText('Reply body');
+    await waitFor(() => expect(editor.textContent).toContain('quick intro'));
   });
 
   it('fills the composer with an AI draft', async () => {
     mockGetInbox.mockResolvedValue({ ...EMPTY_INBOX, threads: [makeThread()], total: 1 });
     renderInbox();
 
-    const expandBtn = await screen.findByRole('button', { name: /Pilot proposal/i });
-    await userEvent.click(expandBtn);
-
+    await userEvent.click(await screen.findByRole('button', { name: /Pilot proposal/i }));
     await userEvent.click(screen.getByRole('button', { name: /AI draft/i }));
 
-    const textarea = screen.getByPlaceholderText('Write your reply...');
-    await waitFor(() => expect(textarea.value).toContain('pricing breakdown'));
+    const editor = screen.getByLabelText('Reply body');
+    await waitFor(() => expect(editor.textContent).toContain('pricing breakdown'));
+  });
+});
+
+describe('Inbox draft autosave', () => {
+  it('restores an unsent draft after switching threads and back', async () => {
+    mockGetInbox.mockResolvedValue({
+      ...EMPTY_INBOX,
+      threads: [
+        makeThread({ gmail_thread_id: 'thread-1', subject: 'Pilot proposal' }),
+        makeThread({ gmail_thread_id: 'thread-2', subject: 'Second thread' }),
+      ],
+      total: 2,
+    });
+    renderInbox();
+
+    // Open thread 1 and drop a draft into it via the AI-draft path.
+    await userEvent.click(await screen.findByRole('button', { name: /Pilot proposal/i }));
+    await userEvent.click(screen.getByRole('button', { name: /AI draft/i }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Reply body').textContent).toContain('pricing breakdown')
+    );
+
+    // Switch to thread 2 — its composer is a clean slate.
+    await userEvent.click(screen.getByRole('button', { name: /Second thread/i }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Reply body').textContent).not.toContain('pricing breakdown')
+    );
+
+    // Back to thread 1 — the draft is still there.
+    await userEvent.click(screen.getByRole('button', { name: /Pilot proposal/i }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Reply body').textContent).toContain('pricing breakdown')
+    );
   });
 });
