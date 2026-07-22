@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
+import { Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -41,7 +41,6 @@ const SocialListening = lazy(() => import('./pages/SocialListening'));
 const DialtoneSuppression = lazy(() => import('./pages/DialtoneSuppression'));
 const PlacesDiscovery = lazy(() => import('./pages/PlacesDiscovery'));
 const Inbox = lazy(() => import('./pages/Inbox'));
-const UnifiedInbox = lazy(() => import('./pages/UnifiedInbox'));
 const Knowledge = lazy(() => import('./pages/Knowledge'));
 const Calls = lazy(() => import('./pages/Calls'));
 const Investors = lazy(() => import('./pages/Investors'));
@@ -160,7 +159,10 @@ export default function App() {
           <Route path="/agents/social-listening" element={<SocialListening />} />
           <Route path="/deliverability/domains" element={<DomainHealth />} />
           <Route path="/inbox" element={<Inbox />} />
-          <Route path="/unified-inbox" element={<UnifiedInbox />} />
+          {/* Unified Inbox folded into /inbox (one queue: Gmail + SMTP +
+              replies, with archive/read/priority/bulk/date). Redirect the old
+              path so bookmarks and deep links keep working. */}
+          <Route path="/unified-inbox" element={<Navigate to="/inbox" replace />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/help/:articleId" element={<HelpPage />} />

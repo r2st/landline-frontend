@@ -13,6 +13,12 @@ export function useEmailInbox(params = {}) {
   return useQuery({
     queryKey: ['email-inbox', params],
     queryFn: () => emailHistoryApi.getInbox(params),
+    // The inbox is a live queue — keep it fresh without a manual "Sync" click.
+    // Poll every 60s and re-fetch when the operator returns to the tab, matching
+    // the Dialtone reply queue (useDialtoneInbox). Aligns with the audit's
+    // no-auto-refresh finding.
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
   });
 }
 

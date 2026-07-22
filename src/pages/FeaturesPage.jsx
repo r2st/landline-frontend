@@ -59,7 +59,7 @@ const GROUPS = [
       { icon: Send, name: 'Sequences', desc: 'Multi-step, conditional, A/B tested cadences.', to: '/sequences', help: '/help/sequences' },
       { icon: Mail, name: 'Gmail integration', desc: 'OAuth multi-account send & receive.', to: '/settings', help: '/help/gmail-integration' },
       { icon: Server, name: 'SMTP mailboxes', desc: 'Custom SMTP/IMAP accounts.', to: '/settings', help: '/help/smtp-mailboxes' },
-      { icon: Inbox, name: 'Unified inbox', desc: 'One reply queue across Gmail, SMTP & Dialtone.', to: '/unified-inbox', help: '/help/unified-inbox' },
+      { icon: Inbox, name: 'Unified inbox', desc: 'One reply queue across Gmail & SMTP, with archive, priority & bulk actions.', to: '/inbox', help: '/help/unified-inbox' },
     ],
   },
   {

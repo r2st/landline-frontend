@@ -314,24 +314,25 @@ Provide the SMTP host/port for sending and the IMAP host/port for receiving, plu
     id: 'unified-inbox',
     category: 'campaigns',
     title: 'Unified inbox',
-    route: '/unified-inbox',
-    keywords: 'unified inbox combined replies gmail smtp dialtone all mailboxes merged reply queue filter search',
-    summary: 'One reply queue across Gmail, SMTP, and Dialtone.',
+    route: '/inbox',
+    keywords: 'unified inbox combined replies gmail smtp all mailboxes merged reply queue filter search archive priority bulk date',
+    summary: 'One reply queue across Gmail and SMTP.',
     body: `# Unified inbox
 
-Replies scatter across mailboxes. The **Unified Inbox** pulls them into one place — Gmail, custom SMTP, and Dialtone-triaged cold replies — so nothing slips.
+Replies scatter across mailboxes. The **Inbox** pulls them into one place — Gmail and custom SMTP — so nothing slips.
 
 ## What's here
-- Every reply across all connected accounts, newest first.
-- **Status** at a glance: replied vs unreplied, so you can work only what's waiting.
-- **Filter and search** by mailbox, status, or text.
+- Every conversation across all connected accounts, newest first, grouped into threads.
+- Tabs for **Received**, **Sent**, **Opened**, **Needs reply**, **Priority**, and **Archived**.
+- **Filter and search** by account, text (subject/body), and date range — searched and paged on the server so nothing is silently capped.
+- **Mark read/unread, archive, and bulk-select** to work the queue fast. Incoming replies carry their intent label (interested, out-of-office, unsubscribe, wrong person) so you can jump to the hot ones first.
 
 ## Working the queue
-Open a message to read the thread and reply inline. Dialtone-classified replies carry their intent label (interested, out-of-office, unsubscribe, wrong person) so you can jump to the hot ones first.
+Open a thread to read it and reply inline, with templates, signatures, and an AI-drafted suggestion. Opening a thread clears its unread dot.
 
 ## Best practices
-- Clear the unreplied filter daily — speed of reply is the strongest predictor of booking a meeting.
-- Trust Dialtone's triage for the obvious buckets, but skim "interested" yourself.`,
+- Clear the Needs-reply tab daily — speed of reply is the strongest predictor of booking a meeting.
+- Trust the intent triage for the obvious buckets, but skim "interested" yourself.`,
   },
 
   // ─── Dialtone ─────────────────────────────────────────────────────────────
