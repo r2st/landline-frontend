@@ -10,6 +10,8 @@ import toast from 'react-hot-toast';
 import EmptyState from '../components/EmptyState';
 import SafeHtml from '../components/SafeHtml';
 import { useEmailInbox, useSendReply, useTriggerSync } from '../hooks/useEmailHistory';
+import { useConnectedAccounts } from '../hooks/useConnectedAccounts';
+import { accountOptionLabel } from '../lib/inboxAccounts';
 import { formatDate, timeAgo, cn } from '../lib/utils';
 
 const STATUS_CONFIG = {
@@ -267,13 +269,19 @@ export default function Inbox() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [accountEmail, setAccountEmail] = useState('');
   const [page, setPage] = useState(1);
+
+  const { accounts } = useConnectedAccounts();
 
   const params = useMemo(() => {
     const p = { page, per_page: 20, filter };
     if (search) p.search = search;
+    // The account filter is a top-level scope: it composes with every tab
+    // (All / Received / Sent / …) and with search.
+    if (accountEmail) p.account_email = accountEmail;
     return p;
-  }, [page, filter, search]);
+  }, [page, filter, search, accountEmail]);
 
   const { data, isLoading, error, refetch } = useEmailInbox(params);
   const triggerSync = useTriggerSync();
@@ -296,6 +304,11 @@ export default function Inbox() {
 
   const handleFilterChange = useCallback((val) => {
     setFilter(val);
+    setPage(1);
+  }, []);
+
+  const handleAccountChange = useCallback((e) => {
+    setAccountEmail(e.target.value);
     setPage(1);
   }, []);
 
@@ -323,6 +336,33 @@ export default function Inbox() {
           {triggerSync.isPending ? 'Syncing...' : 'Sync emails'}
         </button>
       </div>
+
+      {/* Account filter — scopes every tab below to one connected mailbox */}
+      {accounts.length > 0 && (
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+          <label
+            htmlFor="inbox-account-filter"
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-600"
+          >
+            <Mail className="h-4 w-4 text-gray-400" />
+            Account
+          </label>
+          <select
+            id="inbox-account-filter"
+            value={accountEmail}
+            onChange={handleAccountChange}
+            aria-label="Filter inbox by email account"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:w-80"
+          >
+            <option value="">All accounts</option>
+            {accounts.map((a) => (
+              <option key={a.id ?? a.email} value={a.email}>
+                {accountOptionLabel(a)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Filters row */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -380,9 +420,11 @@ export default function Inbox() {
           description={
             search
               ? 'No threads match your search. Try different keywords.'
-              : filter !== 'all'
-                ? 'No threads match this filter.'
-                : 'Email conversations will appear here once synced from Gmail.'
+              : accountEmail
+                ? 'No threads for this account. Try "All accounts" or another mailbox.'
+                : filter !== 'all'
+                  ? 'No threads match this filter.'
+                  : 'Email conversations will appear here once synced from Gmail.'
           }
         />
       ) : (
