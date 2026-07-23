@@ -49,3 +49,51 @@ export function accountOptionLabel(account) {
   const tag = account.provider === 'smtp' ? ' (SMTP)' : '';
   return `${account.email}${tag}`;
 }
+
+// Learn the connected-account identities from a page of inbox threads. Every
+// message the backend returns is tagged with the account it belongs to
+// (``gmail_account_email`` / ``gmail_account_id``), so the mail itself is a
+// reliable source for the account switcher — independent of the
+// /gmail/accounts + /smtp/accounts endpoints, which can come back empty for
+// some sessions (e.g. accounts not linked to the caller's user row) and would
+// otherwise leave the user with mail from several addresses but no way to
+// filter by them. Returns the same normalized shape as ``mergeAccounts``.
+// Provider is left null (not "gmail") so we never mislabel an SMTP address as
+// Gmail — the switcher filters by address either way.
+export function accountsFromThreads(threads) {
+  if (!Array.isArray(threads)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const thread of threads) {
+    const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+    for (const msg of messages) {
+      const email = msg && msg.gmail_account_email;
+      if (!email) continue;
+      const key = email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        id: msg.gmail_account_id ?? null,
+        email,
+        provider: null,
+        status: null,
+        displayName: null,
+      });
+    }
+  }
+  return out;
+}
+
+// Merge the endpoint-sourced accounts with any learned from the mail, keyed by
+// lowercased address (endpoint entry wins — it carries provider/status), and
+// return one address-sorted, de-duplicated list for the switcher.
+export function combineAccounts(connected = [], discovered = []) {
+  const byEmail = new Map();
+  for (const a of discovered) {
+    if (a && a.email) byEmail.set(a.email.toLowerCase(), a);
+  }
+  for (const a of connected) {
+    if (a && a.email) byEmail.set(a.email.toLowerCase(), a);
+  }
+  return [...byEmail.values()].sort((a, b) => a.email.localeCompare(b.email));
+}

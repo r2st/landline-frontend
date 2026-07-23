@@ -21,7 +21,7 @@ import {
 import { useEmailTemplates, useEmailSignatures } from '../hooks/useEmailTemplates';
 import { useConnectedAccounts } from '../hooks/useConnectedAccounts';
 import { useInboxDrafts } from '../hooks/useInboxDrafts';
-import { accountOptionLabel } from '../lib/inboxAccounts';
+import { accountOptionLabel, accountsFromThreads, combineAccounts } from '../lib/inboxAccounts';
 import { timeAgo, cn } from '../lib/utils';
 import {
   fullTimestamp, senderDisplay, counterpartyEmail, threadStatus,
@@ -672,7 +672,12 @@ export default function Inbox() {
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   const drafts = useInboxDrafts();
-  const { accounts } = useConnectedAccounts();
+  const { accounts: connectedAccounts } = useConnectedAccounts();
+  // Accounts learned from the mail itself, accumulated across fetches so the
+  // switcher's options never shrink when the user narrows to one account (which
+  // would otherwise make every *other* option vanish and trap them). Keyed by
+  // lowercased address.
+  const [discoveredAccounts, setDiscoveredAccounts] = useState(() => new Map());
   const bulkAction = useBulkThreadAction();
   const markRead = useMarkThreadRead();
   const archive = useArchiveThread();
@@ -690,6 +695,34 @@ export default function Inbox() {
 
   const { data, isLoading, error, refetch } = useEmailInbox(params);
   const triggerSync = useTriggerSync();
+
+  // Learn any new account identities from the mail this fetch returned and
+  // remember them. This is what makes the switcher appear even when the
+  // /gmail/accounts + /smtp/accounts endpoints come back empty for the session
+  // — as long as the user has mail, they can filter it by account.
+  useEffect(() => {
+    const found = accountsFromThreads(data?.threads);
+    if (!found.length) return;
+    setDiscoveredAccounts((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const acct of found) {
+        const key = acct.email.toLowerCase();
+        if (!next.has(key)) {
+          next.set(key, acct);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [data]);
+
+  // The switcher's full option list: endpoint-sourced accounts unioned with
+  // everything learned from the mail, de-duplicated by address.
+  const accounts = useMemo(
+    () => combineAccounts(connectedAccounts, [...discoveredAccounts.values()]),
+    [connectedAccounts, discoveredAccounts]
+  );
 
   const threads = data?.threads || [];
   const totalThreads = data?.total || 0;

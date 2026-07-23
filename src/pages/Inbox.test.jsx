@@ -173,13 +173,98 @@ describe('Inbox account filter', () => {
     );
   });
 
-  it('hides the selector entirely when no accounts are connected', async () => {
+  it('hides the selector only when there are no accounts AND no mail', async () => {
     mockGmailAccounts.mockResolvedValue([]);
     mockSmtpAccounts.mockResolvedValue([]);
+    mockGetInbox.mockResolvedValue(EMPTY_INBOX);
     renderInbox();
 
     await waitFor(() => expect(mockGetInbox).toHaveBeenCalled());
     expect(screen.queryByLabelText('Filter inbox by email account')).not.toBeInTheDocument();
+  });
+
+  // The reported bug: the accounts endpoints return nothing for the session, so
+  // the endpoint-only switcher stayed hidden even though the user plainly has
+  // mail from several addresses. It must now build itself from the mail.
+  it('shows the selector built from the mail when the accounts endpoints are empty', async () => {
+    mockGmailAccounts.mockResolvedValue([]);
+    mockSmtpAccounts.mockResolvedValue([]);
+    mockGetInbox.mockResolvedValue({
+      threads: [
+        makeThread({
+          gmail_thread_id: 'th-support',
+          messages: [{ id: 'm1', direction: 'received', from_email: 'lead@x.com',
+            to_email: 'support@company.com', gmail_account_id: 'g1',
+            gmail_account_email: 'support@company.com', is_read: false,
+            timestamp: new Date().toISOString() }],
+        }),
+        makeThread({
+          gmail_thread_id: 'th-sales',
+          messages: [{ id: 'm2', direction: 'sent', from_email: 'sales@company.com',
+            to_email: 'lead@x.com', gmail_account_id: 'g2',
+            gmail_account_email: 'sales@company.com', is_read: true,
+            timestamp: new Date().toISOString() }],
+        }),
+      ],
+      total: 2, page: 1, per_page: 20,
+    });
+
+    renderInbox();
+    const select = await screen.findByLabelText('Filter inbox by email account');
+    expect(within(select).getByRole('option', { name: 'All accounts' })).toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: 'support@company.com' })).toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: 'sales@company.com' })).toBeInTheDocument();
+
+    await userEvent.selectOptions(select, 'support@company.com');
+    await waitFor(() =>
+      expect(mockGetInbox).toHaveBeenCalledWith(
+        expect.objectContaining({ account_email: 'support@company.com' })
+      )
+    );
+  });
+
+  // Once an account is picked the inbox narrows to that account's mail, so a
+  // switcher built purely from the current page would collapse to one option
+  // and trap the user. Discovered accounts must persist across filtering.
+  it('keeps every discovered account option after narrowing to one account', async () => {
+    mockGmailAccounts.mockResolvedValue([]);
+    mockSmtpAccounts.mockResolvedValue([]);
+    const supportThread = makeThread({
+      gmail_thread_id: 'th-support',
+      messages: [{ id: 'm1', direction: 'received', from_email: 'lead@x.com',
+        to_email: 'support@company.com', gmail_account_id: 'g1',
+        gmail_account_email: 'support@company.com', is_read: false,
+        timestamp: new Date().toISOString() }],
+    });
+    const salesThread = makeThread({
+      gmail_thread_id: 'th-sales',
+      messages: [{ id: 'm2', direction: 'sent', from_email: 'sales@company.com',
+        to_email: 'lead@x.com', gmail_account_id: 'g2',
+        gmail_account_email: 'sales@company.com', is_read: true,
+        timestamp: new Date().toISOString() }],
+    });
+    // Unfiltered → both accounts' mail; filtered to support → only support's.
+    mockGetInbox.mockImplementation((params = {}) =>
+      Promise.resolve(
+        params.account_email === 'support@company.com'
+          ? { threads: [supportThread], total: 1, page: 1, per_page: 20 }
+          : { threads: [supportThread, salesThread], total: 2, page: 1, per_page: 20 }
+      )
+    );
+
+    renderInbox();
+    const select = await screen.findByLabelText('Filter inbox by email account');
+    await userEvent.selectOptions(select, 'support@company.com');
+
+    await waitFor(() =>
+      expect(mockGetInbox).toHaveBeenCalledWith(
+        expect.objectContaining({ account_email: 'support@company.com' })
+      )
+    );
+    // sales@ was only ever in the unfiltered response, yet it must still be an
+    // option so the user can switch back.
+    expect(within(select).getByRole('option', { name: 'sales@company.com' })).toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: 'support@company.com' })).toBeInTheDocument();
   });
 });
 
