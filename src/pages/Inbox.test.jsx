@@ -16,6 +16,14 @@ const mockBulkMarkRead = vi.fn();
 const mockIntelligence = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGetSignatures = vi.fn();
+const mockSnooze = vi.fn();
+const mockUnsnooze = vi.fn();
+const mockBulkSnooze = vi.fn();
+const mockListLabels = vi.fn();
+const mockCreateLabel = vi.fn();
+const mockAddThreadLabel = vi.fn();
+const mockRemoveThreadLabel = vi.fn();
+const mockGetAnalytics = vi.fn();
 
 vi.mock('../api/client', () => ({
   queryClient: { invalidateQueries: vi.fn() },
@@ -32,6 +40,16 @@ vi.mock('../api/client', () => ({
     bulkArchive: (...a) => mockBulkArchive(...a),
     bulkMarkRead: (...a) => mockBulkMarkRead(...a),
     getThreadIntelligence: (...a) => mockIntelligence(...a),
+    snoozeThread: (...a) => mockSnooze(...a),
+    unsnoozeThread: (...a) => mockUnsnooze(...a),
+    bulkSnooze: (...a) => mockBulkSnooze(...a),
+    listLabels: (...a) => mockListLabels(...a),
+    createLabel: (...a) => mockCreateLabel(...a),
+    updateLabel: vi.fn(),
+    deleteLabel: vi.fn(),
+    addThreadLabel: (...a) => mockAddThreadLabel(...a),
+    removeThreadLabel: (...a) => mockRemoveThreadLabel(...a),
+    getAnalytics: (...a) => mockGetAnalytics(...a),
   },
   emailApi: {
     getTemplates: (...a) => mockGetTemplates(...a),
@@ -125,6 +143,14 @@ beforeEach(() => {
   mockGetSignatures.mockResolvedValue([
     { id: 'sig1', name: 'Default', content_html: '<p>Best,<br/>Sam</p>', is_default: true },
   ]);
+  mockSnooze.mockResolvedValue({ updated: 1, snoozed_until: '2026-07-23T09:00:00Z' });
+  mockUnsnooze.mockResolvedValue({ updated: 1, snoozed_until: null });
+  mockBulkSnooze.mockResolvedValue({ updated: 1 });
+  mockListLabels.mockResolvedValue([]);
+  mockCreateLabel.mockResolvedValue({ id: 'lb1', name: 'Hot', color: 'red', thread_count: 0 });
+  mockAddThreadLabel.mockResolvedValue({ attached: true });
+  mockRemoveThreadLabel.mockResolvedValue({ attached: false });
+  mockGetAnalytics.mockResolvedValue(null);
 });
 
 describe('Inbox account filter', () => {
@@ -376,6 +402,80 @@ describe('Inbox bulk actions', () => {
     await userEvent.click(within(bar).getByRole('button', { name: /Archive/i }));
 
     await waitFor(() => expect(mockBulkArchive).toHaveBeenCalledWith(['thread-1'], true));
+  });
+});
+
+describe('Inbox snooze', () => {
+  it('has a Snoozed tab that drives the filter param', async () => {
+    renderInbox();
+    await waitFor(() => expect(mockGetInbox).toHaveBeenCalled());
+
+    await userEvent.click(screen.getByRole('button', { name: /Snoozed/i }));
+    await waitFor(() =>
+      expect(mockGetInbox).toHaveBeenCalledWith(expect.objectContaining({ filter: 'snoozed' }))
+    );
+  });
+
+  it('snoozes a thread from the row quick-action menu', async () => {
+    mockGetInbox.mockResolvedValue({ ...EMPTY_INBOX, threads: [makeThread()], total: 1 });
+    renderInbox();
+
+    await userEvent.click(await screen.findByTitle('Snooze'));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Tomorrow/i }));
+
+    await waitFor(() => expect(mockSnooze).toHaveBeenCalled());
+    expect(mockSnooze.mock.calls[0][0]).toBe('thread-1');
+    expect(typeof mockSnooze.mock.calls[0][1]).toBe('string'); // ISO snoozed_until
+  });
+
+  it('renders a snoozed badge for a snoozed thread', async () => {
+    mockGetInbox.mockResolvedValue({
+      ...EMPTY_INBOX,
+      threads: [makeThread({ snoozed_until: '2026-07-24T09:00:00Z' })],
+      total: 1,
+    });
+    renderInbox();
+    expect(await screen.findByTitle(/Snoozed until/i)).toBeInTheDocument();
+  });
+});
+
+describe('Inbox labels', () => {
+  it('shows label filter chips and scopes the inbox by label_id', async () => {
+    mockListLabels.mockResolvedValue([
+      { id: 'lb1', name: 'VIP', color: 'purple', thread_count: 2 },
+    ]);
+    renderInbox();
+
+    const chip = await screen.findByRole('button', { name: /VIP/i });
+    await userEvent.click(chip);
+    await waitFor(() =>
+      expect(mockGetInbox).toHaveBeenCalledWith(expect.objectContaining({ label_id: 'lb1' }))
+    );
+  });
+
+  it('renders label chips attached to a thread row', async () => {
+    mockGetInbox.mockResolvedValue({
+      ...EMPTY_INBOX,
+      threads: [makeThread({ labels: [{ id: 'lb1', name: 'Follow up', color: 'blue' }] })],
+      total: 1,
+    });
+    renderInbox();
+    expect(await screen.findByText('Follow up')).toBeInTheDocument();
+  });
+});
+
+describe('Inbox analytics', () => {
+  it('renders the analytics stat bar when metrics are available', async () => {
+    mockGetAnalytics.mockResolvedValue({
+      window_days: 30, sent_count: 12, received_count: 8, unread_count: 3,
+      needs_reply_count: 2, responded_count: 5, avg_response_seconds: 7200,
+      median_response_seconds: 3600, classification_breakdown: {}, daily_volume: [],
+    });
+    renderInbox();
+
+    expect(await screen.findByText('Needs reply')).toBeInTheDocument();
+    expect(screen.getByText('Avg. response')).toBeInTheDocument();
+    expect(screen.getByText('2h')).toBeInTheDocument(); // 7200s humanized
   });
 });
 

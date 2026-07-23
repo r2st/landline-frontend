@@ -645,6 +645,33 @@ export const emailHistoryApi = {
     api.post('/emails/threads/archive', { thread_ids: threadIds }, {
       params: { is_archived: isArchived },
     }).then(r => r.data),
+  // Snooze — hide a thread until `snoozedUntil` (an ISO string), then it
+  // resurfaces automatically. `null` un-snoozes.
+  snoozeThread: (threadId, snoozedUntil) =>
+    api.post(`/emails/thread/${encodeURIComponent(threadId)}/snooze`, {
+      snoozed_until: snoozedUntil,
+    }).then(r => r.data),
+  unsnoozeThread: (threadId) =>
+    api.post(`/emails/thread/${encodeURIComponent(threadId)}/unsnooze`).then(r => r.data),
+  bulkSnooze: (threadIds, snoozedUntil) =>
+    api.post('/emails/threads/snooze', {
+      thread_ids: threadIds, snoozed_until: snoozedUntil,
+    }).then(r => r.data),
+  // Labels — user-created thread tags.
+  listLabels: () => api.get('/emails/labels').then(r => r.data),
+  createLabel: (name, color = 'gray') =>
+    api.post('/emails/labels', { name, color }).then(r => r.data),
+  updateLabel: (labelId, patch) =>
+    api.patch(`/emails/labels/${labelId}`, patch).then(r => r.data),
+  deleteLabel: (labelId) =>
+    api.delete(`/emails/labels/${labelId}`).then(r => r.data),
+  addThreadLabel: (threadId, labelId) =>
+    api.post(`/emails/thread/${encodeURIComponent(threadId)}/labels/${labelId}`).then(r => r.data),
+  removeThreadLabel: (threadId, labelId) =>
+    api.delete(`/emails/thread/${encodeURIComponent(threadId)}/labels/${labelId}`).then(r => r.data),
+  // Mailbox analytics — volume, response time, intent breakdown.
+  getAnalytics: (days = 30) =>
+    api.get('/emails/analytics', { params: { days } }).then(r => r.data),
 };
 
 // Gmail OAuth — connect a Google account so outreach sends from the user's own

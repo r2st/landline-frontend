@@ -5,7 +5,7 @@ import {
   CheckCircle2, MousePointerClick, Reply, MessageSquare, Search, RefreshCw,
   Building2, ArrowRight, Clock, Archive, ArchiveRestore, Flame, Calendar,
   Sparkles, FileText, PenLine, Brain, TrendingUp, X, ChevronLeft, ChevronDown,
-  AlertTriangle, Keyboard,
+  AlertTriangle, Keyboard, AlarmClock, Tag, Plus, Trash2, Timer, User, Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '../components/EmptyState';
@@ -17,6 +17,8 @@ import { InboxSkeleton, ThreadDetailSkeleton } from '../components/Skeleton';
 import {
   useEmailInbox, useSendReply, useTriggerSync,
   useMarkThreadRead, useArchiveThread, useBulkThreadAction, useThreadIntelligence,
+  useSnoozeThread, useInboxLabels, useLabelMutations, useThreadLabel,
+  useInboxAnalytics,
 } from '../hooks/useEmailHistory';
 import { useEmailTemplates, useEmailSignatures } from '../hooks/useEmailTemplates';
 import { useConnectedAccounts } from '../hooks/useConnectedAccounts';
@@ -26,6 +28,10 @@ import { timeAgo, cn } from '../lib/utils';
 import {
   fullTimestamp, senderDisplay, counterpartyEmail, threadStatus,
 } from '../lib/inboxUi';
+import {
+  labelChipClasses, labelDotClass, snoozePresets, formatSnoozeUntil,
+  LABEL_COLOR_TOKENS,
+} from '../lib/inboxExtras';
 
 const STATUS_CONFIG = {
   sent:      { icon: CheckCircle2,      colors: 'bg-blue-50 text-blue-700' },
@@ -55,12 +61,14 @@ const FILTER_OPTIONS = [
   { value: 'opened',      label: 'Opened',       icon: MailOpen },
   { value: 'needs_reply', label: 'Needs Reply',  icon: Clock },
   { value: 'priority',    label: 'Priority',     icon: Flame },
+  { value: 'snoozed',     label: 'Snoozed',      icon: AlarmClock },
   { value: 'archived',    label: 'Archived',     icon: Archive },
 ];
 
 const SHORTCUTS = [
   { keys: 'j / k', desc: 'Next / previous conversation' },
   { keys: 'e',     desc: 'Archive open conversation' },
+  { keys: 'h',     desc: 'Snooze open conversation (tomorrow)' },
   { keys: 'r',     desc: 'Reply (focus composer)' },
   { keys: '⌘ / Ctrl + Enter', desc: 'Send reply' },
   { keys: '/',     desc: 'Focus search' },
@@ -132,14 +140,237 @@ function ThreadStatusPill({ thread }) {
   );
 }
 
+// ─── Labels ───────────────────────────────────────────────────────────────────
+
+function LabelChip({ label, onRemove }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+        labelChipClasses(label.color)
+      )}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', labelDotClass(label.color))} />
+      {label.name}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(label); }}
+          aria-label={`Remove label ${label.name}`}
+          className="ml-0.5 rounded-full hover:bg-black/10"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </span>
+  );
+}
+
+// Small controlled dropdown with click-outside + Escape close. Renders a
+// trigger and, when open, a floating panel.
+function Dropdown({ trigger, children, align = 'right', panelClass, title }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      {trigger({ open, toggle: () => setOpen((v) => !v), close: () => setOpen(false) })}
+      {open && (
+        <div
+          className={cn(
+            'absolute z-20 mt-1 min-w-[13rem] rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg',
+            align === 'right' ? 'right-0' : 'left-0',
+            panelClass
+          )}
+          role="menu"
+        >
+          {title && (
+            <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              {title}
+            </div>
+          )}
+          {typeof children === 'function' ? children({ close: () => setOpen(false) }) : children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Snooze picker — presets + un-snooze. `onSnooze` receives an ISO string.
+function SnoozeMenu({ thread, onSnooze, onUnsnooze, buttonClass, iconOnly }) {
+  const isSnoozed = !!thread.snoozed_until;
+  const presets = snoozePresets();
+  return (
+    <Dropdown
+      title="Snooze until"
+      trigger={({ toggle }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          title={isSnoozed ? 'Snoozed — change or wake' : 'Snooze'}
+          className={buttonClass}
+        >
+          <AlarmClock className={cn('h-4 w-4', isSnoozed && 'text-amber-500')} />
+          {!iconOnly && <span className="ml-1.5">Snooze</span>}
+        </button>
+      )}
+    >
+      {({ close }) => (
+        <div className="space-y-0.5">
+          {presets.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              role="menuitem"
+              onClick={(e) => { e.stopPropagation(); onSnooze(p.date.toISOString()); close(); }}
+              className="flex w-full items-center justify-between gap-4 rounded-lg px-2.5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <span className="font-medium">{p.label}</span>
+              <span className="text-[11px] text-gray-400">{p.sub}</span>
+            </button>
+          ))}
+          {isSnoozed && (
+            <>
+              <div className="my-1 border-t border-gray-100" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(e) => { e.stopPropagation(); onUnsnooze(); close(); }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+              >
+                <ArchiveRestore className="h-3.5 w-3.5" /> Wake now
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
+// Label picker — toggle existing labels on a thread + quick-create.
+function LabelMenu({ thread, labels, onToggle, onCreate, buttonClass, iconOnly }) {
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('indigo');
+  const attachedIds = new Set((thread.labels || []).map((l) => String(l.id)));
+
+  const submitCreate = (close) => {
+    const name = newName.trim();
+    if (!name) return;
+    onCreate(name, newColor);
+    setNewName('');
+    close?.();
+  };
+
+  return (
+    <Dropdown
+      title="Labels"
+      trigger={({ toggle }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          title="Labels"
+          className={buttonClass}
+        >
+          <Tag className="h-4 w-4" />
+          {!iconOnly && <span className="ml-1.5">Label</span>}
+        </button>
+      )}
+    >
+      {({ close }) => (
+        <div className="space-y-0.5">
+          {labels.length === 0 && (
+            <p className="px-2.5 py-1 text-xs text-gray-400">No labels yet — create one below.</p>
+          )}
+          <div className="max-h-52 overflow-y-auto">
+            {labels.map((label) => {
+              const on = attachedIds.has(String(label.id));
+              return (
+                <button
+                  key={label.id}
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={on}
+                  onClick={(e) => { e.stopPropagation(); onToggle(label, !on); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <span className={cn('h-2.5 w-2.5 rounded-full', labelDotClass(label.color))} />
+                  <span className="flex-1 truncate">{label.name}</span>
+                  {on && <Check className="h-3.5 w-3.5 text-indigo-600" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-1 border-t border-gray-100 pt-2">
+            <div className="flex items-center gap-1.5 px-1">
+              <div className="flex gap-1">
+                {LABEL_COLOR_TOKENS.slice(0, 6).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-label={`Colour ${c}`}
+                    onClick={(e) => { e.stopPropagation(); setNewColor(c); }}
+                    className={cn(
+                      'h-4 w-4 rounded-full ring-2 ring-offset-1',
+                      labelDotClass(c),
+                      newColor === c ? 'ring-gray-400' : 'ring-transparent'
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="mt-1.5 flex items-center gap-1 px-1">
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') { e.preventDefault(); submitCreate(close); }
+                }}
+                placeholder="New label…"
+                aria-label="New label name"
+                className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); submitCreate(close); }}
+                aria-label="Create label"
+                className="rounded-md bg-indigo-500 p-1.5 text-white hover:bg-indigo-600"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
 // ─── Thread list row (left rail) ──────────────────────────────────────────────
 
-function ThreadRow({ thread, active, checked, onSelect, onToggleCheck, onArchive }) {
+function ThreadRow({
+  thread, active, checked, onSelect, onToggleCheck, onArchive, onSnooze, onUnsnooze,
+}) {
   const threadId = thread.gmail_thread_id;
   const displaySubject = thread.subject || '(No subject)';
   const messageCount = thread.messages?.length || 0;
   const lastMsg = thread.messages?.[thread.messages.length - 1];
   const isArchived = thread.is_archived;
+  const isSnoozed = !!thread.snoozed_until;
+  const labels = thread.labels || [];
   const person = lastMsg ? senderDisplay(lastMsg) : (thread.lead_name || '');
   const personEmail = lastMsg ? counterpartyEmail(lastMsg) : '';
 
@@ -212,6 +443,16 @@ function ThreadRow({ thread, active, checked, onSelect, onToggleCheck, onArchive
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <ThreadStatusPill thread={thread} />
           <ClassificationChip classification={thread.classification} />
+          {isSnoozed && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20"
+              title={`Snoozed until ${fullTimestamp(thread.snoozed_until)}`}
+            >
+              <AlarmClock className="h-3 w-3" />
+              {formatSnoozeUntil(thread.snoozed_until)}
+            </span>
+          )}
+          {labels.map((label) => <LabelChip key={label.id} label={label} />)}
           {thread.lead_name && (
             <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
               <Building2 className="h-3 w-3" />
@@ -221,14 +462,24 @@ function ThreadRow({ thread, active, checked, onSelect, onToggleCheck, onArchive
         </div>
       </button>
 
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onArchive(thread); }}
-        title={isArchived ? 'Unarchive' : 'Archive'}
-        className="flex-shrink-0 rounded-md p-1.5 text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-600 focus:opacity-100 group-hover:opacity-100"
-      >
-        {isArchived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-      </button>
+      {/* Hover quick actions */}
+      <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
+        <SnoozeMenu
+          thread={thread}
+          onSnooze={(iso) => onSnooze(thread, iso)}
+          onUnsnooze={() => onUnsnooze(thread)}
+          iconOnly
+          buttonClass="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onArchive(thread); }}
+          title={isArchived ? 'Unarchive' : 'Archive'}
+          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        >
+          {isArchived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+        </button>
+      </div>
     </div>
   );
 }
@@ -571,9 +822,117 @@ function ReplyComposer({ thread, drafts, composerRef, suggestion }) {
   );
 }
 
+// ─── Contact details sidebar (detail pane, right column) ──────────────────────
+
+function ContactSidebar({ thread, labels, onToggleLabel, onCreateLabel }) {
+  const navigate = useNavigate();
+  const messages = thread.messages || [];
+  // The counterparty is whoever we're corresponding with — take it from the
+  // most recent inbound message, else the latest message.
+  const inbound = [...messages].reverse().find((m) => m.direction === 'received');
+  const ref = inbound || messages[messages.length - 1];
+  const name = ref ? senderDisplay(ref) : (thread.lead_name || 'Unknown');
+  const email = ref ? counterpartyEmail(ref) : '';
+  const contactId = ref?.contact_id;
+  const firstActivity = messages[0]?.timestamp;
+  const attached = thread.labels || [];
+
+  return (
+    <aside className="hidden w-72 flex-shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white p-4 xl:flex">
+      <div className="flex flex-col items-center text-center">
+        <Avatar name={name} email={email} size="lg" />
+        <p className="mt-2 text-sm font-semibold text-gray-900">{name}</p>
+        {email && <p className="truncate text-xs text-gray-500">{email}</p>}
+      </div>
+
+      <div className="mt-4 space-y-3 text-sm">
+        {thread.lead_name && (
+          <button
+            type="button"
+            onClick={() => thread.lead_id && navigate(`/companies/${thread.lead_id}`)}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-left',
+              thread.lead_id && 'hover:border-indigo-300 hover:bg-indigo-50/40'
+            )}
+          >
+            <Building2 className="h-4 w-4 flex-shrink-0 text-gray-400" />
+            <span className="min-w-0 flex-1 truncate text-gray-700">{thread.lead_name}</span>
+            {thread.lead_id && <ArrowRight className="h-3.5 w-3.5 text-gray-400" />}
+          </button>
+        )}
+
+        <dl className="space-y-2 rounded-lg border border-gray-200 px-3 py-2.5 text-xs">
+          <div className="flex items-center justify-between">
+            <dt className="text-gray-400">Messages</dt>
+            <dd className="font-medium text-gray-700">{messages.length}</dd>
+          </div>
+          {thread.classification && (
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-gray-400">Intent</dt>
+              <dd><ClassificationChip classification={thread.classification} /></dd>
+            </div>
+          )}
+          {firstActivity && (
+            <div className="flex items-center justify-between">
+              <dt className="text-gray-400">First contact</dt>
+              <dd className="text-gray-600" title={fullTimestamp(firstActivity)}>{timeAgo(firstActivity)}</dd>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <dt className="text-gray-400">Last activity</dt>
+            <dd className="text-gray-600" title={fullTimestamp(thread.last_activity)}>{timeAgo(thread.last_activity)}</dd>
+          </div>
+        </dl>
+
+        {contactId && (
+          <button
+            type="button"
+            onClick={() => navigate(`/contacts/${contactId}`)}
+            className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-left text-gray-700 hover:border-indigo-300 hover:bg-indigo-50/40"
+          >
+            <User className="h-4 w-4 flex-shrink-0 text-gray-400" />
+            <span className="flex-1">View contact</span>
+            <ArrowRight className="h-3.5 w-3.5 text-gray-400" />
+          </button>
+        )}
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-xs font-medium text-gray-400">Labels</span>
+            <LabelMenu
+              thread={thread}
+              labels={labels}
+              onToggle={onToggleLabel}
+              onCreate={onCreateLabel}
+              iconOnly
+              buttonClass="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {attached.length === 0 ? (
+              <span className="text-xs text-gray-400">None</span>
+            ) : (
+              attached.map((label) => (
+                <LabelChip
+                  key={label.id}
+                  label={label}
+                  onRemove={(l) => onToggleLabel(l, false)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 // ─── Thread detail pane ──────────────────────────────────────────────────────
 
-function ThreadDetail({ thread, drafts, composerRef, onArchive, onMarkUnread, onClose }) {
+function ThreadDetail({
+  thread, drafts, composerRef, onArchive, onMarkUnread, onClose,
+  onSnooze, onUnsnooze, labels, onToggleLabel, onCreateLabel,
+}) {
   const navigate = useNavigate();
   // IntelligenceStrip pushes a suggested reply down into the composer. The tick
   // makes each click a distinct event the composer can react to.
@@ -619,6 +978,21 @@ function ThreadDetail({ thread, drafts, composerRef, onArchive, onMarkUnread, on
           )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-1">
+          <LabelMenu
+            thread={thread}
+            labels={labels}
+            onToggle={onToggleLabel}
+            onCreate={onCreateLabel}
+            iconOnly
+            buttonClass="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          />
+          <SnoozeMenu
+            thread={thread}
+            onSnooze={(iso) => onSnooze(thread, iso)}
+            onUnsnooze={() => onUnsnooze(thread)}
+            iconOnly
+            buttonClass="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          />
           <button
             type="button"
             onClick={() => onMarkUnread(thread)}
@@ -638,12 +1012,20 @@ function ThreadDetail({ thread, drafts, composerRef, onArchive, onMarkUnread, on
         </div>
       </div>
 
-      {/* Scrollable conversation */}
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-gray-50/50 p-4">
-        <IntelligenceStrip threadId={thread.gmail_thread_id} onUseSuggestion={handleUseSuggestion} />
-        {thread.messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+      {/* Conversation + contact sidebar */}
+      <div className="flex min-h-0 flex-1">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-gray-50/50 p-4">
+          <IntelligenceStrip threadId={thread.gmail_thread_id} onUseSuggestion={handleUseSuggestion} />
+          {thread.messages.map((msg) => (
+            <MessageBubble key={msg.id} message={msg} />
+          ))}
+        </div>
+        <ContactSidebar
+          thread={thread}
+          labels={labels}
+          onToggleLabel={onToggleLabel}
+          onCreateLabel={onCreateLabel}
+        />
       </div>
 
       {/* Composer */}
@@ -657,6 +1039,50 @@ function ThreadDetail({ thread, drafts, composerRef, onArchive, onMarkUnread, on
   );
 }
 
+// ─── Analytics summary bar ────────────────────────────────────────────────────
+
+function humanizeDuration(seconds) {
+  if (seconds == null) return '—';
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const mins = seconds / 60;
+  if (mins < 60) return `${Math.round(mins)}m`;
+  const hours = mins / 60;
+  if (hours < 24) {
+    const h = hours < 10 ? Math.round(hours * 10) / 10 : Math.round(hours);
+    return `${h}h`;
+  }
+  return `${Math.round(hours / 24)}d`;
+}
+
+function StatTile({ icon: Icon, label, value, tone = 'gray' }) {
+  const tones = {
+    gray: 'text-gray-500', indigo: 'text-indigo-500',
+    amber: 'text-amber-500', green: 'text-green-500',
+  };
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+      <Icon className={cn('h-4 w-4 flex-shrink-0', tones[tone])} />
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-none text-gray-900">{value}</p>
+        <p className="mt-0.5 truncate text-[11px] text-gray-400">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsBar({ analytics }) {
+  if (!analytics) return null;
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <StatTile icon={ArrowDownLeft} tone="indigo" label={`Received · ${analytics.window_days}d`} value={analytics.received_count ?? 0} />
+      <StatTile icon={ArrowUpRight} tone="green" label={`Sent · ${analytics.window_days}d`} value={analytics.sent_count ?? 0} />
+      <StatTile icon={Mail} tone="amber" label="Unread" value={analytics.unread_count ?? 0} />
+      <StatTile icon={Clock} tone="amber" label="Needs reply" value={analytics.needs_reply_count ?? 0} />
+      <StatTile icon={Timer} tone="indigo" label="Avg. response" value={humanizeDuration(analytics.avg_response_seconds)} />
+    </div>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function Inbox() {
@@ -664,6 +1090,7 @@ export default function Inbox() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
+  const [labelFilter, setLabelFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -673,6 +1100,11 @@ export default function Inbox() {
 
   const drafts = useInboxDrafts();
   const { accounts: connectedAccounts } = useConnectedAccounts();
+  const snooze = useSnoozeThread();
+  const { data: labels = [] } = useInboxLabels();
+  const { create: createLabelMut } = useLabelMutations();
+  const threadLabel = useThreadLabel();
+  const { data: analytics } = useInboxAnalytics(30);
   // Accounts learned from the mail itself, accumulated across fetches so the
   // switcher's options never shrink when the user narrows to one account (which
   // would otherwise make every *other* option vanish and trap them). Keyed by
@@ -688,10 +1120,11 @@ export default function Inbox() {
     const p = { page, per_page: 20, filter };
     if (search) p.search = search;
     if (accountEmail) p.account_email = accountEmail;
+    if (labelFilter) p.label_id = labelFilter;
     if (dateFrom) p.date_from = `${dateFrom}T00:00:00`;
     if (dateTo) p.date_to = `${dateTo}T23:59:59`;
     return p;
-  }, [page, filter, search, accountEmail, dateFrom, dateTo]);
+  }, [page, filter, search, accountEmail, labelFilter, dateFrom, dateTo]);
 
   const { data, isLoading, error, refetch } = useEmailInbox(params);
   const triggerSync = useTriggerSync();
@@ -760,6 +1193,54 @@ export default function Inbox() {
     );
   }, [markRead]);
 
+  const snoozeThread = useCallback((thread, isoUntil) => {
+    const id = thread.gmail_thread_id;
+    snooze.mutate(
+      { threadId: id, snoozedUntil: isoUntil },
+      {
+        onSuccess: () => {
+          if (selectedId === id) setSelectedId(null);
+          showUndoToast(`Snoozed until ${formatSnoozeUntil(isoUntil)}`, () => {
+            snooze.mutate({ threadId: id, snoozedUntil: null });
+          });
+        },
+        onError: () => toast.error('Failed to snooze thread'),
+      }
+    );
+  }, [snooze, selectedId]);
+
+  const unsnoozeThread = useCallback((thread) => {
+    snooze.mutate(
+      { threadId: thread.gmail_thread_id, snoozedUntil: null },
+      {
+        onSuccess: () => toast.success('Woke up'),
+        onError: () => toast.error('Failed to wake thread'),
+      }
+    );
+  }, [snooze]);
+
+  const toggleLabel = useCallback((thread, label, attached) => {
+    threadLabel.mutate(
+      { threadId: thread.gmail_thread_id, labelId: label.id, attached },
+      { onError: () => toast.error('Failed to update label') }
+    );
+  }, [threadLabel]);
+
+  const createAndAttachLabel = useCallback((thread, name, color) => {
+    createLabelMut.mutate(
+      { name, color },
+      {
+        onSuccess: (label) => {
+          if (label?.id) {
+            threadLabel.mutate({ threadId: thread.gmail_thread_id, labelId: label.id, attached: true });
+          }
+          toast.success(`Label "${name}" created`);
+        },
+        onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to create label'),
+      }
+    );
+  }, [createLabelMut, threadLabel]);
+
   const handleSync = useCallback(() => {
     triggerSync.mutate(undefined, {
       onSuccess: (result) => { toast.success(`Synced ${result.synced || 0} new emails`); refetch(); },
@@ -782,6 +1263,12 @@ export default function Inbox() {
 
   const handleAccountChange = useCallback((e) => {
     setAccountEmail(e.target.value);
+    setPage(1);
+    setSelectedId(null);
+  }, []);
+
+  const handleLabelFilter = useCallback((labelId) => {
+    setLabelFilter((cur) => (cur === labelId ? '' : labelId));
     setPage(1);
     setSelectedId(null);
   }, []);
@@ -822,9 +1309,30 @@ export default function Inbox() {
     );
   }, [checked, bulkAction]);
 
+  const runBulkSnooze = useCallback(() => {
+    const ids = [...checked];
+    if (ids.length === 0) return;
+    const until = snoozePresets()[1].date.toISOString(); // tomorrow 9am
+    bulkAction.mutate(
+      { action: 'snooze', threadIds: ids, value: until },
+      {
+        onSuccess: () => {
+          setChecked(new Set());
+          showUndoToast(`Snoozed ${ids.length}`, () =>
+            bulkAction.mutate({ action: 'snooze', threadIds: ids, value: null })
+          );
+        },
+        onError: () => toast.error('Bulk snooze failed'),
+      }
+    );
+  }, [checked, bulkAction]);
+
   // Keyboard shortcuts (P1-4). Refs keep the handler fresh without re-binding.
   const kb = useRef({});
-  kb.current = { threads, selectedId, selectThread, archiveWithUndo, selectedThread, toggleCheck };
+  kb.current = {
+    threads, selectedId, selectThread, archiveWithUndo, selectedThread,
+    toggleCheck, snoozeThread,
+  };
   useEffect(() => {
     const onKey = (e) => {
       const s = kb.current;
@@ -862,6 +1370,9 @@ export default function Inbox() {
       } else if (e.key === 'e' && s.selectedThread) {
         e.preventDefault();
         s.archiveWithUndo(s.selectedThread);
+      } else if (e.key === 'h' && s.selectedThread) {
+        e.preventDefault();
+        s.snoozeThread(s.selectedThread, snoozePresets()[1].date.toISOString());
       } else if (e.key === 'r' && s.selectedThread) {
         e.preventDefault();
         composerRef.current?.focus();
@@ -903,6 +1414,8 @@ export default function Inbox() {
           </button>
         </div>
       </div>
+
+      <AnalyticsBar analytics={analytics} />
 
       {showShortcuts && (
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -1009,6 +1522,45 @@ export default function Inbox() {
         )}
       </div>
 
+      {/* Label filter chips */}
+      {labels.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600">
+            <Tag className="h-4 w-4 text-gray-400" /> Labels
+          </span>
+          {labels.map((label) => {
+            const on = labelFilter === String(label.id);
+            return (
+              <button
+                key={label.id}
+                type="button"
+                onClick={() => handleLabelFilter(String(label.id))}
+                aria-pressed={on}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset transition',
+                  on ? labelChipClasses(label.color) : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50'
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', labelDotClass(label.color))} />
+                {label.name}
+                {typeof label.thread_count === 'number' && label.thread_count > 0 && (
+                  <span className="text-[10px] text-gray-400">{label.thread_count}</span>
+                )}
+              </button>
+            );
+          })}
+          {labelFilter && (
+            <button
+              type="button"
+              onClick={() => handleLabelFilter(labelFilter)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-3.5 w-3.5" /> Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Bulk action bar */}
       {checked.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5">
@@ -1028,6 +1580,14 @@ export default function Inbox() {
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             <Archive className="h-3.5 w-3.5" /> Archive
+          </button>
+          <button
+            type="button"
+            onClick={() => runBulkSnooze()}
+            disabled={bulkAction.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <AlarmClock className="h-3.5 w-3.5" /> Snooze to tomorrow
           </button>
           <button
             type="button"
@@ -1094,6 +1654,8 @@ export default function Inbox() {
                       onSelect={selectThread}
                       onToggleCheck={toggleCheck}
                       onArchive={archiveWithUndo}
+                      onSnooze={snoozeThread}
+                      onUnsnooze={unsnoozeThread}
                     />
                   ))}
                 </div>
@@ -1140,6 +1702,11 @@ export default function Inbox() {
                 onArchive={archiveWithUndo}
                 onMarkUnread={markUnread}
                 onClose={() => setSelectedId(null)}
+                onSnooze={snoozeThread}
+                onUnsnooze={unsnoozeThread}
+                labels={labels}
+                onToggleLabel={(label, attached) => toggleLabel(selectedThread, label, attached)}
+                onCreateLabel={(name, color) => createAndAttachLabel(selectedThread, name, color)}
               />
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
