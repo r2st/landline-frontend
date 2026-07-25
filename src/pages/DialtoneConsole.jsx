@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Radio, Mail, MailOpen, MousePointerClick, MessageSquareReply, AlertTriangle,
   Ban, UserPlus, Send, Gauge, ShieldCheck, RefreshCw, Search, Filter, X, ChevronRight,
-  ChevronDown, Phone,
+  ChevronDown, Phone, ArrowUp, ArrowDown, Minus, CalendarRange,
 } from 'lucide-react';
 import HelpIcon from '../components/HelpIcon';
 import EmptyState from '../components/EmptyState';
@@ -51,6 +51,26 @@ const FILTER_TYPES = [
 ];
 
 const PAGE_SIZE = 50;
+
+// Reporting windows the stats endpoints accept, in menu order. Values must match
+// app/services/timeframes.py — the API 400s on anything else.
+const TIMEFRAMES = [
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: 'this_week', label: 'This week' },
+  { value: 'last_week', label: 'Last week' },
+  { value: 'this_month', label: 'This month' },
+  { value: 'last_month', label: 'Last month' },
+  { value: 'all_time', label: 'All time' },
+];
+
+// What the console shows before anyone touches the selector. A week is wide
+// enough that a quiet morning doesn't read as a dead agent, and narrow enough to
+// still be about right now.
+const DEFAULT_TIMEFRAME = 'this_week';
+
+const timeframeLabel = (value) =>
+  TIMEFRAMES.find((t) => t.value === value)?.label || 'This week';
 
 function relTime(iso) {
   const d = new Date(iso);
@@ -204,23 +224,120 @@ function ActivityRow({ it, target }) {
   );
 }
 
-// --- Console header stat tiles ----------------------------------------------
-// `to` drills the tile's number down to the events behind it.
-function StatTile({ label, value, icon: Icon, tone = 'gray', to }) {
+// --- Timeframe selector ------------------------------------------------------
+// A pill group rather than a <select>: the whole page's numbers hang off this
+// one choice, so the current window should be readable without opening anything.
+function TimeframeSelector({ value, onChange }) {
+  return (
+    <div
+      role="group"
+      aria-label="Stats timeframe"
+      className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm"
+    >
+      <CalendarRange className="ml-1.5 mr-0.5 h-4 w-4 flex-shrink-0 text-gray-400" aria-hidden="true" />
+      {TIMEFRAMES.map((t) => {
+        const active = t.value === value;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => onChange(t.value)}
+            aria-pressed={active}
+            className={cn(
+              'rounded-lg px-2.5 py-1 text-sm font-medium transition-colors',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+              active
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            )}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- Stat presentation -------------------------------------------------------
+// Percent change vs the previous period of the same length. `invert` flips the
+// colour for metrics where up is bad (bounces, errors) — a red +40% on bounces
+// and a green +40% on replies are both "more", and only one is good news.
+//
+// `undefined` means this metric has no comparison at all — either the timeframe
+// has no previous period (all time), or the number isn't a count of events in the
+// window (warm-up headroom). `null` means there *is* a previous period but it was
+// empty, so a percentage would divide by zero: that reads as "New" when something
+// happened this period, and as nothing at all when both are empty — "+∞%" and
+// "0%" would both be lies.
+function DeltaChip({ value, current = 0, invert = false }) {
+  if (value === undefined) return null;
+  if (value === null) {
+    if (!current) return null;
+    return (
+      <span
+        title="No activity in the previous period"
+        className="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-500"
+      >
+        New
+      </span>
+    );
+  }
+  const flat = value === 0;
+  const up = value > 0;
+  const good = flat ? null : (invert ? !up : up);
+  const Icon = flat ? Minus : up ? ArrowUp : ArrowDown;
+  return (
+    <span
+      title={`${up ? '+' : ''}${value}% vs the previous period`}
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
+        good === null && 'bg-gray-100 text-gray-500',
+        good === true && 'bg-green-50 text-green-700',
+        good === false && 'bg-red-50 text-red-700'
+      )}
+    >
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {Math.abs(value)}%
+    </span>
+  );
+}
+
+// Rates arrive as fractions (0..1) from the API.
+const asPct = (fraction) =>
+  fraction === null || fraction === undefined ? null : `${Math.round(fraction * 100)}%`;
+
+// "52% of sends", or nothing at all when the rate is missing. Interpolating
+// `asPct` straight into a template renders the literal string "null of sends"
+// against a backend that doesn't send `rates` yet — which is every request in
+// the window where the frontend has deployed and the API hasn't.
+const ofSends = (fraction) => {
+  const pct = asPct(fraction);
+  return pct === null ? null : `${pct} of sends`;
+};
+
+// One number in the funnel: prominent value, label, delta vs previous period,
+// and the rate it converts at. `to` drills down to the events behind the number.
+function StatCell({ label, value, icon: Icon, tone = 'gray', to, delta, sub, invert }) {
   const iconClass = cn('h-4 w-4', {
     indigo: 'text-indigo-400', blue: 'text-blue-400', green: 'text-green-400',
     violet: 'text-violet-400', red: 'text-red-400', amber: 'text-amber-400', gray: 'text-gray-300',
   }[tone]);
+  const count = value ?? 0;
 
   const body = (
     <>
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</span>
-        <Icon className={iconClass} />
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</span>
+        <Icon className={iconClass} aria-hidden="true" />
       </div>
-      <p className={cn('mt-2 text-2xl font-bold text-gray-900', to && 'underline-offset-4 group-hover:underline')}>
-        {value ?? 0}
-      </p>
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <p className={cn('text-3xl font-bold leading-none text-gray-900', to && 'underline-offset-4 group-hover:underline')}>
+          {count.toLocaleString()}
+        </p>
+        <DeltaChip value={delta} current={count} invert={invert} />
+      </div>
+      <p className="mt-1.5 h-4 text-xs text-gray-500">{sub || ''}</p>
     </>
   );
 
@@ -230,7 +347,7 @@ function StatTile({ label, value, icon: Icon, tone = 'gray', to }) {
   return (
     <Link
       to={to}
-      aria-label={`${label}: ${value ?? 0}. Filter the activity log to these events`}
+      aria-label={`${label}: ${count}. Filter the activity log to these events`}
       className={cn(
         shell,
         'group block cursor-pointer transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md',
@@ -239,6 +356,60 @@ function StatTile({ label, value, icon: Icon, tone = 'gray', to }) {
     >
       {body}
     </Link>
+  );
+}
+
+// The outreach funnel, read left to right: what went out, and how much of it
+// landed. Grouping these four (rather than scattering them among bounces, errors
+// and warm-up headroom) is what makes the drop-off between them legible.
+function FunnelCard({ stats, deltas, rates, label, drillTo, comparable }) {
+  const sent = stats.emails_sent ?? 0;
+  // With no previous period (all time) there is nothing to compare against, and
+  // an absent delta is what tells the chip to stay away entirely.
+  const delta = (key) => (comparable ? deltas[key] ?? null : undefined);
+  const steps = [
+    {
+      key: 'email_sent', label: 'Sent', value: sent, icon: Mail, tone: 'indigo',
+      delta: delta('emails_sent'), sub: 'emails on the wire',
+    },
+    {
+      key: 'email_opened', label: 'Opens', value: stats.opens, icon: MailOpen, tone: 'blue',
+      delta: delta('opens'), sub: sent ? ofSends(rates.open_rate) : null,
+    },
+    {
+      key: 'email_clicked', label: 'Clicks', value: stats.clicks, icon: MousePointerClick, tone: 'violet',
+      delta: delta('clicks'), sub: sent ? ofSends(rates.click_rate) : null,
+    },
+    {
+      key: 'reply', label: 'Replies', value: stats.replies, icon: MessageSquareReply, tone: 'green',
+      delta: delta('replies'), sub: sent ? ofSends(rates.reply_rate) : null,
+    },
+  ];
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <Send className="h-4 w-4 text-indigo-500" />
+          Outreach funnel
+        </h2>
+        <span className="text-xs font-medium text-gray-500">{label}</span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {steps.map((s) => (
+          <StatCell
+            key={s.key}
+            label={s.label}
+            value={s.value}
+            icon={s.icon}
+            tone={s.tone}
+            delta={s.delta}
+            sub={s.sub}
+            to={drillTo(s.key)}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -334,7 +505,7 @@ function SendersCard({ senders }) {
 // callable number, the hit rate against attempts, the Apollo-direct-dial vs
 // company-line split, and the latest finds. Distinct from the activity feed's
 // per-event "Phone found" rows — this is the standing scoreboard.
-function PhoneEnrichmentCard({ summary }) {
+function PhoneEnrichmentCard({ summary, label }) {
   const enriched = summary?.enriched ?? 0;
   const attempts = summary?.attempts ?? 0;
   const apollo = summary?.apollo ?? 0;
@@ -351,12 +522,14 @@ function PhoneEnrichmentCard({ summary }) {
           <Phone className="h-4 w-4 text-green-500" />
           Phone enrichment
         </h2>
-        <span className="text-xs text-gray-400">{attempts} looked up</span>
+        <span className="text-xs text-gray-400">
+          {attempts} looked up{label ? ` · ${label.toLowerCase()}` : ''}
+        </span>
       </div>
 
       {enriched === 0 && attempts === 0 ? (
         <p className="mt-4 text-sm text-gray-400">
-          No numbers found yet. Dialtone enriches warm leads with a phone number as they engage.
+          No numbers found in this period. Dialtone enriches warm leads with a phone number as they engage.
         </p>
       ) : (
         <>
@@ -421,40 +594,63 @@ function PhoneEnrichmentCard({ summary }) {
 }
 
 export default function DialtoneConsole() {
-  const { data: consoleData, isLoading: consoleLoading, refetch, isFetching } = useDialtoneConsole();
-  const { data: phoneSummary } = usePhoneEnrichment();
-  const today = consoleData?.today || {};
-  const warmup = consoleData?.warmup || {};
-
-  // The tallies above are scoped to the console's reporting day, so their
-  // drill-downs must be too. Without the date bounds a tile reading "Sent: 12"
-  // opened a feed of every send ever — the number you clicked and the list you
-  // landed on didn't reconcile. `end` is expanded to the end of the day by
-  // `filters` below, so passing the same date for both bounds means that day.
-  const reportingDay = consoleData?.date;
-  const drillTo = (type) => {
-    const params = new URLSearchParams({ type });
-    if (reportingDay) {
-      params.set('start', reportingDay);
-      params.set('end', reportingDay);
-    }
-    return `/dialtone?${params}`;
-  };
-
-  // Activity feed filters live in the URL: that's what lets the stat tiles above
-  // (and links from other pages) be plain links into a filtered log, and keeps
-  // the filter bar and the URL from drifting apart.
+  // Everything on this page — stats, enrichment card, activity feed — is scoped
+  // to one window, and that window lives in the URL alongside the feed filters
+  // so a console view is a shareable link.
   const [searchParams, setSearchParams] = useSearchParams();
+  const timeframe = searchParams.get('timeframe') || DEFAULT_TIMEFRAME;
+
+  const { data: consoleData, isLoading: consoleLoading, refetch, isFetching } = useDialtoneConsole(timeframe);
+  const { data: phoneSummary } = usePhoneEnrichment(8, timeframe);
+  // `stats` is the timeframe-aware field; `today` is the pre-timeframe name the
+  // API still mirrors, so an older backend keeps rendering numbers.
+  const stats = consoleData?.stats || consoleData?.today || {};
+  const deltas = consoleData?.deltas || {};
+  const rates = consoleData?.rates || {};
+  const warmup = consoleData?.warmup || {};
+  const label = consoleData?.timeframe_label || timeframeLabel(timeframe);
+  // All-time has no period before it, so there's nothing to show a change against.
+  const comparable = Boolean(consoleData?.previous);
+  const delta = (key) => (comparable ? deltas[key] ?? null : undefined);
+
   const type = searchParams.get('type') || '';
-  const start = searchParams.get('start') || '';
-  const end = searchParams.get('end') || '';
   const q = searchParams.get('q') || '';
   const [page, setPage] = useState(1);
+
+  // The feed follows the selected timeframe unless the operator hand-picks
+  // dates. Deriving the bounds from the window the API reported (rather than
+  // recomputing week/month starts here) is what keeps a tile reading "Sent: 12"
+  // and the list it opens telling the same story.
+  const rangeStart = consoleData?.range_start || '';
+  const rangeEnd = consoleData?.range_end || '';
+  const start = searchParams.get('start') || rangeStart;
+  const end = searchParams.get('end') || rangeEnd;
+
+  // Tiles only need to add the event type: the window is already applied.
+  const drillTo = (eventType) => {
+    const params = new URLSearchParams({ type: eventType });
+    if (timeframe !== DEFAULT_TIMEFRAME) params.set('timeframe', timeframe);
+    if (searchParams.get('start')) params.set('start', searchParams.get('start'));
+    if (searchParams.get('end')) params.set('end', searchParams.get('end'));
+    if (q.trim()) params.set('q', q.trim());
+    return `/dialtone?${params}`;
+  };
 
   const setFilter = (key) => (value) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
+    setSearchParams(next, { replace: true });
+  };
+
+  // Switching timeframe drops any hand-picked dates, so the feed snaps back to
+  // the new window instead of showing last month's rows under this week's stats.
+  const setTimeframe = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value && value !== DEFAULT_TIMEFRAME) next.set('timeframe', value);
+    else next.delete('timeframe');
+    next.delete('start');
+    next.delete('end');
     setSearchParams(next, { replace: true });
   };
 
@@ -475,7 +671,12 @@ export default function DialtoneConsole() {
   const total = feed?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const hasFilters = Boolean(type || start || end || q.trim());
+  // The timeframe isn't a "filter" to clear — it's the window the whole page is
+  // reporting on, and Clear returns it to the default along with everything else.
+  const hasFilters = Boolean(
+    type || q.trim() || searchParams.get('start') || searchParams.get('end') ||
+    timeframe !== DEFAULT_TIMEFRAME
+  );
   const resetFilters = () => setSearchParams({}, { replace: true });
 
   // Any filter change — including one arriving from a stat tile — puts the feed
@@ -520,28 +721,60 @@ export default function DialtoneConsole() {
       {/* Global sending status + kill switch */}
       <SendingKillSwitch compact />
 
-      {/* Console header: warm-up + senders + today's tallies */}
+      {/* Which window every number below covers. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TimeframeSelector value={timeframe} onChange={setTimeframe} />
+        <p className="text-xs text-gray-500">
+          {rangeStart && rangeEnd
+            ? (rangeStart === rangeEnd ? rangeStart : `${rangeStart} → ${rangeEnd}`)
+            : 'All recorded activity'}
+          {consoleData?.previous ? ' · change vs the previous period' : ''}
+        </p>
+      </div>
+
+      {/* Stats: the send→reply funnel, plus the warm-up ramp it runs inside. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <WarmupCard warmup={warmup} />
         <div className="lg:col-span-2">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Sent" value={today.emails_sent} icon={Mail} tone="indigo" to={drillTo('email_sent')} />
-            <StatTile label="Opens" value={today.opens} icon={MailOpen} tone="blue" to={drillTo('email_opened')} />
-            <StatTile label="Clicks" value={today.clicks} icon={MousePointerClick} tone="violet" to={drillTo('email_clicked')} />
-            <StatTile label="Replies" value={today.replies} icon={MessageSquareReply} tone="green" to={drillTo('reply')} />
-            <StatTile label="Bounces" value={today.bounces} icon={AlertTriangle} tone="red" to={drillTo('bounced')} />
-            <StatTile label="Errors" value={today.errors} icon={AlertTriangle} tone="red" to={drillTo('error')} />
-            <StatTile label="Leads found" value={today.leads_discovered} icon={UserPlus} tone="blue" to={drillTo('lead_discovered')} />
-            {/* Remaining is warm-up headroom, not a count of events — nothing to drill into. */}
-            <StatTile label="Remaining" value={warmup.daily_remaining} icon={Gauge} tone="gray" />
-          </div>
+          <FunnelCard
+            stats={stats}
+            deltas={deltas}
+            rates={rates}
+            label={label}
+            drillTo={drillTo}
+            comparable={comparable}
+          />
         </div>
+        <WarmupCard warmup={warmup} />
+      </div>
+
+      {/* Deliverability problems and pipeline — separate from the funnel because
+          they're read differently: here, up is bad (except leads found). */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCell
+          label="Bounces" value={stats.bounces} icon={AlertTriangle} tone="red" invert
+          delta={delta('bounces')} to={drillTo('bounced')}
+          sub={stats.emails_sent && asPct(rates.bounce_rate) ? `${asPct(rates.bounce_rate)} of attempts` : null}
+        />
+        <StatCell
+          label="Errors" value={stats.errors} icon={AlertTriangle} tone="amber" invert
+          delta={delta('errors')} to={drillTo('error')} sub="failed to send"
+        />
+        <StatCell
+          label="Leads found" value={stats.leads_discovered} icon={UserPlus} tone="blue"
+          delta={delta('leads_discovered')} to={drillTo('lead_discovered')} sub="new prospects"
+        />
+        {/* Warm-up headroom is a today-only cap, not a count of events in the
+            selected window — nothing to drill into, and no delta to compare. */}
+        <StatCell
+          label="Remaining" value={warmup.daily_remaining} icon={Gauge} tone="gray"
+          sub="sends left today"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-1">
           <SendersCard senders={consoleData?.senders} />
-          <PhoneEnrichmentCard summary={phoneSummary} />
+          <PhoneEnrichmentCard summary={phoneSummary} label={label} />
         </div>
 
         {/* Activity log */}
@@ -552,6 +785,8 @@ export default function DialtoneConsole() {
               <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
                 <Filter className="h-4 w-4 text-gray-400" />
                 Activity
+                {/* The feed shares the stats' window, so say which one. */}
+                <span className="font-normal text-gray-400">· {label}</span>
               </div>
               <div className="relative ml-auto">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />

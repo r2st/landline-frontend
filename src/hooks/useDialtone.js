@@ -1,42 +1,56 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { dialtoneApi, sendTimingApi } from '../api/client';
 
 // Dialtone Console header — polls so the "live" feel holds up while the agent
-// works. Degrades to a safe empty shape if the backend isn't ready.
-export function useDialtoneConsole() {
+// works. `timeframe` scopes the tallies (and the vs-previous-period deltas the
+// response carries with them); it's part of the query key so switching windows
+// doesn't serve the last one's numbers. Degrades to a safe empty shape if the
+// backend isn't ready.
+export function useDialtoneConsole(timeframe) {
   return useQuery({
-    queryKey: ['dialtone-console'],
+    queryKey: ['dialtone-console', timeframe],
     queryFn: async () => {
       try {
-        return await dialtoneApi.console();
+        return await dialtoneApi.console(timeframe);
       } catch {
         return {
           sending: { enabled: true },
           warmup: {},
+          stats: {},
           today: {},
           senders: [],
+          timeframe,
+          deltas: {},
+          rates: {},
         };
       }
     },
     refetchInterval: 30000,
+    // Hold the last window's numbers on screen while the new one loads, so
+    // switching timeframes reads as the figures changing rather than the whole
+    // header blanking to zeros. (v5 spelling — a bare `keepPreviousData: true`
+    // is a v4 option and silently does nothing here.)
+    placeholderData: keepPreviousData,
     retry: false,
   });
 }
 
-// Warm-lead phone-enrichment roll-up for the Console card. Degrades to a safe
-// zeroed shape so the card renders "nothing enriched yet" rather than blanking
-// out when the backend isn't ready.
-export function usePhoneEnrichment(recentLimit = 8) {
+// Warm-lead phone-enrichment roll-up for the Console card, scoped to the same
+// timeframe as the rest of the page's stats. Degrades to a safe zeroed shape so
+// the card renders "nothing enriched yet" rather than blanking out when the
+// backend isn't ready.
+export function usePhoneEnrichment(recentLimit = 8, timeframe) {
   return useQuery({
-    queryKey: ['dialtone-phone-enrichment', recentLimit],
+    queryKey: ['dialtone-phone-enrichment', recentLimit, timeframe],
     queryFn: async () => {
       try {
-        return await dialtoneApi.phoneEnrichment(recentLimit);
+        return await dialtoneApi.phoneEnrichment(recentLimit, timeframe);
       } catch {
         return { enriched: 0, attempts: 0, hit_rate: 0, apollo: 0, company: 0, recent: [] };
       }
     },
     refetchInterval: 60000,
+    placeholderData: keepPreviousData,
     retry: false,
   });
 }
@@ -61,7 +75,9 @@ export function useDialtoneActivity(filters) {
       }
     },
     refetchInterval: 30000,
-    keepPreviousData: true,
+    // The feed follows the selected timeframe, so it re-keys on every window
+    // change too — same reason as the header above.
+    placeholderData: keepPreviousData,
     retry: false,
   });
 }

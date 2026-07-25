@@ -424,15 +424,22 @@ export const placesDiscoveryApi = {
 
 // Dialtone Console — the unified activity log for the autonomous cold-email agent.
 export const dialtoneApi = {
-  // At-a-glance header: sending state, warm-up ramp, today's tallies, senders.
-  console: () => api.get('/dialtone/console').then(r => r.data),
-  // Chronological event stream. `params` accepts { start, end, types, status,
-  // contact_id, q, page, page_size }.
+  // At-a-glance header: sending state, warm-up ramp, the selected timeframe's
+  // tallies (+ `previous`, `deltas`, `rates`, `range_start`/`range_end`), senders.
+  // `timeframe` is one of today | yesterday | this_week | last_week |
+  // this_month | last_month | all_time; omitted means the API default (today).
+  console: (timeframe) =>
+    api.get('/dialtone/console', { params: timeframe ? { timeframe } : {} }).then(r => r.data),
+  // Chronological event stream. `params` accepts { start, end, timeframe, types,
+  // status, contact_id, q, page, page_size }; explicit start/end beat timeframe.
   activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
   // Warm-lead phone-enrichment roll-up: { enriched, attempts, hit_rate,
-  // apollo, company, recent[] }. `recentLimit` caps the recent-activity strip.
-  phoneEnrichment: (recentLimit = 8) =>
-    api.get('/dialtone/phone-enrichment/summary', { params: { recent_limit: recentLimit } }).then(r => r.data),
+  // apollo, company, recent[] }. `recentLimit` caps the recent-activity strip;
+  // `timeframe` scopes it by when each number was found (default all time).
+  phoneEnrichment: (recentLimit = 8, timeframe) =>
+    api.get('/dialtone/phone-enrichment/summary', {
+      params: { recent_limit: recentLimit, ...(timeframe ? { timeframe } : {}) },
+    }).then(r => r.data),
   // Warm-up plans (Feature 1): one per sending account, with today's usage.
   // [{ account_id, account_type, account_email, current_day, daily_limit,
   //    status, used_today, remaining_today, start_date }]

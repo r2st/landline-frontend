@@ -29,6 +29,10 @@ vi.mock('../api/client', () => ({
 
 import DialtoneConsole from './DialtoneConsole';
 
+const STATS = {
+  emails_sent: 8, opens: 5, clicks: 2, replies: 1, bounces: 0, errors: 0, leads_discovered: 3,
+};
+
 const CONSOLE = {
   date: '2026-07-15',
   sending: { enabled: true },
@@ -36,9 +40,23 @@ const CONSOLE = {
     today_sent: 8, daily_limit: 20, daily_remaining: 12, monthly_sent: 120,
     warmup_active: true, warmup_week: 1,
   },
-  today: {
-    emails_sent: 8, opens: 5, clicks: 2, replies: 1, bounces: 0, errors: 0, leads_discovered: 3,
+  // `stats` is the timeframe-aware field; `today` mirrors it for older clients.
+  stats: STATS,
+  today: STATS,
+  timeframe: 'this_week',
+  timeframe_label: 'This week',
+  range_start: '2026-07-13',
+  range_end: '2026-07-19',
+  previous: {
+    emails_sent: 4, opens: 5, clicks: 0, replies: 0, bounces: 2, errors: 0, leads_discovered: 0,
   },
+  previous_range_start: '2026-07-06',
+  previous_range_end: '2026-07-12',
+  deltas: {
+    emails_sent: 100, opens: 0, clicks: null, replies: null,
+    bounces: -100, errors: null, leads_discovered: null,
+  },
+  rates: { open_rate: 0.625, click_rate: 0.25, reply_rate: 0.125, bounce_rate: 0 },
   senders: [
     {
       account_id: 'a1', account_type: 'gmail', email: 'suman.das@apprend.tech',
@@ -123,7 +141,7 @@ describe('DialtoneConsole page', () => {
       data: { enriched: 0, attempts: 0, hit_rate: 0, apollo: 0, company: 0, recent: [] },
     });
     renderPage();
-    expect(screen.getByText(/no numbers found yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no numbers found in this period/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when the feed is empty', () => {
@@ -134,19 +152,28 @@ describe('DialtoneConsole page', () => {
 
   it('links each tally to the activity log filtered to those events', () => {
     renderPage();
-    // The tallies are scoped to the console's reporting day, so the drill-down
-    // carries that day too — an unbounded link would open every send ever and
-    // fail to reconcile with the number just clicked.
+    // The window is already the page's (the default timeframe), so a tile only
+    // has to add the event type.
     expect(screen.getByRole('link', { name: /^Sent: 8/ })).toHaveAttribute(
       'href',
-      '/dialtone?type=email_sent&start=2026-07-15&end=2026-07-15'
+      '/dialtone?type=email_sent'
     );
     expect(screen.getByRole('link', { name: /^Leads found: 3/ })).toHaveAttribute(
       'href',
-      '/dialtone?type=lead_discovered&start=2026-07-15&end=2026-07-15'
+      '/dialtone?type=lead_discovered'
     );
     // Warm-up headroom isn't a count of events, so it stays inert.
     expect(screen.queryByRole('link', { name: /^Remaining/ })).toBeNull();
+  });
+
+  it('carries a non-default timeframe into the drill-down', () => {
+    // Otherwise clicking "Sent" while viewing Last month would open the feed on
+    // this week's rows — the number and the list wouldn't reconcile.
+    renderPage('/dialtone?timeframe=last_month');
+    expect(screen.getByRole('link', { name: /^Sent: 8/ })).toHaveAttribute(
+      'href',
+      '/dialtone?type=email_sent&timeframe=last_month'
+    );
   });
 
   it('drills into exactly the day the tallies count', () => {
@@ -162,11 +189,156 @@ describe('DialtoneConsole page', () => {
     );
   });
 
-  it('still links a tile when the console reports no date', () => {
-    mockConsole.mockReturnValue({ data: { ...CONSOLE, date: undefined }, isLoading: false, refetch: vi.fn() });
+  it('still links a tile when the console reports no window', () => {
+    mockConsole.mockReturnValue({
+      data: { ...CONSOLE, range_start: null, range_end: null },
+      isLoading: false, refetch: vi.fn(),
+    });
     renderPage();
     // Degrade to the unbounded link rather than emitting `start=undefined`.
     expect(screen.getByRole('link', { name: /^Sent: 8/ })).toHaveAttribute('href', '/dialtone?type=email_sent');
+  });
+
+  // ─── Timeframe selector ───────────────────────────────────────────────────
+
+  it('offers every timeframe and defaults to this week', () => {
+    renderPage();
+    const group = screen.getByRole('group', { name: /stats timeframe/i });
+    expect(group).toBeInTheDocument();
+    for (const label of ['Today', 'Yesterday', 'This week', 'Last week',
+      'This month', 'Last month', 'All time']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    // Nothing in the URL → this week, and the console is asked for exactly that.
+    expect(screen.getByRole('button', { name: 'This week' })).toHaveAttribute('aria-pressed', 'true');
+    expect(mockConsole).toHaveBeenCalledWith('this_week');
+  });
+
+  it('re-fetches the stats when a timeframe is picked', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Last month' }));
+    expect(mockConsole).toHaveBeenLastCalledWith('last_month');
+    expect(screen.getByRole('button', { name: 'Last month' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'This week' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('reads the timeframe from the URL so a console view is shareable', () => {
+    renderPage('/dialtone?timeframe=yesterday');
+    expect(mockConsole).toHaveBeenCalledWith('yesterday');
+    expect(screen.getByRole('button', { name: 'Yesterday' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('scopes the enrichment card to the same timeframe as the stats', () => {
+    renderPage('/dialtone?timeframe=this_month');
+    expect(mockPhone).toHaveBeenCalledWith(8, 'this_month');
+  });
+
+  it('scopes the activity feed to the window the stats cover', () => {
+    renderPage();
+    // No hand-picked dates: the feed follows the window the API reported for the
+    // selected timeframe, so the log under the numbers is the same period.
+    expect(mockActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ start: '2026-07-13', end: '2026-07-19T23:59:59' })
+    );
+  });
+
+  it('drops hand-picked dates when the timeframe changes', () => {
+    renderPage('/dialtone?start=2026-07-01&end=2026-07-02');
+    expect(mockActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ start: '2026-07-01' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    // Back to the reported window — a stale hand-picked range under a new
+    // timeframe is exactly the mismatch the selector is meant to remove.
+    expect(mockActivity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ start: '2026-07-13', end: '2026-07-19T23:59:59' })
+    );
+  });
+
+  it('shows the window the numbers cover, and that they carry a comparison', () => {
+    renderPage();
+    expect(screen.getByText(/2026-07-13 → 2026-07-19/)).toBeInTheDocument();
+    expect(screen.getByText(/change vs the previous period/i)).toBeInTheDocument();
+  });
+
+  it('says so when the window is unbounded', () => {
+    mockConsole.mockReturnValue({
+      data: {
+        ...CONSOLE, timeframe: 'all_time', timeframe_label: 'All time',
+        range_start: null, range_end: null, previous: null,
+        deltas: { emails_sent: null, opens: null, clicks: null, replies: null,
+          bounces: null, errors: null, leads_discovered: null },
+      },
+      isLoading: false, refetch: vi.fn(),
+    });
+    renderPage('/dialtone?timeframe=all_time');
+    expect(screen.getByText(/all recorded activity/i)).toBeInTheDocument();
+    // No baseline to compare against, so no percentage chips are invented.
+    expect(screen.queryByText(/vs the previous period/i)).toBeNull();
+  });
+
+  // ─── Grouped stats + deltas ───────────────────────────────────────────────
+
+  it('groups the funnel and shows each step against sends', () => {
+    renderPage();
+    expect(screen.getByText('Outreach funnel')).toBeInTheDocument();
+    // Rates arrive as fractions and are shown as whole percentages.
+    expect(screen.getByText('63% of sends')).toBeInTheDocument();   // opens 0.625
+    expect(screen.getByText('25% of sends')).toBeInTheDocument();   // clicks 0.25
+    expect(screen.getByText('13% of sends')).toBeInTheDocument();   // replies 0.125
+  });
+
+  it('shows percentage change against the previous period', () => {
+    renderPage();
+    // Sends doubled: +100%, and up is good here.
+    const sent = screen.getByRole('link', { name: /^Sent: 8/ });
+    expect(sent).toHaveTextContent('100%');
+    expect(sent.querySelector('.text-green-700')).not.toBeNull();
+    // Bounces fell to zero: -100%, and down is good — the tone inverts.
+    const bounces = screen.getByRole('link', { name: /^Bounces: 0/ });
+    expect(bounces).toHaveTextContent('100%');
+    expect(bounces.querySelector('.text-green-700')).not.toBeNull();
+  });
+
+  it('flags a rise in bounces as bad news', () => {
+    mockConsole.mockReturnValue({
+      data: { ...CONSOLE, stats: { ...STATS, bounces: 6 }, deltas: { ...CONSOLE.deltas, bounces: 200 } },
+      isLoading: false, refetch: vi.fn(),
+    });
+    renderPage();
+    const bounces = screen.getByRole('link', { name: /^Bounces: 6/ });
+    expect(bounces).toHaveTextContent('200%');
+    expect(bounces.querySelector('.text-red-700')).not.toBeNull();
+  });
+
+  it('says "New" rather than inventing a percentage with no baseline', () => {
+    renderPage();
+    // Clicks went 0 → 2, so a percentage would be division by zero.
+    const clicks = screen.getByRole('link', { name: /^Clicks: 2/ });
+    expect(clicks).toHaveTextContent('New');
+  });
+
+  it('stays silent when a metric is empty in both periods', () => {
+    renderPage();
+    // Errors: 0 now, 0 before — no chip at all, not "0%" or "New".
+    const errors = screen.getByRole('link', { name: /^Errors: 0/ });
+    expect(errors).not.toHaveTextContent('New');
+    expect(errors).not.toHaveTextContent('%');
+  });
+
+  it('renders numbers from an older backend that only sends `today`', () => {
+    const legacy = { ...CONSOLE };
+    for (const field of ['stats', 'deltas', 'rates', 'previous']) delete legacy[field];
+    mockConsole.mockReturnValue({ data: legacy, isLoading: false, refetch: vi.fn() });
+    renderPage();
+    // `today` is the fallback, so the tiles still read 8 sends rather than 0.
+    expect(screen.getByRole('link', { name: /^Sent: 8/ })).toBeInTheDocument();
+    // With no `rates` there is no conversion line to draw. Interpolating the
+    // missing rate would print the literal "null of sends" — and that's the
+    // state of every request between the frontend deploy and the API's.
+    expect(screen.queryByText(/null of sends/)).toBeNull();
+    expect(screen.queryByText(/null of attempts/)).toBeNull();
+    expect(screen.queryByText(/NaN/)).toBeNull();
   });
 
   it('applies a type filter arriving from the URL', () => {

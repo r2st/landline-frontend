@@ -8,7 +8,9 @@ test.describe('Kill switch', () => {
     await stubApi(page);
     await authenticate(page);
     // Keep the Console shell happy.
-    await page.route('**/api/v1/dialtone/console', (route) => route.fulfill(json({})));
+    // `**` matters: the console is fetched with a `?timeframe=` param, and a
+    // glob without it stops matching the moment that param appears.
+    await page.route('**/api/v1/dialtone/console**', (route) => route.fulfill(json({})));
     await page.route('**/api/v1/dialtone/activity**', (route) => route.fulfill(json({ items: [], total: 0 })));
     // No active danger-signal trip → a clean manual pause path.
     await page.route('**/api/v1/dialtone/health/signals', (route) => route.fulfill(json({ active_trip: null })));
