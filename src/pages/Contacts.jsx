@@ -27,12 +27,21 @@ import {
   Send,
   Eye,
   ChevronDown,
+  Tag,
+  Ban,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '../components/EmptyState';
 import MetricCard from '../components/MetricCard';
 import ContactDetailModal from '../components/ContactDetailModal';
-import { useContacts, useDeleteContact, useQuickAddContact } from '../hooks/useContacts';
+import {
+  useBulkSuppress,
+  useBulkTag,
+  useContactTags,
+  useContacts,
+  useDeleteContact,
+  useQuickAddContact,
+} from '../hooks/useContacts';
 import { contactsApi, queryClient } from '../api/client';
 import { getInitials, cn, formatDate, timeAgo, contactPhones } from '../lib/utils';
 
@@ -332,7 +341,7 @@ function QuickAddForm({ onClose }) {
 }
 
 // ─── Bulk Action Bar ──────────────────────────────────────────────────────────
-function BulkActionBar({ selectedIds, items, onDeselect, onDelete, onExport }) {
+function BulkActionBar({ selectedIds, items, onDeselect, onDelete, onExport, onTag, onSuppress }) {
   if (selectedIds.length === 0) return null;
 
   return (
@@ -351,6 +360,27 @@ function BulkActionBar({ selectedIds, items, onDeselect, onDelete, onExport }) {
         >
           <Download className="h-3.5 w-3.5" />
           Export
+        </button>
+
+        <button
+          type="button"
+          onClick={onTag}
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <Tag className="h-3.5 w-3.5" />
+          Tag
+        </button>
+
+        {/* Amber, not red: suppression is reversible (the flag lifts), unlike
+            Delete next to it — but it stops live sequences, so it shouldn't
+            read as neutral either. */}
+        <button
+          type="button"
+          onClick={onSuppress}
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100"
+        >
+          <Ban className="h-3.5 w-3.5" />
+          Suppress
         </button>
 
         <button
@@ -526,8 +556,11 @@ function ActionsDropdown({ contact, onEdit, onDelete }) {
 }
 
 // ─── Advanced Filters Panel ───────────────────────────────────────────────────
-function FilterPanel({ filters, setFilters, onClear }) {
-  const hasFilters = filters.source !== 'all' || filters.status !== 'all' || filters.city || filters.companyName;
+function FilterPanel({ filters, setFilters, onClear, allTags = [], onToggleTag }) {
+  const hasFilters =
+    filters.source !== 'all' || filters.status !== 'all' || filters.city ||
+    filters.companyName || filters.tags.length > 0 ||
+    filters.suppressed !== 'all' || filters.bounced !== 'all';
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -592,7 +625,102 @@ function FilterPanel({ filters, setFilters, onClear }) {
             className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
+        {/* Suppression — the hard do-not-email gate. Worth its own filter
+            because "who did we take out of circulation" is a question you ask
+            after a bad list, and it isn't answerable from the status dropdown
+            (which conflates unsubscribes with missing addresses). */}
+        <div>
+          <label htmlFor="filter-suppressed" className="mb-1 block text-xs font-medium text-gray-500">
+            Suppressed
+          </label>
+          <select
+            id="filter-suppressed"
+            value={filters.suppressed}
+            onChange={(e) => setFilters((p) => ({ ...p, suppressed: e.target.value }))}
+            className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="all">Any</option>
+            <option value="yes">Suppressed only</option>
+            <option value="no">Not suppressed</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="filter-bounced" className="mb-1 block text-xs font-medium text-gray-500">
+            Bounced
+          </label>
+          <select
+            id="filter-bounced"
+            value={filters.bounced}
+            onChange={(e) => setFilters((p) => ({ ...p, bounced: e.target.value }))}
+            className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="all">Any</option>
+            <option value="yes">Has bounced</option>
+            <option value="no">Never bounced</option>
+          </select>
+        </div>
       </div>
+
+      {/* Tags. Rendered as toggles rather than a multi-select because the
+          counts are the point — a tag on 2 contacts and a tag on 2,000 need to
+          look different before you click one. */}
+      {allTags.length > 0 && (
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <div className="mb-2 flex items-center gap-3">
+            {/* A group of toggle buttons, not a form control — <p> rather than
+                <label>, which would have nothing to point at. */}
+            <p className="text-xs font-medium text-gray-500">Tags</p>
+            {filters.tags.length > 1 && (
+              <div className="flex items-center gap-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setFilters((p) => ({ ...p, tagMatch: 'all' }))}
+                  className={cn(
+                    'rounded px-1.5 py-0.5',
+                    filters.tagMatch === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-400 hover:text-gray-600',
+                  )}
+                >
+                  match all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilters((p) => ({ ...p, tagMatch: 'any' }))}
+                  className={cn(
+                    'rounded px-1.5 py-0.5',
+                    filters.tagMatch === 'any' ? 'bg-blue-100 text-blue-700' : 'text-gray-400 hover:text-gray-600',
+                  )}
+                >
+                  match any
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {allTags.map(({ tag, count }) => {
+              const active = filters.tags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onToggleTag?.(tag)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition',
+                    active
+                      ? 'bg-blue-600 text-white ring-blue-600'
+                      : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50',
+                  )}
+                >
+                  {tag}
+                  <span className={cn('tabular-nums', active ? 'text-blue-100' : 'text-gray-400')}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -683,6 +811,13 @@ export default function Contacts() {
     status: 'all',
     city: '',
     companyName: '',
+    // Tag / compliance filters are resolved server-side (see useContacts): a
+    // client-side pass would only ever search the page already loaded, so
+    // "everyone tagged X" would quietly mean "…among these 50 rows".
+    tags: [],
+    tagMatch: 'all',
+    suppressed: 'all',   // 'all' | 'yes' | 'no'
+    bounced: 'all',      // 'all' | 'yes' | 'no'
   });
 
   // Genuine vs test contact group — quick-access chips above the toolbar.
@@ -723,9 +858,55 @@ export default function Contacts() {
     city: filters.city.trim() || undefined,
     companyName: filters.companyName.trim() || undefined,
     group: group !== 'all' ? group : undefined,
+    tags: filters.tags,
+    tagMatch: filters.tagMatch,
+    suppressed: filters.suppressed === 'all' ? undefined : filters.suppressed === 'yes',
+    hasBounced: filters.bounced === 'all' ? undefined : filters.bounced === 'yes',
   });
 
   const deleteContact = useDeleteContact();
+  const { data: allTags = [] } = useContactTags();
+  const bulkTag = useBulkTag();
+  const bulkSuppress = useBulkSuppress();
+
+  const toggleTagFilter = (tag) => {
+    setFilters((p) => ({
+      ...p,
+      tags: p.tags.includes(tag) ? p.tags.filter((t) => t !== tag) : [...p.tags, tag],
+    }));
+  };
+
+  const handleBulkTag = async () => {
+    const raw = window.prompt(
+      'Tag the selected contacts with (comma-separated):\n\n' +
+      'Prefix a tag with "-" to remove it instead.',
+    );
+    if (!raw) return;
+    const entries = raw.split(',').map((t) => t.trim()).filter(Boolean);
+    const add = entries.filter((t) => !t.startsWith('-'));
+    const remove = entries.filter((t) => t.startsWith('-')).map((t) => t.slice(1).trim());
+    if (!add.length && !remove.length) return;
+    await bulkTag.mutateAsync({ contactIds: selectedIds, add, remove });
+    setSelectedIds([]);
+  };
+
+  const handleBulkSuppress = async () => {
+    // Suppression stops live sequences and is the gate every send path reads,
+    // so it gets an explicit confirmation naming both consequences rather than
+    // a silent bulk write.
+    const ok = window.confirm(
+      `Suppress ${selectedIds.length} contact${selectedIds.length === 1 ? '' : 's'}?\n\n` +
+      'They will never be emailed again, and any sequences they are currently ' +
+      'in will be stopped.',
+    );
+    if (!ok) return;
+    await bulkSuppress.mutateAsync({
+      contactIds: selectedIds,
+      suppressed: true,
+      reason: 'bulk suppression from contacts view',
+    });
+    setSelectedIds([]);
+  };
 
   const items = contactsData?.items || [];
   const total = contactsData?.total ?? items.length;
@@ -864,7 +1045,10 @@ export default function Contacts() {
   };
 
   const clearFilters = () => {
-    setFilters({ source: 'all', status: 'all', city: '', companyName: '' });
+    setFilters({
+      source: 'all', status: 'all', city: '', companyName: '',
+      tags: [], tagMatch: 'all', suppressed: 'all', bounced: 'all',
+    });
   };
 
   const activeFilterCount = [
@@ -872,7 +1056,9 @@ export default function Contacts() {
     filters.status !== 'all',
     !!filters.city.trim(),
     !!filters.companyName.trim(),
-  ].filter(Boolean).length;
+    filters.suppressed !== 'all',
+    filters.bounced !== 'all',
+  ].filter(Boolean).length + filters.tags.length;
 
   // ─── Inline edit cell renderer ──────────────────────────────────────────
   const renderEditableCell = (contact, field, displayValue) => {
@@ -1065,6 +1251,8 @@ export default function Contacts() {
           filters={filters}
           setFilters={setFilters}
           onClear={clearFilters}
+          allTags={allTags}
+          onToggleTag={toggleTagFilter}
         />
       )}
 
@@ -1287,6 +1475,8 @@ export default function Contacts() {
         onDeselect={() => setSelectedIds([])}
         onExport={handleBulkExport}
         onDelete={handleBulkDelete}
+        onTag={handleBulkTag}
+        onSuppress={handleBulkSuppress}
       />
 
       {/* Contact Detail Slide-Over */}

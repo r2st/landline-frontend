@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { dialtoneApi, sendTimingApi } from '../api/client';
 
@@ -82,7 +83,79 @@ export function useDialtoneActivity(filters) {
   });
 }
 
-// ── Smart Send-Time Optimization (Feature 6) ─────────────────────────────────
+// Live sending activity — the running feed on the Console.
+//
+// Deliberately NOT `useDialtoneActivity` on a short interval: that endpoint
+// pages the entire history and gets slower as the send log grows, which is
+// exactly the wrong cost curve for something polled every few seconds. This one
+// looks back a bounded window and carries a `since` cursor, so every poll after
+// the first asks "anything newer than X?" and usually answers nothing.
+//
+// The feed is accumulated in the hook rather than read off the cache: each
+// response contains only what's new, so React Query's own value would replace
+// the list with the last 8 seconds of events instead of extending it.
+export function useLiveActivity({ limit = 50, windowHours = 24, types, enabled = true } = {}) {
+  const key = `${limit}|${windowHours}|${types || ''}`;
+
+  // The accumulated feed, cursor and clock live in ONE state object stamped
+  // with the filter key it belongs to. Keeping the key alongside the data is
+  // what makes a filter change safe without resetting anything mid-render:
+  // a state object from the previous filter simply doesn't match, so it reads
+  // as empty and the next poll re-seeds from a full window. (Splicing events
+  // gathered under two different filters into one list would produce a feed
+  // that matches neither.)
+  const [feed, setFeed] = useState({ key, items: [], cursor: null, serverTime: null });
+  const current = feed.key === key ? feed : { key, items: [], cursor: null, serverTime: null };
+
+  const query = useQuery({
+    queryKey: ['dialtone-live-activity', key],
+    enabled,
+    queryFn: async () => {
+      try {
+        const data = await dialtoneApi.liveActivity({
+          limit,
+          window_hours: windowHours,
+          ...(types ? { types } : {}),
+          ...(current.cursor ? { since: current.cursor } : {}),
+        });
+        const fresh = Array.isArray(data?.items) ? data.items : [];
+        setFeed((prev) => {
+          const base = prev.key === key ? prev : { key, items: [], cursor: null, serverTime: null };
+          // Dedupe by id. A reconnect or a retried request can re-deliver an
+          // event, and a feed showing the same send twice reads as the system
+          // having sent it twice.
+          const seen = new Set(base.items.map((i) => i.id));
+          const merged = [...fresh.filter((i) => !seen.has(i.id)), ...base.items];
+          return {
+            key,
+            items: merged.slice(0, limit * 4),
+            cursor: data?.latest_at || base.cursor,
+            serverTime: data?.server_time || base.serverTime,
+          };
+        });
+        return data;
+      } catch {
+        // Keep what's already on screen — a blip in polling shouldn't blank a
+        // feed someone is reading.
+        return { items: [], server_time: null, latest_at: null };
+      }
+    },
+    refetchInterval: 8000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
+
+  return {
+    items: current.items,
+    serverTime: current.serverTime,
+    // Only "loading" before anything has ever arrived; later polls refresh in
+    // place rather than throwing the feed back to a spinner.
+    isLoading: query.isLoading && current.items.length === 0,
+    isFetching: query.isFetching,
+    windowHours,
+  };
+}
+
 // ── Smart Send-Time Optimization (Feature 6) ─────────────────────────
 // Each hook degrades to a safe empty/off shape so the results page always
 // renders — even before the backend ships or when the optimizer has no data.

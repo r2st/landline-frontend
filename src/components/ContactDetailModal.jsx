@@ -21,6 +21,7 @@ import {
 import { contactsApi, queryClient } from '../api/client';
 import { getInitials, contactPhones, formatDate, phonesToPayload } from '../lib/utils';
 import ContactSendTiming from './ContactSendTiming';
+import ContactEngagement, { ContactTags } from './ContactEngagement';
 
 const fullName = (c) =>
   [c?.first_name, c?.last_name].filter(Boolean).join(' ').trim() || c?.email || 'Unknown';
@@ -504,6 +505,15 @@ export default function ContactDetailModal({ contactId, initial, onClose, embedd
                   )}
                 </div>
               </div>
+
+              {/* Operator labels — the segmentation the taxonomy columns can't
+                  express ("people I met at IMTS"). */}
+              <ContactTags contactId={contactId} tags={c.tags || []} />
+
+              {/* What we've already sent them. It lives on the contact rather
+                  than in a reporting page because it's what you read before
+                  deciding what to send next. */}
+              <ContactEngagement contactId={contactId} />
 
               {/* Smart Send-Time — when this contact is most likely to open. */}
               <ContactSendTiming contactId={contactId} />

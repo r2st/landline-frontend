@@ -167,6 +167,31 @@ export const contactsApi = {
   quickAdd: (data) => api.post('/contacts/quick-add', data).then(r => r.data),
   // Find existing contacts that look like the one about to be saved (email / phone / name).
   checkDuplicate: (params) => api.get('/contacts/check-duplicate', { params }).then(r => r.data),
+
+  // --- Tags ---
+  // Every tag in use with its contact count: { tags: [{ tag, count }] }.
+  // Most-used first, so it reads as a filter menu.
+  listTags: () => api.get('/contacts/tags').then(r => r.data),
+  // Add/remove tags on one contact. `body` = { add?: [], remove?: [] }.
+  // Deltas, never a replacement set — two people tagging from the same stale
+  // list view would otherwise each write the set they last read, and whoever
+  // saved second would drop the other's tag.
+  updateTags: (id, body) => api.post(`/contacts/${id}/tags`, body).then(r => r.data),
+  // The same deltas across many contacts. `body` = { contact_ids, add?, remove? }.
+  bulkTag: (body) => api.post('/contacts/bulk-tag', body).then(r => r.data),
+  // Rename a tag everywhere it appears; merging into an existing tag de-dupes.
+  renameTag: (body) => api.post('/contacts/tags/rename', body).then(r => r.data),
+
+  // --- Suppression ---
+  // `body` = { contact_ids, suppressed?, reason? }. Suppressing also stops the
+  // contacts' live enrollments; un-suppressing deliberately does NOT restart them.
+  bulkSuppress: (body) => api.post('/contacts/bulk-suppress', body).then(r => r.data),
+
+  // --- Engagement ---
+  // Counters + recent history for one contact, read across BOTH send tables
+  // (sequence sends live only in outreach_events, manual sends in email_sends).
+  engagement: (id, limit = 50) =>
+    api.get(`/contacts/${id}/engagement`, { params: { limit } }).then(r => r.data),
 };
 
 export const emailApi = {
@@ -430,9 +455,15 @@ export const dialtoneApi = {
   // this_month | last_month | all_time; omitted means the API default (today).
   console: (timeframe) =>
     api.get('/dialtone/console', { params: timeframe ? { timeframe } : {} }).then(r => r.data),
-  // Chronological event stream. `params` accepts { start, end, timeframe, types,
-  // status, contact_id, q, page, page_size }; explicit start/end beat timeframe.
+  // Chronological event stream (the archive — paginates the whole history).
+  // `params` accepts { start, end, timeframe, types, status, contact_id, q,
+  // page, page_size }; explicit start/end beat timeframe.
   activity: (params) => api.get('/dialtone/activity', { params }).then(r => r.data),
+  // The live view — newest N events over a bounded lookback, cheap to poll.
+  // `params` accepts { limit, since, window_hours, types }. Pass the previous
+  // response's `latest_at` back as `since` and each poll returns only what's
+  // new. Returns { items, server_time, latest_at, window_hours }.
+  liveActivity: (params) => api.get('/dialtone/activity/live', { params }).then(r => r.data),
   // Warm-lead phone-enrichment roll-up: { enriched, attempts, hit_rate,
   // apollo, company, recent[] }. `recentLimit` caps the recent-activity strip;
   // `timeframe` scopes it by when each number was found (default all time).

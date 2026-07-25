@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import HelpIcon from '../components/HelpIcon';
 import EmptyState from '../components/EmptyState';
+import LiveActivityFeed from '../components/LiveActivityFeed';
 import SafeHtml from '../components/SafeHtml';
 import SendingKillSwitch from '../components/SendingKillSwitch';
 import { useDialtoneConsole, useDialtoneActivity, usePhoneEnrichment } from '../hooks/useDialtone';
@@ -773,6 +774,11 @@ export default function DialtoneConsole() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-1">
+          {/* What's happening right now, above the state-of-the-world cards.
+              Separate from the archive feed below because they answer different
+              questions: this one is "is it working, this minute", that one is
+              "what happened in the window I selected". */}
+          <LiveActivityFeed />
           <SendersCard senders={consoleData?.senders} />
           <PhoneEnrichmentCard summary={phoneSummary} label={label} />
         </div>

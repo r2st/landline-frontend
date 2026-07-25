@@ -7,10 +7,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const mockConsole = vi.fn();
 const mockActivity = vi.fn();
 const mockPhone = vi.fn();
+// The embedded live feed polls on its own timer; a quiet stub keeps these tests
+// about the page's own rendering rather than the feed's.
+const mockLive = vi.fn(() => ({
+  items: [], serverTime: null, isLoading: false, isFetching: false, windowHours: 24,
+}));
 vi.mock('../hooks/useDialtone', () => ({
   useDialtoneConsole: (...a) => mockConsole(...a),
   useDialtoneActivity: (...a) => mockActivity(...a),
   usePhoneEnrichment: (...a) => mockPhone(...a),
+  useLiveActivity: (...a) => mockLive(...a),
 }));
 
 // The embedded SendingKillSwitch banner fetches sending status on mount, and
