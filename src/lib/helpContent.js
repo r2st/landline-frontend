@@ -368,6 +368,41 @@ Every Console carries a **sending kill switch**. Flip it and Dialtone stops send
 - If errors spike, check Deliverability Health before resuming.`,
   },
   {
+    id: 'dialtone-campaigns',
+    category: 'dialtone',
+    title: 'Campaign performance',
+    route: '/dialtone/campaigns',
+    keywords: 'campaign campaigns performance compare open click reply bounce unsubscribe conversion deals ai composed personalization depth which campaign works best warm leads engagement score allocation',
+    summary: 'Every campaign side by side, and who to call this morning.',
+    body: `# Campaign performance
+
+A sequence's own analytics answer *how is this campaign doing, step by step*. This screen answers the question that actually decides something: **which campaign deserves tomorrow's sends.**
+
+With several sequences competing for a warm-up-capped daily budget, that allocation is the only lever with real leverage — and without this table it gets pulled from memory.
+
+## Reading the table
+Each row is one campaign over the window you pick (30 days by default, because a whole-history table hides a campaign that stopped working last week behind the months when it worked). Sorting happens on the server, so the ranking is the same one every other surface uses.
+
+## The two columns that keep the rest honest
+**AI copy** is the share of sends that were personalized rather than static mail-merge, and **depth** is how many prospect data points the copywriter had.
+
+A reply rate is uninterpretable without them. When the AI provider chain goes dark, a personalized campaign silently becomes a mail-merge campaign with the same name, the same send count, and a quietly worse reply rate. A high AI share next to a depth near zero means the model is writing from the merge fields and nothing else.
+
+## Unsub is the number your domain lives on
+A bounce is a bad address. An **unsubscribe is a person telling you to stop** — the leading indicator of the spam complaints that get a sending domain blocklisted, and unlike complaints you see all of them. It is banded tighter than bounce here for that reason.
+
+## Warmest prospects
+Below the table: everyone who has engaged, ranked by what they did and how recently. A reply outweighs a click outweighs an open, each decaying with age — so someone who clicked on Tuesday outranks someone who opened five emails in April. Each row carries the reason it is there, because "score 78" is not something anyone can act on.
+
+Anyone who unsubscribed or is suppressed scores zero and never appears.
+
+## Best practices
+- Compare on the 30-day window before deciding anything; lifetime averages hide trends in both directions.
+- A campaign with very few sends has rates that mean nothing yet — volume first, verdict later.
+- If reply rate moved, check AI copy and depth before crediting the copy.
+- Work the warm list top-down in the morning; it decays daily.`,
+  },
+  {
     id: 'ai-drafts',
     category: 'dialtone',
     title: 'AI draft generation',
