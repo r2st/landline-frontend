@@ -401,12 +401,12 @@ export const repliesApi = {
 
 // Smart reply — dispatch an operator-approved (and optionally edited) response
 // to a classified reply. The detail route drafts the copy; this actually sends
-// it. `body` = { reply_id, subject, body } — the subject/body are what the
-// operator approved, which may differ from the AI's original draft.
+// it. The reply is identified by the path, and the subject/body are what the
+// operator approved, which may differ from the AI's original draft. Omitting
+// the subject lets the server use `Re: <original subject>`.
 export const smartReplyApi = {
   send: ({ replyId, subject, body }) =>
-    api.post('/smart-reply/send', {
-      reply_id: replyId,
+    api.post(`/dialtone/inbox/${replyId}/approve-send`, {
       subject,
       body,
     }).then(r => r.data),
@@ -779,22 +779,29 @@ export const investorsApi = {
   getAll: (params) => api.get('/investors/', { params }).then(r => r.data),
   getById: (id) => api.get(`/investors/${id}`).then(r => r.data),
   create: (data) => api.post('/investors/', data).then(r => r.data),
-  update: (id, data) => api.patch(`/investors/${id}`, data).then(r => r.data),
+  update: (id, data) => api.put(`/investors/${id}`, data).then(r => r.data),
   remove: (id) => api.delete(`/investors/${id}`).then(r => r.data),
-  // Move an investor along the outreach pipeline (status progression).
-  updateStatus: (id, status) => api.patch(`/investors/${id}/status`, { status }).then(r => r.data),
+  // Move an investor along the outreach pipeline (status progression). There is
+  // no dedicated status route — `InvestorUpdate` carries `status`, and the
+  // update is a partial one (`exclude_unset`), so a body of just `{status}`
+  // moves the stage and touches nothing else.
+  updateStatus: (id, status) => api.put(`/investors/${id}`, { status }).then(r => r.data),
   // Pipeline funnel counts by status (+ stage breakdown).
   getPipeline: (params) => api.get('/investors/pipeline', { params }).then(r => r.data),
   // Interaction timeline (emails, calls, meetings, LinkedIn messages).
   getInteractions: (id) => api.get(`/investors/${id}/interactions`).then(r => r.data),
   createInteraction: (id, data) => api.post(`/investors/${id}/interactions`, data).then(r => r.data),
-  removeInteraction: (id, interactionId) => api.delete(`/investors/${id}/interactions/${interactionId}`).then(r => r.data),
+  // Interactions and documents are addressed by their own id, not nested under
+  // the investor — a document can be investor-agnostic (the pitch deck belongs
+  // to the round, not to one VC), so the collection cannot live under a single
+  // investor and the investor is a filter rather than a path segment.
+  removeInteraction: (id, interactionId) => api.delete(`/investors/interactions/${interactionId}`).then(r => r.data),
   // Data-room documents (pitch deck, financials, etc.).
-  getDocuments: (id) => api.get(`/investors/${id}/documents`).then(r => r.data),
-  createDocument: (id, data) => api.post(`/investors/${id}/documents`, data).then(r => r.data),
-  removeDocument: (id, documentId) => api.delete(`/investors/${id}/documents/${documentId}`).then(r => r.data),
+  getDocuments: (id) => api.get('/investors/documents', { params: { investor_id: id } }).then(r => r.data),
+  createDocument: (id, data) => api.post('/investors/documents', { ...data, investor_id: id }).then(r => r.data),
+  removeDocument: (id, documentId) => api.delete(`/investors/documents/${documentId}`).then(r => r.data),
   // AI-drafted personalised outreach email for this investor.
-  generateEmail: (id, data) => api.post(`/investors/${id}/generate-email`, data).then(r => r.data),
+  generateEmail: (id, data) => api.post(`/investors/${id}/outreach`, data).then(r => r.data),
 };
 
 // ─── Cold Calling (migration 028) ───────────────────────────────────────────
@@ -841,8 +848,15 @@ export const sentimentApi = {
 // returns everything held about that contact; erase is destructive and
 // irreversible, so the UI gates it behind a typed confirmation.
 export const gdprApi = {
-  export: (email) => api.get(`/gdpr/export/${encodeURIComponent(email)}`).then(r => r.data),
-  erase: (email) => api.post(`/gdpr/erase/${encodeURIComponent(email)}`).then(r => r.data),
+  // Both take the subject's address as data, never as a path segment — an
+  // email in a URL lands in access logs and in `Referer`, and this is the one
+  // surface whose whole job is handling a person's data carefully.
+  export: (email) => api.get('/gdpr/export', { params: { email } }).then(r => r.data),
+  // `confirm` is the server's acknowledgement flag for an irreversible write.
+  // It is set here because the caller has already made the operator retype the
+  // exact address into a confirmation dialog — that typed match *is* the
+  // acknowledgement. Without it the server refuses with a 400.
+  erase: (email) => api.post('/gdpr/erase', { email, confirm: true }).then(r => r.data),
 };
 
 // --- Social Listening Agent ---

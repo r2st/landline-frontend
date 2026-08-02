@@ -178,3 +178,99 @@ describe('api response interceptor — 403 organization deactivated', () => {
     expect(logout).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The wire shape of calls whose server contract is not guessable.
+//
+// These four surfaces were each built against a shape the server never had, and
+// each failed the same silent way: the page renders, the button clicks, the
+// request 404s, and the error lands in a toast nobody reads as "this feature has
+// never worked". Every one of them had passing tests — because the tests mock
+// the api module, so they pinned the guess rather than the contract.
+//
+// So these assert the request that actually goes out. `tests/
+// test_frontend_contract.py` on the backend pins that the route exists; this
+// pins that we call it correctly.
+// ---------------------------------------------------------------------------
+describe('request shapes that are not guessable from the call site', () => {
+  let seen;
+
+  beforeEach(() => {
+    seen = [];
+    tokenStore.clear();
+    impersonationStore.clear?.();
+    installAdapter((config) => {
+      seen.push(config);
+      return axios200(config);
+    });
+  });
+
+  it('GDPR export passes the subject as a query param, never a path segment', async () => {
+    const { gdprApi } = await import('./client');
+    await gdprApi.export('subject@example.com');
+
+    expect(seen[0].url).toBe('/gdpr/export');
+    expect(seen[0].params).toEqual({ email: 'subject@example.com' });
+  });
+
+  it('GDPR erase posts the address and the irreversibility acknowledgement', async () => {
+    // Without `confirm` the server refuses with a 400 — so an erasure request,
+    // the one operation with a legal deadline attached, silently did nothing.
+    const { gdprApi } = await import('./client');
+    await gdprApi.erase('subject@example.com');
+
+    expect(seen[0].url).toBe('/gdpr/erase');
+    expect(seen[0].method).toBe('post');
+    expect(JSON.parse(seen[0].data)).toEqual({
+      email: 'subject@example.com',
+      confirm: true,
+    });
+  });
+
+  it('investor updates use PUT — PATCH is not a method this API answers', async () => {
+    const { investorsApi } = await import('./client');
+    await investorsApi.update('inv-1', { firm: 'Acme Ventures' });
+    await investorsApi.updateStatus('inv-1', 'passed');
+
+    expect(seen.map((c) => [c.method, c.url])).toEqual([
+      ['put', '/investors/inv-1'],
+      ['put', '/investors/inv-1'],
+    ]);
+    // Partial update: a status move must not blank the rest of the record.
+    expect(JSON.parse(seen[1].data)).toEqual({ status: 'passed' });
+  });
+
+  it('investor documents are addressed by their own id, not nested under the investor', async () => {
+    const { investorsApi } = await import('./client');
+    await investorsApi.getDocuments('inv-1');
+    await investorsApi.createDocument('inv-1', { name: 'Deck' });
+    await investorsApi.removeDocument('inv-1', 'doc-9');
+    await investorsApi.removeInteraction('inv-1', 'int-9');
+
+    expect(seen.map((c) => [c.method, c.url])).toEqual([
+      ['get', '/investors/documents'],
+      ['post', '/investors/documents'],
+      ['delete', '/investors/documents/doc-9'],
+      ['delete', '/investors/interactions/int-9'],
+    ]);
+    expect(seen[0].params).toEqual({ investor_id: 'inv-1' });
+    // The investor travels in the body on create, since a document may be
+    // investor-agnostic and the field is therefore optional server-side.
+    expect(JSON.parse(seen[1].data)).toEqual({ name: 'Deck', investor_id: 'inv-1' });
+  });
+
+  it('approve-and-send targets the reply by path and carries the edited copy', async () => {
+    const { smartReplyApi } = await import('./client');
+    await smartReplyApi.send({ replyId: 'r-1', subject: 'Re: hello', body: 'edited' });
+
+    expect(seen[0].url).toBe('/dialtone/inbox/r-1/approve-send');
+    expect(JSON.parse(seen[0].data)).toEqual({ subject: 'Re: hello', body: 'edited' });
+  });
+
+  it('the AI outreach draft is /outreach, the route the server registers', async () => {
+    const { investorsApi } = await import('./client');
+    await investorsApi.generateEmail('inv-1', { log_interaction: true });
+
+    expect(seen[0].url).toBe('/investors/inv-1/outreach');
+  });
+});
