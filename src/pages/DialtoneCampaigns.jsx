@@ -69,6 +69,20 @@ function bounceTone(value) {
   return 'text-gray-400';
 }
 
+// The other rate where high is bad, and the one worth reading before the bounce
+// rate: a bounce is a bad address, an unsubscribe is a real person telling us to
+// stop. It is the leading indicator of the spam complaints that get a sending
+// domain blocklisted, and unlike complaints we see all of them.
+//
+// No automation acts on this number, so these are read thresholds rather than
+// enforcement ones — deliberately tighter than the bounce bands, because by the
+// time an opt-out rate looks like a bounce rate the damage is to the domain.
+function unsubTone(value) {
+  if ((value || 0) >= 0.03) return 'text-red-600 font-semibold';
+  if ((value || 0) >= 0.01) return 'text-amber-600';
+  return 'text-gray-400';
+}
+
 const TIER_STYLES = {
   hot: 'bg-red-50 text-red-700 ring-red-200',
   warm: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -208,6 +222,7 @@ function CampaignTable({ campaigns }) {
             <th className="px-3 py-2.5 text-right font-medium">Click</th>
             <th className="px-3 py-2.5 text-right font-medium">Reply</th>
             <th className="px-3 py-2.5 text-right font-medium">Bounce</th>
+            <th className="px-3 py-2.5 text-right font-medium">Unsub</th>
             <th className="px-3 py-2.5 text-right font-medium">Deals</th>
             <th className="px-3 py-2.5 text-right font-medium">AI copy</th>
             <th className="px-3 py-2.5 text-right font-medium">Last send</th>
@@ -237,6 +252,9 @@ function CampaignTable({ campaigns }) {
               </td>
               <td className={cn('px-3 py-2.5 text-right tabular-nums', bounceTone(c.bounce_rate))}>
                 {pct(c.bounce_rate)}
+              </td>
+              <td className={cn('px-3 py-2.5 text-right tabular-nums', unsubTone(c.unsubscribe_rate))}>
+                {pct(c.unsubscribe_rate)}
               </td>
               <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">
                 {c.deals_attributed}
