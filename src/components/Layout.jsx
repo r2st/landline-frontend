@@ -95,6 +95,7 @@ const navSections = [
       { name: 'Replies', href: '/dialtone/inbox', icon: MailCheck },
       { name: 'AI Drafts', href: '/dialtone/drafts', icon: PenLine },
       { name: 'Templates', href: '/dialtone/templates', icon: FileText },
+      { name: 'Campaigns', href: '/dialtone/campaigns', icon: BarChart3 },
       { name: 'A/B Tests', href: '/dialtone/ab-tests', icon: Beaker },
       { name: 'Send Timing', href: '/dialtone/send-timing', icon: Clock },
       { name: 'Policies', href: '/dialtone/policies', icon: SlidersHorizontal },

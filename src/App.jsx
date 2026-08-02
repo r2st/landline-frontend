@@ -31,6 +31,7 @@ const DialtoneHealth = lazy(() => import('./pages/DialtoneHealth'));
 const Icp = lazy(() => import('./pages/Icp'));
 const DialtoneInbox = lazy(() => import('./pages/DialtoneInbox'));
 const DialtoneAbTests = lazy(() => import('./pages/DialtoneAbTests'));
+const DialtoneCampaigns = lazy(() => import('./pages/DialtoneCampaigns'));
 const EmailTemplates = lazy(() => import('./pages/EmailTemplates'));
 const DialtoneSendTiming = lazy(() => import('./pages/DialtoneSendTiming'));
 const DialtonePolicies = lazy(() => import('./pages/DialtonePolicies'));
@@ -150,6 +151,7 @@ export default function App() {
           <Route path="/dialtone/icp" element={<Icp />} />
           <Route path="/dialtone/inbox" element={<DialtoneInbox />} />
           <Route path="/dialtone/ab-tests" element={<DialtoneAbTests />} />
+          <Route path="/dialtone/campaigns" element={<DialtoneCampaigns />} />
           <Route path="/dialtone/templates" element={<EmailTemplates />} />
           <Route path="/dialtone/send-timing" element={<DialtoneSendTiming />} />
           <Route path="/dialtone/policies" element={<DialtonePolicies />} />

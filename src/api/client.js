@@ -497,6 +497,16 @@ export const dialtoneApi = {
   // Per-sequence analytics (Feature 4): per-step funnel counts + rates and the
   // enrolled → deal conversion rate.
   sequenceAnalytics: (id) => api.get(`/dialtone/sequences/${id}/analytics`).then(r => r.data),
+  // Every campaign side by side — open/click/reply/bounce/conversion plus the
+  // AI-composed share and mean personalization depth behind each one.
+  // `params` accepts { days, sort_by, include_empty }. Returns
+  // { timeframe_days, campaigns[], totals }.
+  campaignAnalytics: (params) =>
+    api.get('/dialtone/campaigns/analytics', { params }).then(r => r.data),
+  // Prospects ranked by recency-weighted engagement (reply > click > open,
+  // decayed by age). `params` accepts { limit, min_score, include_suppressed }.
+  // Returns { leads[], tier_counts, total_ranked }.
+  rankedLeads: (params) => api.get('/dialtone/leads/ranked', { params }).then(r => r.data),
 };
 
 // Per-sender calendar booking config. A sender with no `booking_url` falls back

@@ -215,3 +215,48 @@ export function useSendTimingContacts(limit = 20) {
     retry: false,
   });
 }
+
+// Cross-campaign comparison — every sequence's open/click/reply/bounce rates,
+// enrolled→deal conversion, and the AI-composed share behind each. `days`
+// scopes the send/engagement window (undefined = all time); `sortBy` orders the
+// table server-side. Degrades to an empty table so the page renders even when
+// the backend is unhappy, rather than blanking on a hiccup.
+export function useCampaignAnalytics({ days, sortBy = 'reply_rate', includeEmpty = false } = {}) {
+  return useQuery({
+    queryKey: ['dialtone-campaign-analytics', days ?? 'all', sortBy, includeEmpty],
+    queryFn: async () => {
+      try {
+        return await dialtoneApi.campaignAnalytics({
+          ...(days ? { days } : {}),
+          sort_by: sortBy,
+          include_empty: includeEmpty,
+        });
+      } catch {
+        return { timeframe_days: days ?? null, campaigns: [], totals: null };
+      }
+    },
+    refetchInterval: 60000,
+    // Keep the previous window's rows on screen while a new timeframe loads, so
+    // switching reads as the numbers changing rather than the table emptying.
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+// Prospects ranked by recency-weighted engagement (reply > click > open, each
+// decayed by age). The "who do I call this morning" list.
+export function useRankedLeads({ limit = 25, minScore = 0 } = {}) {
+  return useQuery({
+    queryKey: ['dialtone-ranked-leads', limit, minScore],
+    queryFn: async () => {
+      try {
+        return await dialtoneApi.rankedLeads({ limit, min_score: minScore });
+      } catch {
+        return { leads: [], tier_counts: {}, total_ranked: 0 };
+      }
+    },
+    refetchInterval: 60000,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
