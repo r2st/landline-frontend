@@ -520,20 +520,23 @@ export default function Analytics() {
     const sum = (arr, key1, key2) => arr.reduce((s, t) => s + (t[key1] || t[key2] || 0), 0);
     const prevSent = sum(previous, 'sent', 'sent');
     const currSent = sum(current, 'sent', 'sent');
-    const prevOpened = sum(previous, 'opened', 'opens');
-    const currOpened = sum(current, 'opened', 'opens');
-    const prevReplied = sum(previous, 'replied', 'replies');
-    const currReplied = sum(current, 'replied', 'replies');
 
-    const prevOpenRate = prevSent > 0 ? (prevOpened / prevSent) * 100 : 0;
-    const currOpenRate = currSent > 0 ? (currOpened / currSent) * 100 : 0;
-    const prevReplyRate = prevSent > 0 ? (prevReplied / prevSent) * 100 : 0;
-    const currReplyRate = currSent > 0 ? (currReplied / currSent) * 100 : 0;
+    // Rate of `key` against sent, as a percentage, rounded the way the card
+    // displays it — so the badge agrees with the numbers either side of it.
+    const rate = (arr, sent, key1, key2) =>
+      sent > 0 ? Math.round((sum(arr, key1, key2) / sent) * 1000) / 10 : 0;
 
     return {
-      openRate: pctChange(Math.round(currOpenRate * 10) / 10, Math.round(prevOpenRate * 10) / 10),
-      replyRate: pctChange(Math.round(currReplyRate * 10) / 10, Math.round(prevReplyRate * 10) / 10),
-      clickRate: 0, // click data not available in trends
+      openRate: pctChange(rate(current, currSent, 'opened', 'opens'), rate(previous, prevSent, 'opened', 'opens')),
+      replyRate: pctChange(rate(current, currSent, 'replied', 'replies'), rate(previous, prevSent, 'replied', 'replies')),
+      // Was hardcoded to 0 with a comment saying clicks weren't in the trend
+      // series. They are — `/dashboard/email-trends` returns `clicked` per day
+      // alongside opened and replied. The comment stayed true to its own
+      // history and false about the endpoint, and the cost of that is not a
+      // missing badge: `pctChange` renders 0 as a real reading, so the Click
+      // Rate card carried a flat "0% vs previous period" through every change
+      // clicks actually made. Same shape as the two above it.
+      clickRate: pctChange(rate(current, currSent, 'clicked', 'clicks'), rate(previous, prevSent, 'clicked', 'clicks')),
     };
   }, [compareMode, comparisonTrends]);
 
