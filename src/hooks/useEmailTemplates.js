@@ -99,6 +99,10 @@ export function useComposeEmail() {
       queryClient.invalidateQueries({ queryKey: ['campaign-analytics'] });
       const parts = [];
       if (res.sent) parts.push(`${res.sent} sent`);
+      // A "send later" batch isn't sent yet — the backend counts it separately
+      // now, so without this line the toast reads "no contacts" for a batch
+      // that was queued successfully.
+      if (res.scheduled) parts.push(`${res.scheduled} scheduled`);
       if (res.skipped) parts.push(`${res.skipped} skipped`);
       if (res.errors) parts.push(`${res.errors} failed`);
       const via = res.sender ? ` via ${res.sender}` : '';
