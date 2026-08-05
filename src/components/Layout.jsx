@@ -55,6 +55,7 @@ import {
   LifeBuoy,
   Sparkle,
   ChevronUp,
+  KeyRound,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { emailApi } from '../api/client';
@@ -181,6 +182,10 @@ const platformSection = {
   label: 'Platform',
   items: [
     { name: 'Organizations', href: '/platform', icon: ShieldCheck, end: true },
+    // Rotating the Google OAuth client or a provider key without SSH — the
+    // credentials belong to the deployment, so they live beside the org list
+    // rather than in a tenant's own /settings.
+    { name: 'API Credentials', href: '/platform/credentials', icon: KeyRound },
   ],
 };
 

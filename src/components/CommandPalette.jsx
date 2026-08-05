@@ -41,6 +41,7 @@ import {
   SlidersHorizontal,
   LifeBuoy,
   Sparkle,
+  KeyRound,
 } from 'lucide-react';
 import { companiesApi, contactsApi, tasksApi, dealsApi } from '../api/client';
 import { normalizeCompanies } from '../lib/normalize';
@@ -87,6 +88,10 @@ const COMMANDS = [
   { id: 'org-settings', label: 'Organization Settings', hint: 'Name, branding, plan & config', icon: Building2, to: '/settings/organization', keywords: 'organization org settings name industry branding logo billing plan config jsonb white-label tenant' },
   { id: 'org-team', label: 'Team Management', hint: 'Members, roles & invites', icon: Users, to: '/settings/team', keywords: 'team members users roles invite remove admin manager agent org organization seats' },
   { id: 'org-usage', label: 'Usage Dashboard', hint: 'Contacts, emails & AI usage', icon: BarChart3, to: '/settings/usage', keywords: 'usage stats contacts emails sent ai calls limit billing quota trends charts organization org' },
+  // Platform-admin only; the page itself refuses anyone else, so an entry
+  // here costs a 403 at worst and saves the operator hunting for it during
+  // the one situation it exists for — a credential that has stopped working.
+  { id: 'platform-credentials', label: 'API Credentials', hint: 'Rotate Google OAuth & provider keys', icon: KeyRound, to: '/platform/credentials', keywords: 'api credentials keys secret google oauth client id secret rotate change update openrouter gemini groq cerebras anthropic apollo hunter provider token env environment platform admin ssh' },
   { id: 'help', label: 'Help Center', hint: 'Guides & docs for every feature', icon: LifeBuoy, to: '/help', keywords: 'help docs documentation guide support how to learn tutorial article faq question getting started onboarding' },
   { id: 'features', label: 'Features', hint: 'Everything Landline can do', icon: Sparkle, to: '/features', keywords: 'features capabilities overview what can it do modules showcase list tour' },
 ];

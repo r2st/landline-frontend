@@ -138,3 +138,56 @@ export function useDemoteAdmin() {
       toast.error(e?.response?.data?.detail || e?.message || 'Could not demote admin'),
   });
 }
+
+// --- API credentials ---------------------------------------------------------
+
+// Every managed credential with its masked value and provenance. Gated on
+// `enabled` like the other platform queries — an org admin hitting this 403s,
+// and the page that renders it is platform-admin-only anyway.
+export function useCredentials(options = {}) {
+  const { enabled = true } = options;
+  return useQuery({
+    queryKey: ['platform-credentials'],
+    queryFn: async () => {
+      const data = await platformApi.listCredentials();
+      return {
+        credentials: Array.isArray(data?.credentials) ? data.credentials : [],
+        applied_at: data?.applied_at || null,
+      };
+    },
+    enabled,
+    retry: false,
+  });
+}
+
+// Store an override. The success copy names the propagation delay rather than
+// implying the rotation is live everywhere: this call updates the worker that
+// served it, and the rest follow on the 5-minute refresh beat.
+export function useSetCredential() {
+  return useMutation({
+    mutationFn: ({ key, value }) => platformApi.setCredential(key, value),
+    onSuccess: (cred) => {
+      queryClient.invalidateQueries({ queryKey: ['platform-credentials'] });
+      toast.success(`${cred.label} saved — live on all workers within 5 minutes`);
+    },
+    onError: (e) =>
+      toast.error(e?.response?.data?.detail || e?.message || 'Could not save credential'),
+  });
+}
+
+// Drop an override, falling back to the deployed environment value.
+export function useClearCredential() {
+  return useMutation({
+    mutationFn: (key) => platformApi.clearCredential(key),
+    onSuccess: (cred) => {
+      queryClient.invalidateQueries({ queryKey: ['platform-credentials'] });
+      toast.success(
+        cred.source === 'environment'
+          ? `${cred.label} reverted to the deployed value`
+          : `${cred.label} cleared — nothing is configured for it now`
+      );
+    },
+    onError: (e) =>
+      toast.error(e?.response?.data?.detail || e?.message || 'Could not clear credential'),
+  });
+}

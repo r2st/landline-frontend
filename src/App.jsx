@@ -61,6 +61,7 @@ const ClientSuccessAgent = lazy(() => import('./pages/ClientSuccessAgent'));
 const BookingAgent = lazy(() => import('./pages/BookingAgent'));
 const Platform = lazy(() => import('./pages/Platform'));
 const PlatformOrganizationDetail = lazy(() => import('./pages/PlatformOrganizationDetail'));
+const PlatformCredentials = lazy(() => import('./pages/PlatformCredentials'));
 const HelpPage = lazy(() => import('./pages/HelpPage'));
 const FeaturesPage = lazy(() => import('./pages/FeaturesPage'));
 
@@ -191,6 +192,14 @@ export default function App() {
             element={
               <ProtectedRoute requireRole="platform_admin">
                 <Platform />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/platform/credentials"
+            element={
+              <ProtectedRoute requireRole="platform_admin">
+                <PlatformCredentials />
               </ProtectedRoute>
             }
           />

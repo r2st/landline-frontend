@@ -601,6 +601,19 @@ export const platformApi = {
   // Demote a platform_admin back to org_admin, reassigning them to `orgId`.
   demoteAdmin: (userId, orgId) =>
     api.post('/platform/demote-admin', { user_id: userId, org_id: orgId }).then(r => r.data),
+
+  // --- API credentials -------------------------------------------------------
+  // Every managed credential with its masked value and provenance
+  // ("database" = set here, "environment" = from the deploy, "unset" = dark).
+  // Secrets never come back in full; client IDs do, because confirming which
+  // Google project is live is the point of the screen.
+  listCredentials: () => api.get('/platform/credentials').then(r => r.data),
+  // Store an override. Takes effect on the worker that serves this call at
+  // once, and on the others within the 5-minute refresh beat.
+  setCredential: (key, value) =>
+    api.put(`/platform/credentials/${key}`, { value }).then(r => r.data),
+  // Drop the override, restoring whatever the deploy put in the environment.
+  clearCredential: (key) => api.delete(`/platform/credentials/${key}`).then(r => r.data),
 };
 
 // Orchestration policies (feature 2.2) — the guardrails the autonomous engine

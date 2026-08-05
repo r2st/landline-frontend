@@ -50,6 +50,29 @@ Build → zip `dist/` → create-deployment → upload → start-deployment.
 - Mobile responsive (test at 375px)
 - Accent color: indigo-based palette
 
+## Platform credentials are rotated from the UI, and the copy has to be careful
+
+`/platform/credentials` (platform_admin only) edits the deployment's API keys —
+the Google OAuth client, the LLM providers, Apollo — so an operator no longer
+needs SSH to rotate one. Three things the page does deliberately:
+
+- **Provenance is a first-class field.** `Set here` / `From deploy` /
+  `Not configured` come from the API's `source`. A page that just listed values
+  would give no way to tell whether reverting one is safe.
+- **The copy names the propagation delay.** A save applies at once on the API
+  worker that served it and reaches the others on a 5-minute refresh beat. An
+  operator who assumes otherwise concludes the rotation failed and rotates
+  again.
+- **Secrets have no reveal affordance**, because there is nothing to reveal: the
+  API returns a mask and never the value. Client *IDs* are shown in full — they
+  are in the consent URL every user sees, and confirming which Google project is
+  live is the point of the screen.
+
+The action buttons carry `aria-label`s naming the credential (`Set Hunter.io API
+Key`), not just `Set`. Nine of them share the page, so the visible label alone
+identifies none of them to a screen reader — or to a test, which is how the
+first version of `PlatformCredentials.test.jsx` failed.
+
 ## Key Patterns
 - Pipeline stages shown as kanban: New Lead → Researching → Outreach → Engaged → Negotiating → Client → Churned
 - Health badges: green (healthy), yellow (at_risk), red (churned)
