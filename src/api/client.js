@@ -212,6 +212,19 @@ export const gmailApi = {
   testSend: (id, toEmail) => api.post(`/gmail/accounts/${id}/test`, { to_email: toEmail || null }).then(r => r.data),
 };
 
+export const settingsApi = {
+  getLlmKey: () => api.get('/settings/llm-key').then(r => r.data),
+  setLlmKey: (apiKey, provider = 'gemini') => api.put('/settings/llm-key', { api_key: apiKey, provider }).then(r => r.data),
+  deleteLlmKey: () => api.delete('/settings/llm-key').then(r => r.data),
+};
+
+export const apiKeysApi = {
+  list: () => api.get('/org/api-keys').then(r => r.data),
+  create: (data) => api.post('/org/api-keys', data).then(r => r.data),
+  revoke: (id) => api.delete(`/org/api-keys/${id}`).then(r => r.data),
+  scopes: () => api.get('/org/api-keys/scopes').then(r => r.data),
+};
+
 export const smtpApi = {
   accounts: () => api.get('/smtp/accounts').then(r => r.data),
   add: (payload) => api.post('/smtp/accounts', payload).then(r => r.data),

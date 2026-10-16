@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon,
   Globe,
@@ -11,14 +11,19 @@ import {
   Zap,
   BarChart3,
   Calendar,
+  Key,
+  Eye,
+  EyeOff,
+  Plus,
+  Copy,
+  XCircle,
 } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import GmailConnect from '../components/GmailConnect';
 import { API_BASE_URL } from '../lib/constants';
+import { settingsApi, apiKeysApi } from '../api/client';
 import toast from 'react-hot-toast';
 
-// Automation flags are controlled by backend environment variables and shown
-// read-only. The scheduling link is a UI-side preference persisted locally.
 const SCHEDULING_LINK_KEY = 'landline.scheduling_link';
 
 function ConnectionStatus({ connected }) {
@@ -62,6 +67,309 @@ function AutomationStatusRow({ icon: Icon, label, enabled, description }) {
         <span className={`h-1.5 w-1.5 rounded-full ${enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
         {enabled ? 'ON' : 'OFF'}
       </span>
+    </div>
+  );
+}
+
+function LlmKeySection() {
+  const [llmKey, setLlmKey] = useState({ provider: 'gemini', key_hint: '', has_key: false });
+  const [newKey, setNewKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadKey = useCallback(async () => {
+    try {
+      const data = await settingsApi.getLlmKey();
+      setLlmKey(data);
+    } catch {
+      // API not available — leave defaults
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadKey(); }, [loadKey]);
+
+  const handleSave = async () => {
+    if (!newKey.trim()) return;
+    setSaving(true);
+    try {
+      const data = await settingsApi.setLlmKey(newKey.trim());
+      setLlmKey(data);
+      setNewKey('');
+      setShowKey(false);
+      toast.success('Gemini API key saved');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to save key');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    try {
+      await settingsApi.deleteLlmKey();
+      setLlmKey({ provider: 'gemini', key_hint: '', has_key: false });
+      toast.success('Gemini API key removed — using platform default');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to remove key');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="animate-pulse space-y-3">
+        <div className="h-4 w-48 rounded bg-gray-200" />
+        <div className="h-10 rounded bg-gray-200" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">
+        Provide your own Gemini API key so AI features (tactics, scoring, news analysis, call scripts) use your key instead of the platform default.
+      </p>
+
+      {llmKey.has_key ? (
+        <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Current key</p>
+            <p className="text-sm font-mono text-gray-500">{llmKey.key_hint}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remove
+          </button>
+        </div>
+      ) : null}
+
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <input
+            type={showKey ? 'text' : 'password'}
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder={llmKey.has_key ? 'Replace with a new key...' : 'Enter your Gemini API key'}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !newKey.trim()}
+          className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ApiKeysSection() {
+  const [keys, setKeys] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createdKey, setCreatedKey] = useState(null);
+  const [revokeTarget, setRevokeTarget] = useState(null);
+
+  const loadKeys = useCallback(async () => {
+    try {
+      const data = await apiKeysApi.list();
+      setKeys(data);
+    } catch {
+      // API not available
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadKeys(); }, [loadKeys]);
+
+  const handleCreate = async () => {
+    if (!newKeyName.trim()) return;
+    setCreating(true);
+    try {
+      const data = await apiKeysApi.create({ name: newKeyName.trim(), scopes: [] });
+      setCreatedKey(data.api_key);
+      setNewKeyName('');
+      await loadKeys();
+      toast.success('API key created — copy it now, it won\'t be shown again');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to create key');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(createdKey);
+    toast.success('Copied to clipboard');
+  };
+
+  const handleRevoke = async () => {
+    if (!revokeTarget) return;
+    try {
+      await apiKeysApi.revoke(revokeTarget);
+      setRevokeTarget(null);
+      await loadKeys();
+      toast.success('API key revoked');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to revoke key');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="animate-pulse space-y-3">
+        <div className="h-4 w-48 rounded bg-gray-200" />
+        <div className="h-10 rounded bg-gray-200" />
+        <div className="h-10 rounded bg-gray-200" />
+      </div>
+    );
+  }
+
+  const activeKeys = keys.filter(k => !k.revoked_at);
+  const revokedKeys = keys.filter(k => k.revoked_at);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">
+        Generate API keys to access Prospect programmatically. Keys authenticate requests to the public API at <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">/api/v1/public/*</code>.
+      </p>
+
+      {/* Create new key */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newKeyName}
+          onChange={(e) => setNewKeyName(e.target.value)}
+          placeholder="Key name (e.g. Zapier integration)"
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+        />
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={creating || !newKeyName.trim()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          {creating ? 'Creating...' : 'Create Key'}
+        </button>
+      </div>
+
+      {/* Newly created key (show once) */}
+      {createdKey && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+          <p className="mb-2 text-sm font-medium text-green-800">
+            New API key created — copy it now. It won't be shown again.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded bg-white px-3 py-2 text-sm font-mono text-gray-900 border border-green-200 break-all">
+              {createdKey}
+            </code>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+            >
+              <Copy className="h-4 w-4" />
+              Copy
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCreatedKey(null)}
+            className="mt-2 text-xs text-green-700 underline hover:text-green-900"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Active keys list */}
+      {activeKeys.length > 0 ? (
+        <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+          {activeKeys.map((k) => (
+            <div key={k.id} className="flex items-center justify-between px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 truncate">{k.name}</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-xs font-mono text-gray-500">{k.key_prefix}•••</span>
+                  <span className="text-xs text-gray-400">
+                    Created {new Date(k.created_at).toLocaleDateString()}
+                  </span>
+                  {k.last_used_at && (
+                    <span className="text-xs text-gray-400">
+                      Last used {new Date(k.last_used_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRevokeTarget(k.id)}
+                className="ml-3 inline-flex items-center gap-1 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+          No active API keys. Create one above to get started.
+        </div>
+      )}
+
+      {/* Revoked keys (collapsed) */}
+      {revokedKeys.length > 0 && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+            {revokedKeys.length} revoked key{revokedKeys.length !== 1 ? 's' : ''}
+          </summary>
+          <div className="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-200 opacity-60">
+            {revokedKeys.map((k) => (
+              <div key={k.id} className="flex items-center justify-between px-4 py-2">
+                <div>
+                  <p className="text-sm text-gray-500 line-through">{k.name}</p>
+                  <span className="text-xs font-mono text-gray-400">{k.key_prefix}•••</span>
+                </div>
+                <span className="text-xs text-red-500">
+                  Revoked {new Date(k.revoked_at).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Revoke confirm dialog */}
+      <ConfirmDialog
+        open={!!revokeTarget}
+        title="Revoke API Key"
+        message="This key will immediately stop working. Any integrations using it will lose access. This cannot be undone."
+        confirmLabel="Revoke Key"
+        variant="danger"
+        onConfirm={handleRevoke}
+        onCancel={() => setRevokeTarget(null)}
+      />
     </div>
   );
 }
@@ -127,6 +435,35 @@ export default function Settings() {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Email Sending — Gmail OAuth connection */}
       <GmailConnect />
+
+      {/* API Keys */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100">
+            <Key className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">API Keys</h2>
+            <p className="text-sm text-gray-500">Manage your LLM and programmatic API keys</p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {/* LLM Key subsection */}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-gray-800 uppercase tracking-wide">AI Provider Key</h3>
+            <LlmKeySection />
+          </div>
+
+          <hr className="border-gray-200" />
+
+          {/* Programmatic API Keys subsection */}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-gray-800 uppercase tracking-wide">Programmatic API Keys</h3>
+            <ApiKeysSection />
+          </div>
+        </div>
+      </div>
 
       {/* Automation */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
