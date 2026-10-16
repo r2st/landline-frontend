@@ -51,7 +51,7 @@ const renderCard = () =>
     </QueryClientProvider>
   );
 
-describe('DialtoneProvenance', () => {
+describe('AutopilotProvenance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockProvenance.mockResolvedValue(AGENT_FOUND);

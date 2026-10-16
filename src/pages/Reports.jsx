@@ -66,7 +66,7 @@ function LeadQualityCard({ report }) {
   return (
     <ChartCard title="Lead Quality" icon={GraduationCap}>
       {total === 0 ? (
-        <EmptyState icon={GraduationCap} title="No scored leads yet" description="Grades appear once Dialtone scores your leads." />
+        <EmptyState icon={GraduationCap} title="No scored leads yet" description="Grades appear once Autopilot scores your leads." />
       ) : (
         <div className="space-y-4">
           <p className="text-xs text-gray-400">Graded by Dialtone</p>

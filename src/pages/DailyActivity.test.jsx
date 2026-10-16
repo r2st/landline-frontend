@@ -80,7 +80,7 @@ describe('DailyActivity page', () => {
     expect(screen.getByText('Daily Activity')).toBeInTheDocument();
     // Page is branded as Dialtone and renders Dialtone's narrative + briefing.
     expect(screen.getByText(/What Dialtone did/)).toBeInTheDocument();
-    expect(screen.getByText("Dialtone's briefing")).toBeInTheDocument();
+    expect(screen.getByText("Autopilot's briefing")).toBeInTheDocument();
     expect(screen.getByText(/Dialtone sent 12 outreach emails/)).toBeInTheDocument();
     // Headline metric values ("12" appears for both the metric and the
     // by-sequence count, so assert at least one is present).

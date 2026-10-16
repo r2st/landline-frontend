@@ -21,7 +21,7 @@ export function LogoMark({ className, size = 32, rounded = 9 }) {
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       role="img"
-      aria-label="Landline"
+      aria-label="DoAide Prospect"
     >
       <defs>
         <linearGradient id={id} x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
@@ -58,7 +58,7 @@ export default function Logo({ className, markSize = 30, showWord = true, wordCl
             wordClassName
           )}
         >
-          Landline
+          DoAide Prospect
         </span>
       )}
     </div>

@@ -23,7 +23,7 @@ describe('HelpPage — home', () => {
     expect(screen.getByRole('heading', { name: /help center/i })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /search help articles/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /all articles/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /dialtone ai agent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /autopilot ai agent/i })).toBeInTheDocument();
   });
 
   it('filters to a category when its chip is clicked', async () => {
@@ -72,7 +72,7 @@ describe('HelpPage — article', () => {
 
   it('lists sibling articles from the same category', () => {
     renderAt('/help/ai-drafts');
-    expect(screen.getByText(/more in dialtone ai agent/i)).toBeInTheDocument();
+    expect(screen.getByText(/more in autopilot ai agent/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /reply triage/i })).toBeInTheDocument();
   });
 

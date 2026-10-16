@@ -57,7 +57,7 @@ describe('helpContent data', () => {
 describe('getArticle / getCategory', () => {
   it('returns the matching record', () => {
     expect(getArticle('welcome').title).toMatch(/welcome/i);
-    expect(getCategory('dialtone').title).toBe('Dialtone AI Agent');
+    expect(getCategory('dialtone').title).toBe('Autopilot AI Agent');
   });
 
   it('returns null for unknown ids', () => {

@@ -740,7 +740,7 @@ export default function Analytics() {
 
   function handleExportSummary() {
     const lines = [
-      `Landline Analytics Summary - ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+      `DoAide Prospect Analytics Summary - ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
       `Period: Last ${dateRange} days`,
       '',
       '--- Key Metrics ---',

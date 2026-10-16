@@ -131,7 +131,7 @@ export default function DailyActivity() {
         <EmptyState
           icon={Activity}
           title="No activity summaries yet"
-          description="Dialtone's daily summary is generated automatically at 6 PM IST, or on first load once Dialtone starts taking actions."
+          description="Autopilot's daily summary is generated automatically at 6 PM IST, or on first load once Autopilot starts taking actions."
         />
       ) : (
         <>
@@ -139,7 +139,7 @@ export default function DailyActivity() {
           <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-6 shadow-sm">
             <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-indigo-700">
               <Sparkles className="h-4 w-4" />
-              Dialtone's briefing
+              Autopilot's briefing
             </h2>
             <p className="text-sm leading-relaxed text-gray-700">{latest.narrative}</p>
           </div>

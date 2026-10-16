@@ -51,7 +51,7 @@ export const OVERALL = {
   paused: {
     label: 'Paused',
     tone: 'bg-red-50 text-red-700 ring-red-600/20',
-    blurb: 'Dialtone has halted its own sending.',
+    blurb: 'Autopilot has halted its own sending.',
   },
 };
 

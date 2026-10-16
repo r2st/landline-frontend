@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { queryClient, repliesApi, smartReplyApi } from '../api/client';
 
-// Dialtone's intent-classified reply queue. Errors are surfaced rather than
+// Autopilot's intent-classified reply queue. Errors are surfaced rather than
 // folded into an empty list: "no hot leads" and "the inbox is broken" are very
 // different days, and the older hooks' `catch { return [] }` made them
 // pixel-identical.

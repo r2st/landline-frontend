@@ -31,7 +31,7 @@ export const helpCategories = [
   },
   {
     id: 'dialtone',
-    title: 'Dialtone AI Agent',
+    title: 'Autopilot AI Agent',
     icon: 'Radio',
     description: 'The autonomous cold-email agent and everything it drives.',
   },
@@ -60,13 +60,13 @@ export const helpArticles = [
   {
     id: 'welcome',
     category: 'getting-started',
-    title: 'Welcome to Landline',
+    title: 'Welcome to DoAide Prospect',
     route: '/help',
     keywords: 'welcome overview intro start basics what is landline b2b lead generation',
-    summary: 'What Landline is and how the pieces fit together.',
+    summary: 'What DoAide Prospect is and how the pieces fit together.',
     body: `# Welcome to Landline
 
-Landline is a B2B lead-generation and client-management platform. It combines a CRM, a multi-channel outreach engine, and **Dialtone** — an autonomous cold-email AI agent that sources prospects, writes and sends first touches, triages replies, and protects your sending reputation on its own.
+DoAide Prospect is a B2B lead-generation and client-management platform. It combines a CRM, a multi-channel outreach engine, and **Autopilot** — an autonomous cold-email AI agent that sources prospects, writes and sends first touches, triages replies, and protects your sending reputation on its own.
 
 ## The big picture
 
@@ -95,12 +95,12 @@ Every feature page has a **?** button in its header — click it for help specif
 Follow these steps in order — each one unblocks the next.
 
 ## 1. Connect a mailbox
-Outreach needs somewhere to send from. Connect a **Gmail account** with OAuth, or add a **custom SMTP/IMAP mailbox**. You can connect several and let Landline rotate between them.
+Outreach needs somewhere to send from. Connect a **Gmail account** with OAuth, or add a **custom SMTP/IMAP mailbox**. You can connect several and let DoAide Prospect rotate between them.
 
 > Don't send real campaigns from a brand-new mailbox. Start a **warmup plan** first (step 4).
 
 ## 2. Import or discover contacts
-Upload a CSV of companies and contacts, or use **Discovery** and **Places Discovery** to source new leads. Landline dedupes on import and scores each contact against your ICP.
+Upload a CSV of companies and contacts, or use **Discovery** and **Places Discovery** to source new leads. DoAide Prospect dedupes on import and scores each contact against your ICP.
 
 ## 3. Verify your sending domain
 Run **SPF / DKIM / DMARC checks** on the domain you send from. All three must pass before you send at volume — this is the single biggest lever on inbox placement.
@@ -109,20 +109,20 @@ Run **SPF / DKIM / DMARC checks** on the domain you send from. All three must pa
 Ramp sending volume gradually with a **warmup plan** and a per-account daily cap. Reputation is earned over weeks, not days.
 
 ## 5. Send your first sequence
-Build a multi-step **sequence** with a clear first touch and one or two follow-ups — or enroll contacts into **Dialtone** and let the agent handle it. Watch the **Unified Inbox** for replies.
+Build a multi-step **sequence** with a clear first touch and one or two follow-ups — or enroll contacts into **Autopilot** and let the agent handle it. Watch the **Unified Inbox** for replies.
 
 You're live. Keep an eye on **Sender Health** and **Deliverability Health** as volume grows.`,
   },
   {
     id: 'features-overview',
     category: 'getting-started',
-    title: 'Everything Landline can do',
+    title: 'Everything DoAide Prospect can do',
     route: '/features',
     keywords: 'features capabilities list overview everything modules what can it do',
     summary: 'A tour of every capability, grouped by area.',
-    body: `# Everything Landline can do
+    body: `# Everything DoAide Prospect can do
 
-Landline is broad. Here's the map, area by area — each links to a deeper article.
+DoAide Prospect is broad. Here's the map, area by area — each links to a deeper article.
 
 ## Contacts & pipeline
 Contact management with groups, merge, ICP scoring and phone enrichment; a deal pipeline with a kanban board, an activity timeline, and a progression agent that nudges stalled deals.
@@ -158,7 +158,7 @@ See the full [Features page](/features) for the interactive version.`,
 Contacts are the people you reach out to. Companies group them; deals track the money.
 
 ## Importing
-- **CSV import** (Import page): map columns, and Landline dedupes on email as it loads. Malformed rows are flagged rather than silently dropped.
+- **CSV import** (Import page): map columns, and DoAide Prospect dedupes on email as it loads. Malformed rows are flagged rather than silently dropped.
 - **Business card scan**: photograph a card and OCR pulls out the name, title, email, and phone.
 - **Discovery**: source brand-new companies and contacts from external providers.
 
@@ -253,10 +253,10 @@ A **sequence** is an automated, multi-step outreach cadence. A **campaign** is a
 3. Add **conditional steps** — branch on whether the prior email was opened, clicked, or replied to. Replies typically end the sequence so you don't email someone mid-conversation.
 
 ## A/B testing
-Give a step two or more variants (different subject lines or bodies). Landline splits enrollees between them and tracks open/click/reply rates per variant, so you can **declare a winner** once the difference is statistically significant.
+Give a step two or more variants (different subject lines or bodies). DoAide Prospect splits enrollees between them and tracks open/click/reply rates per variant, so you can **declare a winner** once the difference is statistically significant.
 
 ## Send-time optimization
-Instead of blasting at a fixed hour, let Landline schedule each contact's email for **their** best-performing window. See the Send-Time Optimization article for how the experiment arms work.
+Instead of blasting at a fixed hour, let DoAide Prospect schedule each contact's email for **their** best-performing window. See the Send-Time Optimization article for how the experiment arms work.
 
 ## Best practices
 - Keep sequences short — 3 to 5 steps. Persistence past that annoys more than it converts.
@@ -299,7 +299,7 @@ Authorize with **OAuth** (no password ever touches Landline). You can connect **
 When you send from your own domain (not Gmail), add a **custom SMTP/IMAP mailbox**.
 
 ## Adding a mailbox
-Provide the SMTP host/port for sending and the IMAP host/port for receiving, plus credentials. Landline verifies the connection before saving.
+Provide the SMTP host/port for sending and the IMAP host/port for receiving, plus credentials. DoAide Prospect verifies the connection before saving.
 
 ## Sending & receiving
 - **SMTP** handles outbound — sequence steps and manual sends.
@@ -339,7 +339,7 @@ Open a thread to read it and reply inline, with templates, signatures, and an AI
   {
     id: 'dialtone-console',
     category: 'dialtone',
-    title: 'Dialtone Console',
+    title: 'Autopilot Console',
     route: '/dialtone',
     keywords: 'dialtone console autonomous agent cold email activity log live feed overview prospecting',
     summary: 'The command center for the autonomous cold-email agent.',
@@ -608,11 +608,11 @@ The **Domain Health** page verifies all three per sending domain and flags anyth
     summary: 'Hard vs soft bounces and automatic suppression.',
     body: `# Bounce management
 
-A **bounce** is a send that couldn't be delivered. Bounce rate is one of the first numbers providers use to judge you, so Landline handles bounces automatically.
+A **bounce** is a send that couldn't be delivered. Bounce rate is one of the first numbers providers use to judge you, so DoAide Prospect handles bounces automatically.
 
 ## Hard vs soft
 - **Hard bounce** — permanent (the address doesn't exist). The contact is **auto-suppressed** immediately; sending again would only hurt your reputation.
-- **Soft bounce** — temporary (mailbox full, server down). Landline retries a limited number of times before giving up.
+- **Soft bounce** — temporary (mailbox full, server down). DoAide Prospect retries a limited number of times before giving up.
 
 ## Auto-suppression
 Hard-bounced addresses are added to your suppression list so no campaign can email them again. This is not optional — it's how you keep bounce rate low enough to stay in the inbox.
@@ -631,7 +631,7 @@ Hard-bounced addresses are added to your suppression list so no campaign can ema
     summary: 'Pre-send content analysis that catches spammy copy.',
     body: `# Spam scoring
 
-Before an email sends, Landline scores its **content** for the traits spam filters punish — trigger words, too many links, image-heavy bodies, misleading subjects, poor text-to-HTML ratio.
+Before an email sends, DoAide Prospect scores its **content** for the traits spam filters punish — trigger words, too many links, image-heavy bodies, misleading subjects, poor text-to-HTML ratio.
 
 ## When it runs
 - **AI drafts** are scored before they can be approved or auto-sent; high scorers are held.
@@ -654,7 +654,7 @@ A high spam score means the copy is likely to be filtered even with perfect auth
     summary: 'Domain reputation and delivery metrics straight from Google.',
     body: `# Google Postmaster Tools
 
-Google publishes reputation and delivery data for your sending domain through **Postmaster Tools**. Landline surfaces it so you see what Gmail sees.
+Google publishes reputation and delivery data for your sending domain through **Postmaster Tools**. DoAide Prospect surfaces it so you see what Gmail sees.
 
 ## What it tells you
 - **Domain and IP reputation** as Google rates it (high / medium / low / bad).
@@ -739,7 +739,7 @@ Prospects respond to different channels. A **multichannel** sequence mixes step 
 - **LinkedIn** — a task prompting you to connect or message.
 - **Phone** — a task that drops the contact into the cold-calling queue with a briefing.
 
-Non-email steps are **tasks** — Landline queues them for a human; it won't auto-connect on LinkedIn or auto-dial.
+Non-email steps are **tasks** — DoAide Prospect queues them for a human; it won't auto-connect on LinkedIn or auto-dial.
 
 ## Why it works
 Coordinated channels reinforce each other: an email plus a well-timed call converts far better than either alone. Policies still bound the total touches so multichannel doesn't become harassment.
@@ -758,7 +758,7 @@ Coordinated channels reinforce each other: an email plus a well-timed call conve
     summary: 'The daily call queue, briefings, and scripts.',
     body: `# Cold calling
 
-For contacts worth a voice, Landline runs a **call system** alongside email.
+For contacts worth a voice, DoAide Prospect runs a **call system** alongside email.
 
 ## The call queue
 Today's calls are queued for you — sourced from phone steps in multichannel sequences, phone-enriched contacts, and manual adds. Work the queue top to bottom.
@@ -809,7 +809,7 @@ Draft quality is downstream of this content. A rich knowledge base produces emai
 When someone exercises their data rights, the **GDPR console** lets you fulfill the request by email address.
 
 ## Export (right of access)
-Look up a contact by email to see everything Landline holds — the contact record, associated companies, and email history. Export it to hand the subject their data.
+Look up a contact by email to see everything DoAide Prospect holds — the contact record, associated companies, and email history. Export it to hand the subject their data.
 
 ## Erasure (right to be forgotten)
 Erase a contact's data permanently. Because this is irreversible, erasure is **gated behind a typed email confirmation** — you must retype the exact address to proceed. Nothing is deleted on a single click.
@@ -817,7 +817,7 @@ Erase a contact's data permanently. Because this is irreversible, erasure is **g
 ## Best practices
 - Verify the requester's identity before exporting or erasing — the console acts on whatever email you give it.
 - Export before you erase if you need a record that the request was fulfilled.
-- Log requests outside Landline too; erasure removes the very data that proves who asked.`,
+- Log requests outside DoAide Prospect too; erasure removes the very data that proves who asked.`,
   },
   {
     id: 'webhooks',
@@ -825,17 +825,17 @@ Erase a contact's data permanently. Because this is irreversible, erasure is **g
     title: 'Webhooks',
     route: '/settings',
     keywords: 'webhooks integration endpoints events http post notify external crm zapier callback',
-    summary: 'Push Landline events to your own systems.',
+    summary: 'Push DoAide Prospect events to your own systems.',
     body: `# Webhooks
 
-Webhooks let Landline notify your own systems when things happen — a reply arrives, a deal advances, a contact unsubscribes.
+Webhooks let DoAide Prospect notify your own systems when things happen — a reply arrives, a deal advances, a contact unsubscribes.
 
 ## How they work
-Register an endpoint URL and choose which events to subscribe to. When an event fires, Landline sends an HTTP POST with the event payload to your endpoint. Your system reacts — sync to another CRM, trigger a Slack alert, kick off a workflow.
+Register an endpoint URL and choose which events to subscribe to. When an event fires, DoAide Prospect sends an HTTP POST with the event payload to your endpoint. Your system reacts — sync to another CRM, trigger a Slack alert, kick off a workflow.
 
 ## Best practices
 - Return a 2xx quickly and process asynchronously; slow endpoints get retried.
-- Verify the payload signature so you only act on genuine Landline events.
+- Verify the payload signature so you only act on genuine DoAide Prospect events.
 - Subscribe only to the events you use — fewer moving parts, less noise.`,
   },
 

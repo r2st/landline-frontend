@@ -84,14 +84,14 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
         if (enabled) {
           toast.success(
             data.enrollments_affected
-              ? `Dialtone resumed — ${data.enrollments_affected} enrollment(s) reactivated`
-              : 'Dialtone resumed'
+              ? `Autopilot resumed — ${data.enrollments_affected} enrollment(s) reactivated`
+              : 'Autopilot resumed'
           );
         } else {
           toast.success(
             data.enrollments_affected
-              ? `Dialtone paused — ${data.enrollments_affected} enrollment(s) paused`
-              : 'Dialtone paused'
+              ? `Autopilot paused — ${data.enrollments_affected} enrollment(s) paused`
+              : 'Autopilot paused'
           );
         }
       } catch {
@@ -144,7 +144,7 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
       )}
     >
       <span className={cn('h-2 w-2 rounded-full', enabled ? 'bg-green-500' : 'bg-red-500 animate-pulse')} />
-      {enabled ? 'Dialtone active' : 'Dialtone paused'}
+      {enabled ? 'Autopilot active' : 'Autopilot paused'}
     </span>
   );
 
@@ -211,8 +211,8 @@ export default function SendingKillSwitch({ compact = false, onChange }) {
           {enabled ? <ShieldCheck className="h-5 w-5 text-green-600" /> : <ShieldAlert className="h-5 w-5 text-red-600" />}
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Dialtone Kill Switch</h2>
-          <p className="text-sm text-gray-500">Immediately pause or resume Dialtone — all autonomous outgoing email</p>
+          <h2 className="text-lg font-semibold text-gray-900">Autopilot Kill Switch</h2>
+          <p className="text-sm text-gray-500">Immediately pause or resume Autopilot — all autonomous outgoing email</p>
         </div>
       </div>
 

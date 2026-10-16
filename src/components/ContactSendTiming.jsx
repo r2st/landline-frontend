@@ -4,7 +4,7 @@ import { sendTimingApi } from '../api/client';
 import { DAY_NAMES_FULL, hourLabel, pct, windowLabel } from '../lib/sendTiming';
 import { cn } from '../lib/utils';
 
-// Where the send window came from, in Dialtone's colour language: a learned
+// Where the send window came from, in Autopilot's colour language: a learned
 // per-contact signal (indigo) is stronger than a cohort fallback (blue), which
 // is stronger than the global default (gray).
 const SOURCE_STYLES = {

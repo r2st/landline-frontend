@@ -14,8 +14,8 @@ const renderPage = () =>
 describe('FeaturesPage', () => {
   it('renders the hero and every feature group heading', () => {
     renderPage();
-    expect(screen.getByRole('heading', { name: /everything landline can do/i })).toBeInTheDocument();
-    for (const group of ['Contacts & Pipeline', 'Dialtone AI Agent', 'Deliverability', 'Platform & Settings']) {
+    expect(screen.getByRole('heading', { name: /everything doaide prospect can do/i })).toBeInTheDocument();
+    for (const group of ['Contacts & Pipeline', 'Autopilot AI Agent', 'Deliverability', 'Platform & Settings']) {
       expect(screen.getByRole('heading', { name: group })).toBeInTheDocument();
     }
   });
@@ -35,7 +35,7 @@ describe('FeaturesPage', () => {
 
   it('surfaces the marquee capabilities by name', () => {
     renderPage();
-    expect(screen.getByRole('heading', { name: 'Dialtone Console' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Autopilot Console' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Send-time optimization' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Spintax' })).toBeInTheDocument();
   });

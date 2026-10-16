@@ -90,7 +90,7 @@ const navSections = [
   },
   {
     key: 'dialtone',
-    label: 'Dialtone',
+    label: 'Autopilot',
     items: [
       { name: 'Console', href: '/dialtone', icon: Radio, end: true },
       { name: 'Replies', href: '/dialtone/inbox', icon: MailCheck },
@@ -408,7 +408,7 @@ export default function Layout({ children }) {
   const SidebarContent = (
     <>
       <div className="flex items-center justify-between gap-2 border-b border-gray-200 px-5 py-4">
-        <Link to="/" className="flex items-center" aria-label="Landline home">
+        <Link to="/" className="flex items-center" aria-label="DoAide Prospect home">
           <Logo markSize={30} />
         </Link>
         <button
@@ -559,7 +559,7 @@ export default function Layout({ children }) {
         </button>
 
         <div className="px-3 pb-0.5 pt-1">
-          <div className="text-[11px] font-medium text-gray-400">Landline v1.0 &middot; B2B Lead Gen</div>
+          <div className="text-[11px] font-medium text-gray-400">DoAide Prospect v1.0 &middot; B2B Lead Gen</div>
         </div>
       </div>
     </>
@@ -580,7 +580,7 @@ export default function Layout({ children }) {
         <div className="flex min-w-0 items-center gap-2">
           <LogoMark size={24} />
           <span className="truncate font-semibold tracking-tight">
-            {currentPage ? currentPage.name : 'Landline'}
+            {currentPage ? currentPage.name : 'DoAide Prospect'}
           </span>
         </div>
         <button

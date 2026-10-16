@@ -48,7 +48,7 @@ export function useResumeSending() {
       const affected = data?.enrollments_affected;
       const base = affected
         ? `Dialtone resumed — ${affected} enrollment(s) reactivated`
-        : 'Dialtone resumed';
+        : 'Autopilot resumed';
       if (data?.forced) toast(`${base} (forced over a live danger signal)`, { icon: '⚠️' });
       else toast.success(base);
     },

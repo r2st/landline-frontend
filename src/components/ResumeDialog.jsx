@@ -68,7 +68,7 @@ export default function ResumeDialog({ trip, open, onClose }) {
           {/* What tripped — the operator can't judge "is it safe" without it. */}
           <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-              Dialtone paused itself
+              Autopilot paused itself
             </p>
             <p className="mt-1 text-sm text-red-900">
               <span className="font-semibold">{METRIC_LABELS[trip.metric] || trip.metric}</span>

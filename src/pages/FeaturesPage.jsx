@@ -64,10 +64,10 @@ const GROUPS = [
   },
   {
     id: 'dialtone',
-    title: 'Dialtone AI Agent',
+    title: 'Autopilot AI Agent',
     blurb: 'An autonomous cold-email agent that runs outreach for you.',
     features: [
-      { icon: Radio, name: 'Dialtone Console', desc: 'Live activity feed and kill switch.', to: '/dialtone', help: '/help/dialtone-console' },
+      { icon: Radio, name: 'Autopilot Console', desc: 'Live activity feed and kill switch.', to: '/dialtone', help: '/help/dialtone-console' },
       { icon: PenLine, name: 'AI draft generation', desc: 'Personalized first touches with spam scoring.', to: '/dialtone/drafts', help: '/help/ai-drafts' },
       { icon: MailCheck, name: 'Reply triage', desc: 'Classify replies and suggest smart responses.', to: '/dialtone/inbox', help: '/help/reply-triage' },
       { icon: Beaker, name: 'A/B testing', desc: 'Variant comparison with statistical significance.', to: '/dialtone/ab-tests', help: '/help/ab-testing' },
@@ -119,9 +119,9 @@ export default function FeaturesPage() {
     <div>
       {/* Hero */}
       <div className="mb-8 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 to-indigo-700 p-8 text-white">
-        <h1 className="text-3xl font-bold">Everything Landline can do</h1>
+        <h1 className="text-3xl font-bold">Everything DoAide Prospect can do</h1>
         <p className="mt-2 max-w-2xl text-indigo-100">
-          A B2B sales platform with Dialtone — an autonomous cold-email AI agent that sources
+          A B2B sales platform with Autopilot — an autonomous cold-email AI agent that sources
           prospects, writes and sends first touches, triages replies, and protects your reputation.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">

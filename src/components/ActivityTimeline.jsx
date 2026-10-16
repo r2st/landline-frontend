@@ -30,7 +30,7 @@ function buildEvents({ company, contacts = [], scores = [], news = [], sends = [
     events.push({
       id: 'added',
       type: 'company_added',
-      title: 'Company added to Landline',
+      title: 'Company added to DoAide Prospect',
       subtitle: company.source ? `via ${company.source.replace(/_/g, ' ')}` : null,
       at: company.created_at,
     });

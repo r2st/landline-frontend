@@ -82,7 +82,7 @@ describe('SendingKillSwitch', () => {
     wireGets({ status: { enabled: true, today_sent: 5, daily_limit: 25 } });
     renderSwitch();
 
-    expect(await screen.findByText('Dialtone active')).toBeInTheDocument();
+    expect(await screen.findByText('Autopilot active')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /pause dialtone/i })).toBeInTheDocument();
   });
 
@@ -92,7 +92,7 @@ describe('SendingKillSwitch', () => {
     mockPost.mockResolvedValue({ data: { enabled: false, enrollments_affected: 3 } });
 
     renderSwitch();
-    await screen.findByText('Dialtone active');
+    await screen.findByText('Autopilot active');
 
     await user.click(screen.getByRole('button', { name: /pause dialtone/i }));
     // Confirmation appears before anything is sent.
@@ -103,14 +103,14 @@ describe('SendingKillSwitch', () => {
     await waitFor(() =>
       expect(mockPost).toHaveBeenCalledWith('/system/sending-toggle', expect.objectContaining({ enabled: false }))
     );
-    expect(await screen.findByText('Dialtone paused')).toBeInTheDocument();
+    expect(await screen.findByText('Autopilot paused')).toBeInTheDocument();
   });
 
   it('shows paused status and a resume button when Dialtone is disabled', async () => {
     wireGets({ status: { enabled: false, reason: 'manual' } });
     renderSwitch();
 
-    expect(await screen.findByText('Dialtone paused')).toBeInTheDocument();
+    expect(await screen.findByText('Autopilot paused')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /resume dialtone/i })).toBeInTheDocument();
   });
 

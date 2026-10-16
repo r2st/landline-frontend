@@ -100,7 +100,7 @@ describe('DialtoneHealth page', () => {
     mockHealth.mockResolvedValue(HEALTHY);
     renderPage();
 
-    expect(await screen.findByText('Dialtone is sending')).toBeInTheDocument();
+    expect(await screen.findByText('Autopilot is sending')).toBeInTheDocument();
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     // Rates are fractions server-side; thresholds read as percentages.
     expect(screen.getByText('5.0%')).toBeInTheDocument();
@@ -115,14 +115,14 @@ describe('DialtoneHealth page', () => {
     expect(await screen.findByText(/can't read the danger signals/i)).toBeInTheDocument();
     expect(screen.getByText(/not the same as/i)).toBeInTheDocument();
     expect(screen.queryByText('Healthy')).not.toBeInTheDocument();
-    expect(screen.queryByText('Dialtone is sending')).not.toBeInTheDocument();
+    expect(screen.queryByText('Autopilot is sending')).not.toBeInTheDocument();
   });
 
   it('says what tripped when Dialtone has paused itself', async () => {
     mockHealth.mockResolvedValue(PAUSED);
     renderPage();
 
-    expect(await screen.findByText('Dialtone is not sending')).toBeInTheDocument();
+    expect(await screen.findByText('Autopilot is not sending')).toBeInTheDocument();
     expect(screen.getByText(/dialtone paused itself/i)).toBeInTheDocument();
     expect(screen.getByText('Paused')).toBeInTheDocument();
     // The breached value appears in both the trip banner and the breach list.
@@ -132,7 +132,7 @@ describe('DialtoneHealth page', () => {
   it('offers the acknowledged resume only when a trip is open', async () => {
     mockHealth.mockResolvedValue(HEALTHY);
     const { unmount } = renderPage();
-    await screen.findByText('Dialtone is sending');
+    await screen.findByText('Autopilot is sending');
     expect(screen.queryByRole('button', { name: /review & resume/i })).not.toBeInTheDocument();
     unmount();
 
@@ -144,7 +144,7 @@ describe('DialtoneHealth page', () => {
   it('formats counts as counts and rates as percentages', async () => {
     mockHealth.mockResolvedValue(HEALTHY);
     renderPage();
-    await screen.findByText('Dialtone is sending');
+    await screen.findByText('Autopilot is sending');
 
     // hard_bounce_count is a plain count — rendering it as a percentage would
     // turn "25" into "2500%".
@@ -168,7 +168,7 @@ describe('DialtoneHealth page', () => {
       thresholds: THRESHOLDS,
     });
     renderPage();
-    await screen.findByText('Dialtone is sending');
+    await screen.findByText('Autopilot is sending');
 
     await user.click(screen.getByRole('button', { name: /run test/i }));
     expect(await screen.findByText(/nothing would trip/i)).toBeInTheDocument();
@@ -194,7 +194,7 @@ describe('DialtoneHealth page', () => {
       thresholds: THRESHOLDS,
     });
     renderPage();
-    await screen.findByText('Dialtone is sending');
+    await screen.findByText('Autopilot is sending');
 
     await user.click(screen.getByRole('button', { name: /run test/i }));
     expect(await screen.findByText(/would pause dialtone now/i)).toBeInTheDocument();

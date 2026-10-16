@@ -847,7 +847,7 @@ export default function Import() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Column Mapping</h2>
                 <p className="text-sm text-gray-500">
-                  Map your CSV columns to Landline fields
+                  Map your CSV columns to DoAide Prospect fields
                 </p>
               </div>
             </div>

@@ -28,7 +28,7 @@ describe('HelpIcon', () => {
     renderIcon({ articleId: 'dialtone-console' });
 
     await user.click(screen.getByRole('button', { name: /help/i }));
-    const dialog = screen.getByRole('dialog', { name: /dialtone console/i });
+    const dialog = screen.getByRole('dialog', { name: /autopilot console/i });
     // The article body is rendered inside the panel.
     expect(within(dialog).getByText(/autonomous cold-email agent/i)).toBeInTheDocument();
     // And a deep link to the feature itself.

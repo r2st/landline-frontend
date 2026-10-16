@@ -113,7 +113,7 @@ describe('DialtoneConsole page', () => {
 
   it('renders the console header, warm-up progress and today tallies', () => {
     renderPage();
-    expect(screen.getByText('Dialtone Console')).toBeInTheDocument();
+    expect(screen.getByText('Autopilot Console')).toBeInTheDocument();
     expect(screen.getByText('Warm-up progress')).toBeInTheDocument();
     // Warm-up "8 / 20 today" (8 also appears in the tallies, so assert ≥1).
     expect(screen.getAllByText('8').length).toBeGreaterThan(0);

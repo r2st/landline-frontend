@@ -99,7 +99,7 @@ export default function DialtoneHealth() {
                   {overall.label}
                 </span>
                 <span className="text-sm font-medium text-gray-900">
-                  {data?.sending_enabled ? 'Dialtone is sending' : 'Dialtone is not sending'}
+                  {data?.sending_enabled ? 'Autopilot is sending' : 'Autopilot is not sending'}
                 </span>
               </div>
               <p className="mt-1 text-sm text-gray-500">{overall.blurb}</p>
@@ -421,7 +421,7 @@ function TripHistory() {
         <EmptyState
           icon={ShieldCheck}
           title="The rail has never fired"
-          description="Dialtone has not had to pause itself. Trips land here with the metric that caused them."
+          description="Autopilot has not had to pause itself. Trips land here with the metric that caused them."
         />
       ) : (
         <ul className="divide-y divide-gray-100">

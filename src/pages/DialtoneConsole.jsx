@@ -701,7 +701,7 @@ export default function DialtoneConsole() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
               <span className="relative inline-flex h-3 w-3 rounded-full bg-indigo-500" />
             </span>
-            Dialtone Console
+            Autopilot Console
             <HelpIcon articleId="dialtone-console" />
           </h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -853,7 +853,7 @@ export default function DialtoneConsole() {
                 description={
                   hasFilters
                     ? 'Try widening the date range or clearing filters.'
-                    : "Dialtone's actions — sends, opens, replies, bounces and discovered leads — will stream in here."
+                    : "Autopilot's actions — sends, opens, replies, bounces and discovered leads — will stream in here."
                 }
               />
             ) : (
