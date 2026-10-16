@@ -22,6 +22,7 @@ vi.mock('../api/client', () => ({
 vi.mock('../components/GmailConnect', () => ({ default: () => <div /> }));
 vi.mock('../components/EmailSignatureEditor', () => ({ default: () => <div /> }));
 vi.mock('../components/TestDeliverability', () => ({ default: () => <div /> }));
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { role: 'org_agent' } }) }));
 vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));

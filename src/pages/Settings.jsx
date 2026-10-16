@@ -28,12 +28,16 @@ import {
   Search,
   Loader2,
   AlertTriangle,
+  Key,
 } from 'lucide-react';
 import GmailConnect from '../components/GmailConnect';
 import EmailSignatureEditor from '../components/EmailSignatureEditor';
 import SendingKillSwitch from '../components/SendingKillSwitch';
 import ResetWarmupControl from '../components/ResetWarmupControl';
 import TestDeliverability from '../components/TestDeliverability';
+import ApiKeysSettings from '../components/ApiKeysSettings';
+import { useAuth } from '../context/AuthContext';
+import { isOrgAdmin, isPlatformAdmin } from '../lib/roles';
 import { api } from '../api/client';
 import { useAutomation } from '../hooks/useAutomation';
 import { API_BASE_URL } from '../lib/constants';
@@ -113,6 +117,9 @@ const TABS = [
   { id: 'scoring', label: 'Scoring', icon: Target },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'data', label: 'Data', icon: Download },
+  // Org admins only: the backend rejects everyone else, and platform admins
+  // have no org of their own to hold keys.
+  { id: 'api-keys', label: 'API Keys', icon: Key, orgAdminOnly: true },
   { id: 'system', label: 'System', icon: Activity },
 ];
 
@@ -221,6 +228,9 @@ function NotificationToggle({ label, description, checked, onChange }) {
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('profile');
+  const { user } = useAuth();
+  const canManageKeys = !!user && isOrgAdmin(user.role) && !isPlatformAdmin(user.role);
+  const visibleTabs = TABS.filter((tab) => !tab.orgAdminOnly || canManageKeys);
 
   // API health
   const [apiConnected, setApiConnected] = useState(false);
@@ -846,11 +856,11 @@ export default function Settings() {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900">About</h2>
-            <p className="text-sm text-gray-500">Landline v1.0 by Apprend Technologies</p>
+            <p className="text-sm text-gray-500">DoAide Prospect v1.0 by Apprend Technologies</p>
           </div>
         </div>
         <div className="mt-4 space-y-2 text-sm text-gray-600">
-          <p>Landline is a B2B lead generation and management platform designed to help sales teams discover, qualify, and engage with potential customers.</p>
+          <p>DoAide Prospect is a B2B lead generation and management platform designed to help sales teams discover, qualify, and engage with potential customers.</p>
           <p className="text-xs text-gray-400">
             Built with React, Tailwind CSS, and FastAPI.
           </p>
@@ -1017,6 +1027,7 @@ export default function Settings() {
     scoring: renderScoringTab,
     notifications: renderNotificationsTab,
     data: renderDataTab,
+    'api-keys': () => <ApiKeysSettings />,
     system: renderSystemTab,
   };
 
@@ -1024,7 +1035,7 @@ export default function Settings() {
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Tab Navigation */}
       <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const showGreen = tab.id === 'email' && gmailConnected;
           const showWarning = tab.id === 'scoring' && weightsTotal !== 100;
