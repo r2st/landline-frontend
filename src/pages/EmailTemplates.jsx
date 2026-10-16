@@ -5,13 +5,17 @@ import {
 import toast from 'react-hot-toast';
 import EmptyState from '../components/EmptyState';
 import SafeHtml from '../components/SafeHtml';
+import TemplateAttachments from '../components/TemplateAttachments';
+import { emailApi } from '../api/client';
 import {
   useCreateTemplate,
   useDeleteTemplate,
+  useDeleteTemplateAttachment,
   useEmailTemplates,
   usePreviewTemplate,
   useSetDefaultTemplate,
   useUpdateTemplate,
+  useUploadTemplateAttachment,
 } from '../hooks/useEmailTemplates';
 import { cn } from '../lib/utils';
 
@@ -87,6 +91,8 @@ export default function EmailTemplates() {
   const deleteTemplate = useDeleteTemplate();
   const setDefault = useSetDefaultTemplate();
   const preview = usePreviewTemplate();
+  const uploadAttachment = useUploadTemplateAttachment();
+  const deleteAttachment = useDeleteTemplateAttachment();
 
   // `null` means "nothing chosen yet" and resolves to the default template
   // below. Derived rather than synced into state by an effect: the list arrives
@@ -99,6 +105,9 @@ export default function EmailTemplates() {
   const [draft, setDraft] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [rendered, setRendered] = useState(null);
+  // Files picked for a template that doesn't exist yet. The upload endpoint
+  // needs a template id, so these go up right after Create.
+  const [pendingFiles, setPendingFiles] = useState([]);
   // Which textarea/input the cursor was last in, so a palette click inserts
   // where the writer was typing rather than always at the end of the body.
   const lastFocused = useRef('body');
@@ -123,20 +132,63 @@ export default function EmailTemplates() {
     ? { name: selected.name, subject: selected.subject, body: selected.body }
     : BLANK);
 
+  const hasUnsaved = dirty || pendingFiles.length > 0;
+
   const selectTemplate = (template) => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return;
+    if (hasUnsaved && !window.confirm('Discard unsaved changes?')) return;
     setSelectedId(template.id);
     setDraft(null);
     setDirty(false);
     setRendered(null);
+    setPendingFiles([]);
   };
 
   const startNew = () => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return;
+    if (hasUnsaved && !window.confirm('Discard unsaved changes?')) return;
     setSelectedId('new');
     setDraft(BLANK);
     setDirty(false);
     setRendered(null);
+    setPendingFiles([]);
+  };
+
+  // A saved template takes files at once — they are independent of the text
+  // fields, so there is nothing to wait for. A new one queues them.
+  const addFiles = async (files) => {
+    if (isNew) {
+      setPendingFiles((p) => [...p, ...files]);
+      return;
+    }
+    for (const file of files) {
+      try {
+        await uploadAttachment.mutateAsync({ templateId: activeId, file });
+      } catch {
+        // Toasted by the hook; keep going with the rest of the pick.
+      }
+    }
+  };
+
+  const removeSaved = async (att) => {
+    if (!window.confirm(`Remove "${att.filename}" from this template?`)) return;
+    try {
+      await deleteAttachment.mutateAsync({ templateId: activeId, attachmentId: att.id });
+    } catch {
+      // Toasted by the hook.
+    }
+  };
+
+  const download = async (att) => {
+    try {
+      const blob = await emailApi.downloadTemplateAttachment(activeId, att.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = att.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error(`Couldn't download ${att.filename}`);
+    }
   };
 
   const edit = (field) => (e) => {
@@ -181,7 +233,18 @@ export default function EmailTemplates() {
     };
     if (isNew) {
       const created = await createTemplate.mutateAsync(payload);
-      if (created?.id) setSelectedId(created.id);
+      if (created?.id) {
+        setSelectedId(created.id);
+        for (const file of pendingFiles) {
+          try {
+            await uploadAttachment.mutateAsync({ templateId: created.id, file });
+          } catch {
+            // Toasted by the hook. The template exists; the file can be
+            // re-added from the editor.
+          }
+        }
+      }
+      setPendingFiles([]);
     } else {
       // ``activeId``, not ``selectedId``: the page opens on the default
       // template without ever writing its id into state, and saving must not
@@ -206,7 +269,7 @@ export default function EmailTemplates() {
     [draftValue.subject, draftValue.body],
   );
 
-  const saving = createTemplate.isPending || updateTemplate.isPending;
+  const saving = createTemplate.isPending || updateTemplate.isPending || uploadAttachment.isPending;
 
   return (
     <div className="space-y-6">
@@ -340,6 +403,16 @@ export default function EmailTemplates() {
                 </div>
 
                 <FieldPalette onInsert={insert} />
+
+                <TemplateAttachments
+                  saved={isNew ? [] : (selected?.attachments || [])}
+                  pending={isNew ? pendingFiles : []}
+                  onAddFiles={addFiles}
+                  onRemoveSaved={removeSaved}
+                  onRemovePending={(i) => setPendingFiles((p) => p.filter((_, j) => j !== i))}
+                  onDownload={download}
+                  uploading={uploadAttachment.isPending}
+                />
 
                 {typos.length > 0 && (
                   // Not an error — the template still saves and sends. But an

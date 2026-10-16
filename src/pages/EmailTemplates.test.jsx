@@ -7,6 +7,8 @@ const updateMutate = vi.fn().mockResolvedValue({});
 const deleteMutate = vi.fn().mockResolvedValue({});
 const defaultMutate = vi.fn();
 const previewMutate = vi.fn();
+const uploadMutate = vi.fn().mockResolvedValue({});
+const deleteAttachmentMutate = vi.fn().mockResolvedValue({});
 
 vi.mock('../hooks/useEmailTemplates', () => ({
   useEmailTemplates: (...a) => mockTemplates(...a),
@@ -15,13 +17,25 @@ vi.mock('../hooks/useEmailTemplates', () => ({
   useDeleteTemplate: () => ({ mutateAsync: deleteMutate, isPending: false }),
   useSetDefaultTemplate: () => ({ mutate: defaultMutate, isPending: false }),
   usePreviewTemplate: () => ({ mutateAsync: previewMutate, isPending: false }),
+  useUploadTemplateAttachment: () => ({ mutateAsync: uploadMutate, isPending: false }),
+  useDeleteTemplateAttachment: () => ({ mutateAsync: deleteAttachmentMutate, isPending: false }),
 }));
 
 vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+import toast from 'react-hot-toast';
 import EmailTemplates from './EmailTemplates';
+
+const pdf = (name = 'deck.pdf', size = 2048) =>
+  new File([new Uint8Array(size)], name, { type: 'application/pdf' });
+
+const pick = (files) => {
+  fireEvent.change(screen.getByTestId('template-attachment-input'), {
+    target: { files },
+  });
+};
 
 const TEMPLATES = [
   {
@@ -30,6 +44,15 @@ const TEMPLATES = [
     subject: 'quick question about {{company}}',
     body: '<p>Hi {{first_name}},</p>',
     is_default: true,
+    attachments: [
+      {
+        id: 'a-1',
+        filename: 'Capabilities deck.pdf',
+        content_type: 'application/pdf',
+        size_bytes: 2 * 1024 * 1024,
+        created_at: '2026-10-16T00:00:00Z',
+      },
+    ],
   },
   {
     id: 't-2',
@@ -194,5 +217,88 @@ describe('EmailTemplates', () => {
     mockTemplates.mockReturnValue({ data: [], isLoading: false });
     render(<EmailTemplates />);
     expect(screen.getByText(/no templates yet/i)).toBeInTheDocument();
+  });
+  describe('attachments', () => {
+    it("lists the selected template's files", () => {
+      render(<EmailTemplates />);
+      expect(screen.getByText('Capabilities deck.pdf')).toBeInTheDocument();
+      expect(screen.getByText('2.0 MB')).toBeInTheDocument();
+      // Named per file: several remove buttons can share the section.
+      expect(screen.getByRole('button', { name: 'Remove Capabilities deck.pdf' }))
+        .toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Download Capabilities deck.pdf' }))
+        .toBeInTheDocument();
+    });
+
+    it('shows no files for a template without attachments', () => {
+      render(<EmailTemplates />);
+      fireEvent.click(screen.getByText('Follow-up'));
+      expect(screen.queryByText('Capabilities deck.pdf')).toBeNull();
+      expect(screen.getByText(/sent with every email from this template/i)).toBeInTheDocument();
+    });
+
+    it('uploads straight away on a saved template', async () => {
+      render(<EmailTemplates />);
+      const file = pdf();
+      pick([file]);
+      await waitFor(() => {
+        expect(uploadMutate).toHaveBeenCalledWith({ templateId: 't-1', file });
+      });
+      // Not a text edit — nothing to save.
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    });
+
+    it('confirms before removing a saved file', async () => {
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      render(<EmailTemplates />);
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Capabilities deck.pdf' }));
+      expect(deleteAttachmentMutate).not.toHaveBeenCalled();
+
+      confirm.mockReturnValue(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Capabilities deck.pdf' }));
+      await waitFor(() => {
+        expect(deleteAttachmentMutate).toHaveBeenCalledWith({
+          templateId: 't-1', attachmentId: 'a-1',
+        });
+      });
+      confirm.mockRestore();
+    });
+
+    it('queues files on a new template and uploads them after create', async () => {
+      render(<EmailTemplates />);
+      fireEvent.click(screen.getByRole('button', { name: /new template/i }));
+      const file = pdf('one-pager.pdf');
+      pick([file]);
+
+      // Nothing to upload to yet.
+      expect(uploadMutate).not.toHaveBeenCalled();
+      expect(screen.getByText('one-pager.pdf')).toBeInTheDocument();
+      expect(screen.getByText(/uploads on create/i)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'With deck' } });
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'our deck' } });
+      fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+      await waitFor(() => {
+        expect(uploadMutate).toHaveBeenCalledWith({ templateId: 't-new', file });
+      });
+      expect(createMutate.mock.invocationCallOrder[0])
+        .toBeLessThan(uploadMutate.mock.invocationCallOrder[0]);
+    });
+
+    it('drops a queued file without uploading it', () => {
+      render(<EmailTemplates />);
+      fireEvent.click(screen.getByRole('button', { name: /new template/i }));
+      pick([pdf('draft.pdf')]);
+      fireEvent.click(screen.getByRole('button', { name: 'Remove draft.pdf' }));
+      expect(screen.queryByText('draft.pdf')).toBeNull();
+    });
+
+    it('refuses a blocked file type before uploading', () => {
+      render(<EmailTemplates />);
+      pick([new File(['MZ'], 'setup.exe', { type: 'application/octet-stream' })]);
+      expect(uploadMutate).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/\.exe/));
+    });
   });
 });

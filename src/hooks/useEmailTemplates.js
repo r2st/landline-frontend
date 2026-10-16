@@ -67,6 +67,32 @@ export function useSetDefaultTemplate() {
   });
 }
 
+// ─── Attachments ──────────────────────────────────────────────────────────────
+
+export function useUploadTemplateAttachment() {
+  return useMutation({
+    mutationFn: async ({ templateId, file }) =>
+      await emailApi.uploadTemplateAttachment(templateId, file),
+    onSuccess: (att) => {
+      queryClient.invalidateQueries({ queryKey: ['email-templates'] });
+      toast.success(`Attached ${att?.filename || 'file'}`);
+    },
+    onError: (e) => toast.error(errMsg(e, 'Failed to attach file')),
+  });
+}
+
+export function useDeleteTemplateAttachment() {
+  return useMutation({
+    mutationFn: async ({ templateId, attachmentId }) =>
+      await emailApi.deleteTemplateAttachment(templateId, attachmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-templates'] });
+      toast.success('Attachment removed');
+    },
+    onError: (e) => toast.error(errMsg(e, 'Failed to remove attachment')),
+  });
+}
+
 // ─── Preview ────────────────────────────────────────────────────────────────────
 
 export function usePreviewTemplate() {

@@ -206,6 +206,21 @@ export const emailApi = {
   compose: (data) => api.post('/email-compose', data).then(r => r.data),
   getSends: (params) => api.get('/email-sends', { params }).then(r => r.data),
   sendTest: (data) => api.post('/email-templates/send-test', data).then(r => r.data),
+  // Files sent with every email from a template. Upload needs a saved template,
+  // so a new template's files are uploaded right after it is created.
+  uploadTemplateAttachment: (templateId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/email-templates/${templateId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    }).then(r => r.data);
+  },
+  deleteTemplateAttachment: (templateId, attachmentId) =>
+    api.delete(`/email-templates/${templateId}/attachments/${attachmentId}`).then(r => r.data),
+  downloadTemplateAttachment: (templateId, attachmentId) =>
+    api.get(`/email-templates/${templateId}/attachments/${attachmentId}`, { responseType: 'blob' })
+      .then(r => r.data),
   getABStats: (templateId) => api.get(`/email-sends/ab-stats`, { params: { template_id: templateId } }).then(r => r.data),
   getAnalytics: () => api.get('/email-sends/analytics').then(r => r.data),
 };
