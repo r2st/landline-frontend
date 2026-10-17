@@ -620,7 +620,7 @@ export default function Layout({ children }) {
         <header className="sticky top-0 z-20 hidden h-14 items-center gap-4 border-b border-gray-200 bg-white/80 px-8 backdrop-blur lg:flex">
           <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
             <Link to="/" className="flex-shrink-0 text-gray-400 transition-colors hover:text-gray-700">
-              Landline
+              Prospect
             </Link>
             {breadcrumbs.map((crumb, i) => {
               const isLast = i === breadcrumbs.length - 1;
