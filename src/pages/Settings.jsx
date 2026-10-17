@@ -275,11 +275,14 @@ export default function Settings() {
   });
 
   // Profile
+  // The display-name override is per user: an unscoped key showed whoever
+  // last saved a name in this browser to the next person who logged in.
+  const userNameKey = user?.id ? `${USER_NAME_KEY}:${user.id}` : USER_NAME_KEY;
   const [userName, setUserName] = useState(() => {
     try {
-      return localStorage.getItem(USER_NAME_KEY) || '';
+      return localStorage.getItem(userNameKey) || user?.name || '';
     } catch {
-      return '';
+      return user?.name || '';
     }
   });
   const [userTimezone, setUserTimezone] = useState(() => {
@@ -337,14 +340,14 @@ export default function Settings() {
 
   const handleProfileSave = useCallback(() => {
     try {
-      localStorage.setItem(USER_NAME_KEY, userName.trim());
+      localStorage.setItem(userNameKey, userName.trim());
       localStorage.setItem(TIMEZONE_KEY, userTimezone);
       localStorage.setItem(WORKING_HOURS_KEY, JSON.stringify(workingHours));
       toast.success('Profile saved');
     } catch {
       toast.error('Could not save profile');
     }
-  }, [userName, userTimezone, workingHours]);
+  }, [userNameKey, userName, userTimezone, workingHours]);
 
   const handleExportCompanies = useCallback(() => {
     const baseURL = import.meta.env.VITE_API_URL
@@ -898,7 +901,7 @@ export default function Settings() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">{userName.trim() || 'Not set'}</p>
-              <p className="text-xs text-gray-500">sumaninster7@gmail.com</p>
+              <p className="text-xs text-gray-500">{user?.email || ''}</p>
             </div>
           </div>
 
@@ -918,7 +921,7 @@ export default function Settings() {
               <input
                 type="email"
                 readOnly
-                value="sumaninster7@gmail.com"
+                value={user?.email || ''}
                 className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600"
               />
             </div>
