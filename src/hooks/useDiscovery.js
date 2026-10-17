@@ -8,7 +8,10 @@ export function useSearchCompanies() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      toast.success(`Found ${res.total} companies: ${res.imported} imported, ${res.already_existed} already existed`);
+      // A rate-limited / unconfigured search is explained inline on the page,
+      // not celebrated with a "found 0" toast.
+      if (res?.search_status && res.search_status !== 'ok') return;
+      toast.success(`Found ${res.total} companies: ${res.imported} added, ${res.already_existed} already in Prospect`);
     },
     onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Search failed'),
   });

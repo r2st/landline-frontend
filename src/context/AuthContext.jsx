@@ -114,6 +114,12 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// For components that can render outside the provider (e.g. in isolation in
+// tests): returns null instead of throwing.
+export function useOptionalAuth() {
+  return useContext(AuthContext);
+}
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (ctx === null) {

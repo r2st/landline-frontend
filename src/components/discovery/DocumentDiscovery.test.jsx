@@ -170,18 +170,18 @@ describe('DocumentDiscovery multi-file upload', () => {
         message: 'None of these files could be used.',
         rejected: [
           { index: 0, filename: 'x.pdf', error: 'Not a PDF' },
-          { index: 1, filename: 'y.exe', error: 'Unsupported file type' },
+          { index: 1, filename: 'y.txt', error: 'No readable text' },
         ],
       } } },
     });
     renderUi(<DocumentDiscovery />);
     await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
 
-    pick([file('x.pdf'), file('y.exe')]);
+    pick([file('x.pdf'), file('y.txt')]);
 
     const items = await screen.findAllByTestId('batch-item');
     await waitFor(() => expect(within(items[0]).getByText('Not a PDF')).toBeInTheDocument());
-    expect(within(items[1]).getByText('Unsupported file type')).toBeInTheDocument();
+    expect(within(items[1]).getByText('No readable text')).toBeInTheDocument();
   });
 
   it('skips oversized files locally and sends the rest', async () => {

@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Eye, RefreshCw, Send, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, RefreshCw, Save, Send, Sparkles, Users } from 'lucide-react';
 import {
   isGeminiKeyRequired,
   useDraftEmails,
   usePreviewEmails,
   useSendEmails,
 } from '../../hooks/useDiscoveryDocuments';
+import { usePersistedState } from '../../lib/persistedState';
 import ConfirmDialog from '../ConfirmDialog';
+import Skeleton from '../Skeleton';
 import FollowUpStatus from './FollowUpStatus';
 import GeminiKeyBanner from './GeminiKeyBanner';
 
@@ -37,13 +39,28 @@ function recipientsOf(doc) {
   return [...new Map(out.map((r) => [r.id, r])).values()];
 }
 
+const EMPTY_DRAFT = { brief: '', tone: 'professional', followUps: 2, steps: [], excluded: [] };
+
 export default function DocumentOutreach({ doc, onBack }) {
   const recipients = useMemo(() => recipientsOf(doc), [doc]);
-  const [selected, setSelected] = useState(() => new Set(recipients.map((r) => r.id)));
-  const [brief, setBrief] = useState('');
-  const [tone, setTone] = useState('professional');
-  const [followUps, setFollowUps] = useState(2);
-  const [steps, setSteps] = useState([]);
+  // The whole draft is saved per document, so leaving mid-edit loses nothing.
+  // Recipients are stored as who's *left out*, so people imported later start ticked.
+  const [draftState, setDraftState, clearDraft] = usePersistedState(
+    `prospect.discovery.outreach.${doc.id}`,
+    EMPTY_DRAFT
+  );
+  const { brief, tone, followUps, steps } = { ...EMPTY_DRAFT, ...draftState };
+  const patchDraft = (patch) =>
+    setDraftState((prev) => ({ ...EMPTY_DRAFT, ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }));
+  const setBrief = (v) => patchDraft({ brief: v });
+  const setTone = (v) => patchDraft({ tone: v });
+  const setFollowUps = (v) => patchDraft({ followUps: v });
+  const setSteps = (fn) =>
+    patchDraft((prev) => ({ steps: typeof fn === 'function' ? fn(prev?.steps || []) : fn }));
+  const excluded = new Set(draftState?.excluded || []);
+  const selected = new Set(recipients.filter((r) => !excluded.has(r.id)).map((r) => r.id));
+  const setSelected = (next) =>
+    patchDraft({ excluded: recipients.filter((r) => !next.has(r.id)).map((r) => r.id) });
   const [previewFor, setPreviewFor] = useState(recipients[0]?.id || '');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sent, setSent] = useState(null);
@@ -52,21 +69,28 @@ export default function DocumentOutreach({ doc, onBack }) {
   const preview = usePreviewEmails(doc.id);
   const send = useSendEmails(doc.id);
 
-  const toggle = (id) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const toggle = (id) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
 
   const runDraft = () =>
     draft.mutate(
       { brief, tone, follow_ups: followUps },
       {
         onSuccess: (res) => {
-          setSteps(res.steps.map((s, i) => ({ ...s, delay_days: i === 0 ? 0 : s.delay_days ?? DEFAULT_DELAYS[i - 1] })));
+          const drafted = res.steps.map((s, i) => ({ ...s, delay_days: i === 0 ? 0 : s.delay_days ?? DEFAULT_DELAYS[i - 1] }));
+          setSteps(drafted);
           preview.reset();
+          // Show straight away how it reads for a real recipient.
+          if (previewFor) {
+            preview.mutate({
+              steps: drafted.map((s, i) => ({ subject: s.subject, body: s.body, delay_days: i === 0 ? 0 : Number(s.delay_days) || 1 })),
+              contact_id: previewFor,
+            });
+          }
         },
       }
     );
@@ -75,7 +99,10 @@ export default function DocumentOutreach({ doc, onBack }) {
     setSteps((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
     preview.reset();
   };
-  const removeStep = (i) => setSteps((prev) => prev.filter((_, j) => j !== i));
+  const removeStep = (i) => {
+    setSteps((prev) => prev.filter((_, j) => j !== i));
+    preview.reset();
+  };
   const addFollowUp = () =>
     setSteps((prev) => [
       ...prev,
@@ -134,7 +161,18 @@ export default function DocumentOutreach({ doc, onBack }) {
           </button>
         </div>
         {recipients.length === 0 ? (
-          <p className="text-sm text-gray-500">No imported contacts with an email address. Go back and import some.</p>
+          <div className="flex flex-col items-center rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center">
+            <Users className="h-8 w-8 text-gray-300" />
+            <p className="mt-2 text-sm font-medium text-gray-900">No one to email yet</p>
+            <p className="mt-1 text-sm text-gray-500">Import at least one person with an email address first.</p>
+            <button
+              type="button"
+              onClick={onBack}
+              className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              Back to review
+            </button>
+          </div>
         ) : (
           <ul className="max-h-56 space-y-1 overflow-y-auto">
             {recipients.map((r) => (
@@ -169,16 +207,16 @@ export default function DocumentOutreach({ doc, onBack }) {
         />
         <div className="mt-3 flex flex-wrap items-end gap-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Tone</label>
-            <select value={tone} onChange={(e) => setTone(e.target.value)} className={inputCls}>
+            <label htmlFor="outreach-tone" className="mb-1 block text-xs font-medium text-gray-600">Tone</label>
+            <select id="outreach-tone" value={tone} onChange={(e) => setTone(e.target.value)} className={inputCls}>
               {TONES.map((t) => (
                 <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Follow-ups</label>
-            <select value={followUps} onChange={(e) => setFollowUps(Number(e.target.value))} className={inputCls}>
+            <label htmlFor="outreach-followups" className="mb-1 block text-xs font-medium text-gray-600">Follow-ups</label>
+            <select id="outreach-followups" value={followUps} onChange={(e) => setFollowUps(Number(e.target.value))} className={inputCls}>
               {[0, 1, 2, 3].map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
@@ -202,12 +240,26 @@ export default function DocumentOutreach({ doc, onBack }) {
         </div>
       </div>
 
+      {draft.isPending && steps.length === 0 && (
+        <div className="space-y-4" data-testid="draft-skeleton" aria-label="Drafting emails">
+          {[0, 1].map((i) => (
+            <div key={i} className="space-y-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-28 w-full" />
+            </div>
+          ))}
+          <p className="text-center text-xs text-gray-500">Writing your emails — usually 10–20 seconds…</p>
+        </div>
+      )}
+
       {/* Steps */}
       {steps.length > 0 && (
         <div className="space-y-4">
-          <p className="text-xs text-gray-500">
-            Edit freely — this exact copy is what gets sent. Merge fields: {MERGE_HINT}. An unsubscribe link is added
-            automatically.
+          <p className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+            <Save className="h-3.5 w-3.5" />
+            Edits save automatically. This exact copy is what gets sent. Merge fields: {MERGE_HINT}. An unsubscribe
+            link is added automatically.
           </p>
           {steps.map((s, i) => (
             <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -271,8 +323,8 @@ export default function DocumentOutreach({ doc, onBack }) {
           <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[16rem] flex-1">
-                <label className="mb-1 block text-xs font-medium text-gray-600">Preview as</label>
-                <select value={previewFor} onChange={(e) => setPreviewFor(e.target.value)} className={inputCls}>
+                <label htmlFor="outreach-preview-for" className="mb-1 block text-xs font-medium text-gray-600">Preview as</label>
+                <select id="outreach-preview-for" value={previewFor} onChange={(e) => setPreviewFor(e.target.value)} className={inputCls}>
                   {recipients.map((r) => (
                     <option key={r.id} value={r.id}>{r.name || r.email} — {r.company}</option>
                   ))}
@@ -288,7 +340,16 @@ export default function DocumentOutreach({ doc, onBack }) {
                 Preview
               </button>
             </div>
-            {preview.data && (
+            {!preview.data && !preview.isPending && (
+              <p className="mt-3 text-xs text-gray-500">See exactly what a recipient will get, with merge fields filled in.</p>
+            )}
+            {preview.isPending && (
+              <div className="mt-4 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            )}
+            {preview.data && !preview.isPending && (
               <div className="mt-4 space-y-3">
                 <p className="text-xs text-gray-500">To: {preview.data.to_email}</p>
                 {preview.data.steps.map((p) => (
@@ -331,7 +392,12 @@ export default function DocumentOutreach({ doc, onBack }) {
           setConfirmOpen(false);
           send.mutate(
             { contact_ids: recipientIds, steps: payloadSteps, tone },
-            { onSuccess: (res) => setSent(res) }
+            {
+              onSuccess: (res) => {
+                clearDraft();
+                setSent(res);
+              },
+            }
           );
         }}
         onCancel={() => setConfirmOpen(false)}

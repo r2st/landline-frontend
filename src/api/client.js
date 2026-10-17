@@ -236,12 +236,13 @@ export const discoveryDocsApi = {
   aiStatus: () => api.get('/discovery/documents/ai-status').then(r => r.data),
   list: () => api.get('/discovery/documents').then(r => r.data),
   get: (id) => api.get(`/discovery/documents/${id}`).then(r => r.data),
-  upload: (file) => {
+  upload: (file, onProgress) => {
     const formData = new FormData();
     formData.append('file', file);
     return api.post('/discovery/documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000,
+      onUploadProgress: onProgress ? (e) => onProgress(e.loaded, e.total) : undefined,
     }).then(r => r.data);
   },
   // Several files in one request; each becomes its own document. Bad files come
@@ -256,8 +257,13 @@ export const discoveryDocsApi = {
       onUploadProgress: onProgress ? (e) => onProgress(e.loaded, e.total) : undefined,
     }).then(r => r.data);
   },
-  importCandidates: (id, candidateIds) =>
-    api.post(`/discovery/documents/${id}/import`, { candidate_ids: candidateIds }, { timeout: 120000 }).then(r => r.data),
+  importCandidates: (id, candidateIds, contactIds) =>
+    api.post(
+      `/discovery/documents/${id}/import`,
+      // contact_ids (extracted ids) narrows who comes along; omitted = everyone.
+      contactIds ? { candidate_ids: candidateIds, contact_ids: contactIds } : { candidate_ids: candidateIds },
+      { timeout: 120000 }
+    ).then(r => r.data),
   draft: (id, data) => api.post(`/discovery/documents/${id}/draft`, data, { timeout: 120000 }).then(r => r.data),
   preview: (id, data) => api.post(`/discovery/documents/${id}/preview`, data).then(r => r.data),
   send: (id, data) => api.post(`/discovery/documents/${id}/send`, data, { timeout: 120000 }).then(r => r.data),

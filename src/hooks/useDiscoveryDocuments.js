@@ -47,14 +47,13 @@ export function useDiscoveryDocument(id) {
 
 export function useUploadDocument() {
   return useMutation({
-    mutationFn: (file) => discoveryDocsApi.upload(file),
+    mutationFn: ({ file, onProgress }) => discoveryDocsApi.upload(file, onProgress),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['discovery-docs', 'list'] }),
     onError: (e) => {
       if (isGeminiKeyRequired(e)) {
         queryClient.invalidateQueries({ queryKey: ['discovery-docs', 'ai-status'] });
-        return;
       }
-      toast.error(errMsg(e, 'Upload failed'));
+      // Other failures are shown inline next to the file that failed.
     },
   });
 }
@@ -66,16 +65,16 @@ export function useUploadDocuments() {
     onError: (e) => {
       if (isGeminiKeyRequired(e)) {
         queryClient.invalidateQueries({ queryKey: ['discovery-docs', 'ai-status'] });
-        return;
       }
-      toast.error(errMsg(e, 'Upload failed'));
+      // Other failures are shown inline next to the file that failed.
     },
   });
 }
 
 export function useImportCandidates(id) {
   return useMutation({
-    mutationFn: (candidateIds) => discoveryDocsApi.importCandidates(id, candidateIds),
+    mutationFn: ({ candidateIds, contactIds }) =>
+      discoveryDocsApi.importCandidates(id, candidateIds, contactIds),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['discovery-docs', 'detail', id] });
       queryClient.invalidateQueries({ queryKey: ['companies'] });

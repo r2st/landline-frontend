@@ -1,9 +1,14 @@
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
+  FileSpreadsheet,
   FileText,
   Loader2,
+  Mail,
+  Sparkles,
   Trash2,
   UploadCloud,
 } from 'lucide-react';
@@ -19,11 +24,15 @@ import {
 import { cn, formatDate } from '../../lib/utils';
 import { splitUploadProgress } from '../../lib/uploadProgress';
 import ConfirmDialog from '../ConfirmDialog';
+import ErrorBoundary from '../ErrorBoundary';
+import Skeleton from '../Skeleton';
 import DocumentReview from './DocumentReview';
 import DocumentOutreach from './DocumentOutreach';
 import GeminiKeyBanner from './GeminiKeyBanner';
 
 const ACCEPT = '.csv,.tsv,.xlsx,.pdf,.docx,.txt';
+const ACCEPTED_EXT = ACCEPT.split(',');
+const TYPE_LIST = 'CSV, TSV, XLSX, PDF, DOCX or TXT';
 const MAX_MB = 10;
 const MAX_FILES = 10; // matches the backend's MAX_BATCH_FILES
 
@@ -63,7 +72,18 @@ function UploadZone({ onUploaded, disabled }) {
   const uploadMany = useUploadDocuments();
   const { data: docs = [] } = useDiscoveryDocuments();
 
-  const tooBig = (file) => file.size > MAX_MB * 1024 * 1024;
+  const [single, setSingle] = useState(null); // { name, progress } while one file uploads
+
+  // Checked here so a wrong file fails instantly with a reason, rather than
+  // after the upload round-trip.
+  const problemWith = (file) => {
+    const dot = file.name.lastIndexOf('.');
+    const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
+    if (!ACCEPTED_EXT.includes(ext)) return `Not a supported file type — use ${TYPE_LIST}`;
+    if (file.size === 0) return 'This file is empty';
+    if (file.size > MAX_MB * 1024 * 1024) return `Larger than ${MAX_MB} MB`;
+    return null;
+  };
 
   const handleFiles = (fileList) => {
     const files = Array.from(fileList || []);
@@ -74,12 +94,25 @@ function UploadZone({ onUploaded, disabled }) {
       return;
     }
     if (files.length === 1) {
-      if (tooBig(files[0])) {
-        setLocalError(`Files can be at most ${MAX_MB} MB.`);
+      const problem = problemWith(files[0]);
+      if (problem) {
+        setLocalError(`${files[0].name}: ${problem}.`);
         return;
       }
       setBatch(null);
-      upload.mutate(files[0], { onSuccess: (doc) => onUploaded(doc.id) });
+      setSingle({ name: files[0].name, progress: 0 });
+      upload.mutate(
+        {
+          file: files[0],
+          onProgress: (loaded, total) =>
+            setSingle((prev) => prev && { ...prev, progress: total ? loaded / total : 0 }),
+        },
+        {
+          onSuccess: (doc) => onUploaded(doc.id),
+          onError: (e) => setLocalError(`${files[0].name}: ${errMsg(e, 'Upload failed')}`),
+          onSettled: () => setSingle(null),
+        }
+      );
       return;
     }
 
@@ -88,7 +121,7 @@ function UploadZone({ onUploaded, disabled }) {
       name: file.name,
       progress: 0,
       docId: null,
-      error: tooBig(file) ? `Larger than ${MAX_MB} MB` : null,
+      error: problemWith(file),
     }));
     setBatch(items);
     // Positions (in `items`) of the files actually sent.
@@ -158,11 +191,24 @@ function UploadZone({ onUploaded, disabled }) {
           <UploadCloud className="h-10 w-10 text-gray-400" />
         )}
         <p className="mt-3 text-sm font-medium text-gray-900">
-          {busy ? 'Uploading…' : 'Drop files here, or choose them'}
+          {busy ? (single ? `Uploading ${single.name}…` : 'Uploading…') : 'Drop files here, or choose them'}
         </p>
-        <p className="mt-1 text-xs text-gray-500">
-          CSV, XLSX, PDF, DOCX or TXT — up to {MAX_FILES} files, {MAX_MB} MB each. Scanned PDFs (images of text) aren&apos;t supported yet.
-        </p>
+        {single ? (
+          <div
+            className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-gray-100"
+            role="progressbar"
+            aria-label={`Upload progress for ${single.name}`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(single.progress * 100)}
+          >
+            <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.round(single.progress * 100)}%` }} />
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-gray-500">
+            {TYPE_LIST} — up to {MAX_FILES} files, {MAX_MB} MB each. Scanned PDFs (images of text) aren&apos;t supported yet.
+          </p>
+        )}
         <button
           type="button"
           disabled={disabled || busy}
@@ -184,7 +230,7 @@ function UploadZone({ onUploaded, disabled }) {
             e.target.value = '';
           }}
         />
-        {localError && <p className="mt-3 text-sm text-red-600">{localError}</p>}
+        {localError && <p role="alert" className="mt-3 text-sm text-red-600">{localError}</p>}
       </div>
 
       {batch && (
@@ -321,25 +367,127 @@ function RecentDocuments({ onOpen }) {
   );
 }
 
+const GUIDE = [
+  {
+    Icon: UploadCloud,
+    title: 'Upload',
+    body: 'A trade-show attendee list, a spreadsheet export, a directory PDF — anything that names companies or people.',
+  },
+  {
+    Icon: FileSpreadsheet,
+    title: 'Review & import',
+    body: 'AI lists every company and person it found. Tick the ones you want; duplicates merge into what you have.',
+  },
+  {
+    Icon: Sparkles,
+    title: 'Draft emails',
+    body: 'Describe your offer in a sentence or two. AI writes a first email and follow-ups you can edit word for word.',
+  },
+  {
+    Icon: Mail,
+    title: 'Send & follow up',
+    body: 'Emails go out through your sending queue. Follow-ups stop automatically when someone replies.',
+  },
+];
+
+function HowItWorks() {
+  return (
+    <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 sm:p-5" data-testid="how-it-works">
+      <h3 className="text-sm font-semibold text-gray-900">How it works</h3>
+      <ol className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {GUIDE.map(({ Icon, title, body }, i) => (
+          <li key={title} className="rounded-lg bg-white p-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
+                {i + 1}
+              </span>
+              <Icon className="h-4 w-4 text-blue-600" />
+              <p className="text-sm font-medium text-gray-900">{title}</p>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-gray-600">{body}</p>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs text-gray-500">
+        Tip: files with a website or email column give the best matches. Nothing is emailed until you press Send.
+      </p>
+    </div>
+  );
+}
+
+function DocumentSkeleton() {
+  return (
+    <div className="space-y-3" data-testid="document-skeleton">
+      <Skeleton className="h-5 w-56" />
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 py-3">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="ml-auto h-4 w-12" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StepFallback({ reset, onBack }) {
+  return (
+    <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+      <AlertTriangle className="mx-auto h-8 w-8 text-red-500" />
+      <p className="mt-2 text-sm font-medium text-red-800">This step hit an unexpected error.</p>
+      <p className="mt-1 text-sm text-red-700">Your upload and anything you imported are saved.</p>
+      <div className="mt-3 flex justify-center gap-2">
+        <button
+          type="button"
+          onClick={reset}
+          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
+        >
+          Try again
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            reset();
+            onBack();
+          }}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Back to uploads
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentDiscovery() {
-  const [docId, setDocId] = useState(null);
-  const [stage, setStage] = useState('review'); // review | outreach
+  // The open document and step live in the URL (?doc=…&step=outreach), so
+  // leaving Discovery and coming back — or reloading — resumes where you were.
+  const [params, setParams] = useSearchParams();
+  const docId = params.get('doc');
+  const stage = params.get('step') === 'outreach' ? 'outreach' : 'review';
   const aiStatus = useDiscoveryAiStatus();
-  const { data: doc, error: docError } = useDiscoveryDocument(docId);
+  const { data: docs = [], isLoading: docsLoading } = useDiscoveryDocuments();
+  const { data: doc, error: docError, isLoading: docLoading } = useDiscoveryDocument(docId);
 
   const noKey = aiStatus.data && !aiStatus.data.gemini_key_configured;
+  const go = (id, step) => {
+    const next = new URLSearchParams(params);
+    next.set('tab', 'document');
+    if (id) next.set('doc', id);
+    else next.delete('doc');
+    if (id && step === 'outreach') next.set('step', 'outreach');
+    else next.delete('step');
+    setParams(next);
+  };
   // A document that already sent opens on its follow-up status.
-  const open = (id, sent = false) => {
-    setDocId(id);
-    setStage(sent ? 'outreach' : 'review');
-  };
-  const reset = () => {
-    setDocId(null);
-    setStage('review');
-  };
+  const open = (id, sent = false) => go(id, sent ? 'outreach' : 'review');
+  const reset = () => go(null);
 
   const hasImported = Boolean(
-    doc?.candidates?.some((c) => c.contacts?.some((p) => p.imported_contact_id))
+    doc?.candidates?.some((c) => c.contacts?.some((p) => p.imported_contact_id && p.email))
   );
   const current = !doc ? 0 : doc.sequence_id ? STEPS.length : stage === 'outreach' ? 2 : 1;
 
@@ -353,26 +501,43 @@ export default function DocumentDiscovery() {
 
       {!docId && (
         <>
+          {!docsLoading && docs.length === 0 && <HowItWorks />}
           <UploadZone onUploaded={open} disabled={noKey} />
           <RecentDocuments onOpen={open} />
         </>
       )}
 
       {docId && docError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          Couldn&apos;t load this document.{' '}
-          <button type="button" onClick={reset} className="font-medium underline">Back</button>
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
+          <div>
+            <p className="font-medium text-red-800">Couldn&apos;t load this document</p>
+            <p className="mt-1">{errMsg(docError, 'It may have been deleted.')}</p>
+            <button type="button" onClick={reset} className="mt-2 font-medium underline">
+              Back to uploads
+            </button>
+          </div>
         </div>
       )}
+
+      {docId && !doc && !docError && docLoading && <DocumentSkeleton />}
 
       {docId && doc && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm text-gray-700">
-              <FileText className="h-4 w-4 text-gray-400" />
-              <span className="font-medium">{doc.filename}</span>
+            <div className="flex min-w-0 items-center gap-2 text-sm text-gray-700">
+              <button
+                type="button"
+                onClick={reset}
+                aria-label="Back to uploads"
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <FileText className="h-4 w-4 flex-shrink-0 text-gray-400" />
+              <span className="truncate font-medium">{doc.filename}</span>
               {doc.status === 'ready' && (
-                <span className="text-gray-500">· {doc.candidate_count} companies found</span>
+                <span className="flex-shrink-0 text-gray-500">· {doc.candidate_count} companies found</span>
               )}
             </div>
             <button
@@ -385,10 +550,13 @@ export default function DocumentDiscovery() {
           </div>
 
           {doc.status === 'parsing' && (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white py-16">
+            <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-16 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
               <p className="mt-3 text-sm font-medium text-gray-900">Finding companies and contacts…</p>
-              <p className="mt-1 text-xs text-gray-500">Large PDFs can take a minute or two.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Large PDFs can take a minute or two. You can leave this page — the analysis keeps running and this
+                file will be waiting under Recent uploads.
+              </p>
             </div>
           )}
 
@@ -398,24 +566,29 @@ export default function DocumentDiscovery() {
               <div className="text-sm text-red-800">
                 <p className="font-medium">We couldn&apos;t analyse this file</p>
                 <p className="mt-1">{doc.error}</p>
+                <button type="button" onClick={reset} className="mt-2 font-medium underline">
+                  Try a different file
+                </button>
               </div>
             </div>
           )}
 
-          {doc.status === 'ready' && stage === 'review' && (
-            <DocumentReview
-              doc={doc}
-              canContinue={hasImported}
-              onContinue={() => setStage('outreach')}
-            />
-          )}
+          <ErrorBoundary resetKey={`${docId}:${stage}`} fallback={({ reset: retry }) => <StepFallback reset={retry} onBack={reset} />}>
+            {doc.status === 'ready' && stage === 'review' && (
+              <DocumentReview
+                key={doc.id}
+                doc={doc}
+                canContinue={hasImported}
+                onContinue={() => go(doc.id, 'outreach')}
+              />
+            )}
 
-          {doc.status === 'ready' && stage === 'outreach' && (
-            <DocumentOutreach doc={doc} onBack={() => setStage('review')} />
-          )}
+            {doc.status === 'ready' && stage === 'outreach' && (
+              <DocumentOutreach key={doc.id} doc={doc} onBack={() => go(doc.id, 'review')} />
+            )}
+          </ErrorBoundary>
         </div>
       )}
     </div>
   );
 }
-
