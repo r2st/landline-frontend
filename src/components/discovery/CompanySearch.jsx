@@ -23,7 +23,12 @@ import {
 } from 'lucide-react';
 import { discoveryApi, queryClient } from '../../api/client';
 import { useSearchCompanies } from '../../hooks/useDiscovery';
-import { errMsg, isGeminiKeyRequired, useDiscoveryAiStatus } from '../../hooks/useDiscoveryDocuments';
+import {
+  errMsg,
+  hasDiscoveryAiKey,
+  isGeminiKeyRequired,
+  useDiscoveryAiStatus,
+} from '../../hooks/useDiscoveryDocuments';
 import { useOptionalAuth } from '../../context/AuthContext';
 import { isPlatformAdmin } from '../../lib/roles';
 import { cn, formatNumber } from '../../lib/utils';
@@ -139,6 +144,27 @@ export function toGeminiPayload(form) {
     .filter(Boolean)
     .join('\n');
   return { ...base, keywords: description ? [description, ...base.keywords] : base.keywords, query };
+}
+
+const PROVIDER_LABEL = { gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter' };
+
+// Only Gemini searches the web. When it's out of quota or unavailable the
+// backend answers from Groq/OpenRouter's training data instead and says so in
+// `notice` — results that can be stale or invented must not look web-verified.
+function UngroundedNotice({ results }) {
+  if (!results?.notice || results.grounded !== false) return null;
+  const label = PROVIDER_LABEL[results.provider] || results.provider;
+  return (
+    <div role="status" className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+      <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600" />
+      <div>
+        <p className="font-medium text-amber-900">
+          {label ? `Results from ${label}, not a live web search` : 'Not a live web search'}
+        </p>
+        <p className="mt-1 text-amber-800">{results.notice}</p>
+      </div>
+    </div>
+  );
 }
 
 function Sources({ sources }) {
@@ -390,7 +416,7 @@ export default function CompanySearch() {
   // Gemini routes answer 409 — either way it's the same banner.
   const geminiKeyMissing =
     source === 'gemini' &&
-    ((aiStatus.data && !aiStatus.data.gemini_key_configured) ||
+    ((aiStatus.data && !hasDiscoveryAiKey(aiStatus.data)) ||
       isGeminiKeyRequired(searchCompanies.error) ||
       (results?.source === 'gemini' && results.search_error_code === 'gemini_key_required'));
 
@@ -907,6 +933,7 @@ export default function CompanySearch() {
             </div>
           )}
 
+          <UngroundedNotice results={results} />
           <Sources sources={results.sources} />
 
           {companies.length === 0 ? (

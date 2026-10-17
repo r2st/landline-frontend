@@ -9,11 +9,13 @@ const ALL_SCOPES = [
 
 const mockCreate = vi.fn();
 const mockSetLlmKey = vi.fn();
+const mockDeleteLlmKey = vi.fn();
+const mockListLlmKeys = vi.fn();
 vi.mock('../api/client', () => ({
   settingsApi: {
-    getLlmKey: () => Promise.resolve({ provider: 'gemini', key_hint: '', has_key: false }),
+    listLlmKeys: (...a) => mockListLlmKeys(...a),
     setLlmKey: (...a) => mockSetLlmKey(...a),
-    deleteLlmKey: vi.fn(),
+    deleteLlmKey: (...a) => mockDeleteLlmKey(...a),
   },
   apiKeysApi: {
     list: () => Promise.resolve([]),
@@ -31,6 +33,12 @@ import ApiKeysSettings from './ApiKeysSettings';
 
 describe('ApiKeysSettings', () => {
   beforeEach(() => {
+    mockListLlmKeys.mockReset();
+    mockListLlmKeys.mockResolvedValue([
+      { provider: 'gemini', key_hint: '', has_key: false },
+      { provider: 'groq', key_hint: '', has_key: false },
+      { provider: 'openrouter', key_hint: '', has_key: false },
+    ]);
     mockCreate.mockReset();
     mockCreate.mockResolvedValue({ api_key: 'lk_secret_value' });
   });
@@ -83,7 +91,7 @@ describe('ApiKeysSettings', () => {
       await user.type(input, '  AIzaSyTest-abcd  ');
       await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
 
-      await waitFor(() => expect(mockSetLlmKey).toHaveBeenCalledWith('AIzaSyTest-abcd'));
+      await waitFor(() => expect(mockSetLlmKey).toHaveBeenCalledWith('AIzaSyTest-abcd', 'gemini'));
       expect(await screen.findByText('****abcd')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Replace with a new key...')).toHaveValue('');
       expect(toast.success).toHaveBeenCalledWith('Gemini API key saved');
@@ -115,6 +123,62 @@ describe('ApiKeysSettings', () => {
       await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('String should have at most 500 characters'));
+    });
+  });
+
+  describe('fallback provider keys', () => {
+    beforeEach(() => {
+      mockSetLlmKey.mockReset();
+      mockDeleteLlmKey.mockReset();
+      toast.success.mockReset();
+    });
+
+    it('shows Gemini, Groq and OpenRouter in fallback order', async () => {
+      render(<ApiKeysSettings />);
+      const inputs = await screen.findAllByLabelText(/API key$/);
+      expect(inputs.map((i) => i.getAttribute('aria-label'))).toEqual([
+        'Gemini API key', 'Groq API key', 'OpenRouter API key',
+      ]);
+      expect(screen.getByText('Fallback 1')).toBeInTheDocument();
+      expect(screen.getByText('Fallback 2')).toBeInTheDocument();
+    });
+
+    it('saves a Groq key under the groq provider', async () => {
+      mockSetLlmKey.mockResolvedValue({ provider: 'groq', key_hint: '****wxyz', has_key: true });
+      const user = userEvent.setup();
+      render(<ApiKeysSettings />);
+
+      await user.type(await screen.findByLabelText('Groq API key'), ' gsk_test_wxyz ');
+      await user.click(screen.getAllByRole('button', { name: 'Save' })[1]);
+
+      await waitFor(() => expect(mockSetLlmKey).toHaveBeenCalledWith('gsk_test_wxyz', 'groq'));
+      expect(await screen.findByText('****wxyz')).toBeInTheDocument();
+      expect(toast.success).toHaveBeenCalledWith('Groq API key saved');
+      // Gemini's row is untouched.
+      expect(screen.getByLabelText('Gemini API key')).toHaveAttribute('placeholder', 'Enter your Gemini API key');
+    });
+
+    it('removes only the chosen provider\'s key', async () => {
+      mockListLlmKeys.mockResolvedValue([
+        { provider: 'gemini', key_hint: '****gem1', has_key: true },
+        { provider: 'openrouter', key_hint: '****or22', has_key: true },
+      ]);
+      mockDeleteLlmKey.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<ApiKeysSettings />);
+
+      await user.click(await screen.findByRole('button', { name: 'Remove OpenRouter key' }));
+      await user.click(await screen.findByRole('button', { name: 'Remove Key' }));
+
+      await waitFor(() => expect(mockDeleteLlmKey).toHaveBeenCalledWith('openrouter'));
+      await waitFor(() => expect(screen.queryByText('****or22')).not.toBeInTheDocument());
+      expect(screen.getByText('****gem1')).toBeInTheDocument();
+    });
+
+    it('still renders every row when the key list fails to load', async () => {
+      mockListLlmKeys.mockRejectedValue(new Error('network'));
+      render(<ApiKeysSettings />);
+      expect(await screen.findByLabelText('OpenRouter API key')).toBeInTheDocument();
     });
   });
 });

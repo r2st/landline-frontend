@@ -20,6 +20,7 @@ import {
   useUploadDocument,
   useUploadDocuments,
   errMsg,
+  hasDiscoveryAiKey,
 } from '../../hooks/useDiscoveryDocuments';
 import { cn, formatDate } from '../../lib/utils';
 import { splitUploadProgress } from '../../lib/uploadProgress';
@@ -472,7 +473,7 @@ export default function DocumentDiscovery() {
   const { data: docs = [], isLoading: docsLoading } = useDiscoveryDocuments();
   const { data: doc, error: docError, isLoading: docLoading } = useDiscoveryDocument(docId);
 
-  const noKey = aiStatus.data && !aiStatus.data.gemini_key_configured;
+  const noKey = aiStatus.data && !hasDiscoveryAiKey(aiStatus.data);
   const go = (id, step) => {
     const next = new URLSearchParams(params);
     next.set('tab', 'document');

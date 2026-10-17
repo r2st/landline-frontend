@@ -814,9 +814,11 @@ export const gmailApi = {
 
 // Org-admin only on the backend.
 export const settingsApi = {
-  getLlmKey: () => api.get('/settings/llm-key').then(r => r.data),
+  // provider: 'gemini' | 'groq' | 'openrouter' (Groq/OpenRouter are Discovery fallbacks).
+  listLlmKeys: () => api.get('/settings/llm-keys').then(r => r.data),
+  getLlmKey: (provider = 'gemini') => api.get('/settings/llm-key', { params: { provider } }).then(r => r.data),
   setLlmKey: (apiKey, provider = 'gemini') => api.put('/settings/llm-key', { api_key: apiKey, provider }).then(r => r.data),
-  deleteLlmKey: () => api.delete('/settings/llm-key').then(r => r.data),
+  deleteLlmKey: (provider = 'gemini') => api.delete('/settings/llm-key', { params: { provider } }).then(r => r.data),
 };
 
 export const apiKeysApi = {

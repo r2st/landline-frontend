@@ -29,29 +29,51 @@ function LoadingRows({ rows = 2 }) {
   );
 }
 
-function LlmKeySection() {
-  const [llmKey, setLlmKey] = useState({ provider: 'gemini', key_hint: '', has_key: false });
+// Fallback order matches the backend (services/org_gemini.py): Gemini first,
+// then Groq, then OpenRouter when the one before is out of quota or failing.
+const LLM_PROVIDERS = [
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    badge: 'Primary',
+    help: 'Powers Discovery: web-grounded company search (Google Search) and finding companies and contacts in uploaded documents.',
+    placeholder: 'Enter your Gemini API key',
+    getKeyUrl: 'https://aistudio.google.com/apikey',
+  },
+  {
+    id: 'groq',
+    label: 'Groq',
+    badge: 'Fallback 1',
+    help: 'Used when Gemini is out of quota or unavailable. Free tier. No web search: company search results come from the model\'s training data.',
+    placeholder: 'Enter your Groq API key (gsk_...)',
+    getKeyUrl: 'https://console.groq.com/keys',
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    badge: 'Fallback 2',
+    help: 'Used when Gemini and Groq both fail. Uses free models. No web search, same as Groq.',
+    placeholder: 'Enter your OpenRouter API key (sk-or-...)',
+    getKeyUrl: 'https://openrouter.ai/keys',
+  },
+];
+
+function ProviderKeyRow({ provider, initial }) {
+  const [llmKey, setLlmKey] = useState(initial);
   const [newKey, setNewKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [removeConfirm, setRemoveConfirm] = useState(false);
-
-  useEffect(() => {
-    settingsApi.getLlmKey()
-      .then(setLlmKey)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const { id, label } = provider;
 
   const handleSave = async () => {
     if (!newKey.trim()) return;
     setSaving(true);
     try {
-      setLlmKey(await settingsApi.setLlmKey(newKey.trim()));
+      setLlmKey(await settingsApi.setLlmKey(newKey.trim(), id));
       setNewKey('');
       setShowKey(false);
-      toast.success('Gemini API key saved');
+      toast.success(`${label} API key saved`);
     } catch (err) {
       toast.error(errorDetail(err, 'Failed to save key'));
     } finally {
@@ -62,21 +84,32 @@ function LlmKeySection() {
   const handleRemove = async () => {
     setRemoveConfirm(false);
     try {
-      await settingsApi.deleteLlmKey();
-      setLlmKey({ provider: 'gemini', key_hint: '', has_key: false });
-      toast.success('Gemini API key removed');
+      await settingsApi.deleteLlmKey(id);
+      setLlmKey({ provider: id, key_hint: '', has_key: false });
+      toast.success(`${label} API key removed`);
     } catch (err) {
       toast.error(errorDetail(err, 'Failed to remove key'));
     }
   };
 
-  if (loading) return <LoadingRows rows={1} />;
-
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-600">
-        Your Gemini API key powers Discovery&apos;s document AI — finding companies and contacts in uploaded files and drafting outreach emails. It&apos;s stored encrypted on the server and never shown again; only the last four characters are displayed.
-      </p>
+    <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-sm font-semibold text-gray-900">{label}</h4>
+        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{provider.badge}</span>
+        {llmKey.has_key && (
+          <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">Saved</span>
+        )}
+        <a
+          href={provider.getKeyUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto text-xs font-medium text-blue-600 hover:underline"
+        >
+          Get a key
+        </a>
+      </div>
+      <p className="text-sm text-gray-600">{provider.help}</p>
 
       {llmKey.has_key && (
         <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
@@ -87,6 +120,7 @@ function LlmKeySection() {
           <button
             type="button"
             onClick={() => setRemoveConfirm(true)}
+            aria-label={`Remove ${label} key`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -101,9 +135,10 @@ function LlmKeySection() {
             type={showKey ? 'text' : 'password'}
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
-            placeholder={llmKey.has_key ? 'Replace with a new key...' : 'Enter your Gemini API key'}
+            placeholder={llmKey.has_key ? 'Replace with a new key...' : provider.placeholder}
+            aria-label={`${label} API key`}
             autoComplete="off"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full min-w-0 rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <button
             type="button"
@@ -126,13 +161,43 @@ function LlmKeySection() {
 
       <ConfirmDialog
         open={removeConfirm}
-        title="Remove Gemini API Key"
-        message="AI features will fall back to the platform default key."
+        title={`Remove ${label} API Key`}
+        message={
+          id === 'gemini'
+            ? 'Discovery will use your Groq or OpenRouter key if one is saved, without live web search.'
+            : `Discovery will no longer fall back to ${label}.`
+        }
         confirmLabel="Remove Key"
         variant="danger"
         onConfirm={handleRemove}
         onCancel={() => setRemoveConfirm(false)}
       />
+    </div>
+  );
+}
+
+function LlmKeySection() {
+  const [keys, setKeys] = useState(null);
+
+  useEffect(() => {
+    const empty = Object.fromEntries(
+      LLM_PROVIDERS.map((p) => [p.id, { provider: p.id, key_hint: '', has_key: false }]),
+    );
+    settingsApi.listLlmKeys()
+      .then((rows) => setKeys({ ...empty, ...Object.fromEntries(rows.map((r) => [r.provider, r])) }))
+      .catch(() => setKeys(empty));
+  }, []);
+
+  if (!keys) return <LoadingRows rows={3} />;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">
+        Discovery tries these in order: if Gemini is out of quota or unavailable, it falls back to Groq, then OpenRouter. Keys are stored encrypted on the server and never shown again; only the last four characters are displayed.
+      </p>
+      {LLM_PROVIDERS.map((p) => (
+        <ProviderKeyRow key={p.id} provider={p} initial={keys[p.id]} />
+      ))}
     </div>
   );
 }
@@ -375,13 +440,13 @@ export default function ApiKeysSettings() {
         </div>
         <div>
           <h2 className="text-lg font-semibold text-gray-900">API Keys</h2>
-          <p className="text-sm text-gray-500">Manage your AI provider key and programmatic API keys</p>
+          <p className="text-sm text-gray-500">Manage your AI provider keys and programmatic API keys</p>
         </div>
       </div>
 
       <div className="space-y-6">
         <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-800">AI Provider Key</h3>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-800">AI Provider Keys</h3>
           <LlmKeySection />
         </div>
 

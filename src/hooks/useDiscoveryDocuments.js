@@ -15,6 +15,13 @@ export function errMsg(error, fallback) {
   return error?.message || fallback;
 }
 
+// Any saved Discovery key (Gemini, Groq or OpenRouter) unlocks the features;
+// `gemini_key_configured` alone is what backends before the fallbacks sent.
+export function hasDiscoveryAiKey(status) {
+  if (!status) return true;
+  return status.ai_key_configured ?? status.gemini_key_configured;
+}
+
 export function useDiscoveryAiStatus() {
   return useQuery({
     queryKey: ['discovery-docs', 'ai-status'],

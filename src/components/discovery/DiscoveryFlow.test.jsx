@@ -343,6 +343,44 @@ describe('Gemini search', () => {
     expect(screen.getByLabelText(/Describe the companies/)).toBeInTheDocument();
   });
 
+  it('does not block search for an org with only a Groq key', async () => {
+    docsApi.aiStatus.mockResolvedValue({
+      gemini_key_configured: false, ai_key_configured: true, providers: ['groq'],
+    });
+    renderUi(<CompanySearch />);
+    await waitFor(() => expect(docsApi.aiStatus).toHaveBeenCalled());
+    expect(screen.queryByText(/Add your Gemini API key/)).not.toBeInTheDocument();
+    describeAs('Dental clinics in Pune');
+    expect(screen.getByRole('button', { name: /Search with Gemini/ })).toBeEnabled();
+  });
+
+  it('flags results that came from a fallback model instead of a web search', async () => {
+    discoveryApi.searchCompaniesGemini.mockResolvedValue({
+      ...SEARCH_RESULT,
+      provider: 'groq',
+      grounded: false,
+      sources: [],
+      notice: "Gemini search was unavailable (quota), so these results come from Groq's training data, not a live web search.",
+    });
+    renderUi(<CompanySearch />);
+    describeAs('Healthcare SaaS in Bangalore');
+    submit();
+
+    expect(await screen.findByText('Results from Groq, not a live web search')).toBeInTheDocument();
+    expect(screen.getByText(/training data, not a live web search/)).toBeInTheDocument();
+  });
+
+  it('shows no fallback notice for a grounded Gemini answer', async () => {
+    discoveryApi.searchCompaniesGemini.mockResolvedValue({
+      ...SEARCH_RESULT, provider: 'gemini', grounded: true, notice: null,
+    });
+    renderUi(<CompanySearch />);
+    describeAs('Healthcare SaaS in Bangalore');
+    submit();
+    await screen.findAllByTestId('result-row');
+    expect(screen.queryByText(/not a live web search/)).not.toBeInTheDocument();
+  });
+
   it('shows the key banner up front and blocks the search when no Gemini key is set', async () => {
     mockAuth.mockReturnValue({ user: { role: 'org_admin' } });
     docsApi.aiStatus.mockResolvedValue({ gemini_key_configured: false });
