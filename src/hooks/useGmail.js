@@ -15,8 +15,41 @@ export function useGmailStatus() {
   });
 }
 
-// Open the Google consent screen in a popup and resolve once the backend
-// callback posts back (or the popup closes). Returns the result message.
+const OAUTH_SOURCE = 'landline-gmail-oauth';
+const STATUS_POLL_MS = 2000;
+const STATUS_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Origins the callback page can be served from: the SPA's own (prod, where
+// /api is proxied same-origin) or a separate API host (VITE_API_URL in dev).
+function allowedOrigins() {
+  const origins = [window.location.origin];
+  try {
+    if (import.meta.env.VITE_API_URL) origins.push(new URL(import.meta.env.VITE_API_URL).origin);
+  } catch {
+    // ignore a malformed VITE_API_URL
+  }
+  return origins;
+}
+
+// A fingerprint of the connected accounts, so we can tell when a connect
+// (or reconnect) has landed without the popup telling us.
+function accountsSignature(status) {
+  return (status?.accounts || [])
+    .map((a) => `${a.id}:${a.status}:${a.connected_at}`)
+    .sort()
+    .join('|');
+}
+
+// Open the Google consent screen in a popup and resolve once the connection
+// lands. Returns the result message (or null if we only saw it via polling).
+//
+// The SPA is served with `Cross-Origin-Opener-Policy: same-origin`, so as soon
+// as the popup navigates to accounts.google.com the opener link is severed:
+// the callback page's `window.opener` is null and `popup.closed` reads true
+// here right away. So we listen on three channels — window.postMessage (when
+// the opener survives), a same-origin BroadcastChannel, and a localStorage
+// `storage` event (the callback page is served same-origin under /api) — and
+// also poll gmail/status until the account list changes.
 function openOAuthPopup(authorizationUrl) {
   return new Promise((resolve, reject) => {
     const w = 520;
@@ -25,7 +58,7 @@ function openOAuthPopup(authorizationUrl) {
     const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
     const popup = window.open(
       authorizationUrl,
-      'landline-gmail-oauth',
+      OAUTH_SOURCE,
       `width=${w},height=${h},left=${left},top=${top}`,
     );
     if (!popup) {
@@ -33,31 +66,95 @@ function openOAuthPopup(authorizationUrl) {
       return;
     }
 
+    // If status isn't cached yet, the first poll establishes the baseline.
+    const cached = queryClient.getQueryData(['gmail-status']);
+    let baseline = cached ? accountsSignature(cached) : null;
+    const startedAt = Date.now();
     let settled = false;
+    let channel = null;
+    let pollTimer = null;
+    let polling = false;
+    // Without COOP severing the handle, `popup.closed` is trustworthy: if we
+    // ever saw it open and it later reads closed, the user closed it (or the
+    // callback did) — check status once more and stop waiting.
+    let sawOpen = false;
+
+    const cleanup = () => {
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', checkStatus);
+      if (channel) channel.close();
+      clearTimeout(pollTimer);
+    };
     const finish = (fn, arg) => {
       if (settled) return;
       settled = true;
-      window.removeEventListener('message', onMessage);
-      clearInterval(poll);
+      cleanup();
       fn(arg);
     };
 
-    const onMessage = (event) => {
-      const data = event.data;
-      if (!data || data.source !== 'landline-gmail-oauth') return;
+    const handlePayload = (data) => {
+      if (!data || data.source !== OAUTH_SOURCE) return;
       if (data.status === 'connected') {
         finish(resolve, data.message || 'Gmail connected');
       } else {
         finish(reject, new Error(data.message || 'Connection failed'));
       }
     };
-    window.addEventListener('message', onMessage);
 
-    // Fallback: if the user closes the popup without completing, resolve so we
-    // refetch status (the connection may still have succeeded).
-    const poll = setInterval(() => {
-      if (popup.closed) finish(resolve, null);
-    }, 600);
+    const onMessage = (event) => {
+      if (!allowedOrigins().includes(event.origin)) return;
+      handlePayload(event.data);
+    };
+    const onStorage = (event) => {
+      if (event.key !== OAUTH_SOURCE || !event.newValue) return;
+      try {
+        handlePayload(JSON.parse(event.newValue));
+      } catch {
+        // ignore malformed values
+      }
+    };
+
+    // Fallback: poll status until the account list changes or we time out.
+    async function checkStatus() {
+      if (settled || polling) return;
+      polling = true;
+      try {
+        const status = await gmailApi.status();
+        queryClient.setQueryData(['gmail-status'], status);
+        if (baseline === null) {
+          baseline = accountsSignature(status);
+        } else if (accountsSignature(status) !== baseline) {
+          finish(resolve, 'Gmail connected');
+          return;
+        }
+      } catch {
+        // transient — keep polling
+      } finally {
+        polling = false;
+      }
+      const closedByUser = sawOpen && popup.closed;
+      if (!popup.closed) sawOpen = true;
+      if (closedByUser || Date.now() - startedAt > STATUS_POLL_TIMEOUT_MS) {
+        finish(resolve, null);
+      }
+    }
+    const schedulePoll = () => {
+      if (settled) return;
+      pollTimer = setTimeout(async () => {
+        await checkStatus();
+        schedulePoll();
+      }, STATUS_POLL_MS);
+    };
+
+    window.addEventListener('message', onMessage);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', checkStatus);
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel(OAUTH_SOURCE);
+      channel.onmessage = (event) => handlePayload(event.data);
+    }
+    schedulePoll();
   });
 }
 
