@@ -10,9 +10,11 @@ import {
   Sparkles,
   ExternalLink,
   CheckCircle2,
+  FileText,
 } from 'lucide-react';
 import { useSearchCompanies, useEnrichCompany } from '../hooks/useDiscovery';
 import { formatNumber, cn } from '../lib/utils';
+import DocumentDiscovery from '../components/discovery/DocumentDiscovery';
 
 export default function Discovery() {
   const navigate = useNavigate();
@@ -28,6 +30,7 @@ export default function Discovery() {
     num_results: 10,
   });
 
+  const [tab, setTab] = useState('search'); // search | document
   const [results, setResults] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -63,9 +66,40 @@ export default function Discovery() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Company Discovery</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Find and import new companies from Apollo based on industry, location, and keywords.
+          {tab === 'search'
+            ? 'Find and import new companies from Apollo based on industry, location, and keywords.'
+            : 'Upload a document listing companies or people — AI finds the leads, drafts outreach, and follows up.'}
         </p>
       </div>
+
+      <div className="flex gap-1 border-b border-gray-200" role="tablist">
+        {[
+          { key: 'search', label: 'Search', Icon: Search },
+          { key: 'document', label: 'From a document', Icon: FileText },
+        ].map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={cn(
+              '-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium',
+              tab === key
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'document' && <DocumentDiscovery />}
+
+      {tab === 'search' && (
+      <>
 
       {/* Search Form */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -299,6 +333,8 @@ export default function Discovery() {
             Search for companies by industry, location, or keywords using Apollo.
           </p>
         </div>
+      )}
+      </>
       )}
     </div>
   );

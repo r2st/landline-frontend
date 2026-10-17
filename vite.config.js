@@ -19,5 +19,9 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: mode !== 'production',
     },
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./src/test/setup.js'],
+    },
   };
 });

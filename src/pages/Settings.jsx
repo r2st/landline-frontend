@@ -111,7 +111,7 @@ function LlmKeySection() {
     try {
       await settingsApi.deleteLlmKey();
       setLlmKey({ provider: 'gemini', key_hint: '', has_key: false });
-      toast.success('Gemini API key removed — using platform default');
+      toast.success('Gemini API key removed');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to remove key');
     }
@@ -129,7 +129,7 @@ function LlmKeySection() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Provide your own Gemini API key so AI features (tactics, scoring, news analysis, call scripts) use your key instead of the platform default.
+        Your Gemini API key powers Discovery's document AI — finding companies and contacts in uploaded files and drafting outreach emails. It's stored encrypted on the server and never shown again; only the last four characters are displayed.
       </p>
 
       {llmKey.has_key ? (
@@ -375,6 +375,12 @@ function ApiKeysSection() {
 }
 
 export default function Settings() {
+  // Deep link from Discovery's "add your Gemini key" prompt: /settings#api-keys
+  useEffect(() => {
+    if (window.location.hash !== '#api-keys') return;
+    const t = setTimeout(() => document.getElementById('api-keys')?.scrollIntoView({ behavior: 'smooth' }), 100);
+    return () => clearTimeout(t);
+  }, []);
   const [apiConnected, setApiConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [showClearDialog, setShowClearDialog] = useState(false);
@@ -437,7 +443,7 @@ export default function Settings() {
       <GmailConnect />
 
       {/* API Keys */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div id="api-keys" className="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100">
             <Key className="h-5 w-5 text-indigo-600" />
