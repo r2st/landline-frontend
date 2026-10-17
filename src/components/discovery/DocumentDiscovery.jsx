@@ -13,8 +13,11 @@ import {
   useDiscoveryDocument,
   useDiscoveryDocuments,
   useUploadDocument,
+  useUploadDocuments,
+  errMsg,
 } from '../../hooks/useDiscoveryDocuments';
 import { cn, formatDate } from '../../lib/utils';
+import { splitUploadProgress } from '../../lib/uploadProgress';
 import ConfirmDialog from '../ConfirmDialog';
 import DocumentReview from './DocumentReview';
 import DocumentOutreach from './DocumentOutreach';
@@ -22,6 +25,7 @@ import GeminiKeyBanner from './GeminiKeyBanner';
 
 const ACCEPT = '.csv,.tsv,.xlsx,.pdf,.docx,.txt';
 const MAX_MB = 10;
+const MAX_FILES = 10; // matches the backend's MAX_BATCH_FILES
 
 const STEPS = ['Upload', 'Review & import', 'Draft emails', 'Send & follow up'];
 
@@ -48,72 +52,222 @@ function Stepper({ current }) {
   );
 }
 
+// Files picked together go up in one request; each row tracks its own upload
+// and then its analysis. A single file keeps the old flow and opens straight away.
 function UploadZone({ onUploaded, disabled }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [localError, setLocalError] = useState(null);
+  const [batch, setBatch] = useState(null); // [{ key, name, progress, docId, error }]
   const upload = useUploadDocument();
+  const uploadMany = useUploadDocuments();
+  const { data: docs = [] } = useDiscoveryDocuments();
 
-  const handleFile = (file) => {
-    if (!file) return;
+  const tooBig = (file) => file.size > MAX_MB * 1024 * 1024;
+
+  const handleFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
     setLocalError(null);
-    if (file.size > MAX_MB * 1024 * 1024) {
-      setLocalError(`Files can be at most ${MAX_MB} MB.`);
+    if (files.length > MAX_FILES) {
+      setLocalError(`Upload at most ${MAX_FILES} files at a time.`);
       return;
     }
-    upload.mutate(file, { onSuccess: (doc) => onUploaded(doc.id) });
+    if (files.length === 1) {
+      if (tooBig(files[0])) {
+        setLocalError(`Files can be at most ${MAX_MB} MB.`);
+        return;
+      }
+      setBatch(null);
+      upload.mutate(files[0], { onSuccess: (doc) => onUploaded(doc.id) });
+      return;
+    }
+
+    const items = files.map((file, i) => ({
+      key: `${i}:${file.name}`,
+      name: file.name,
+      progress: 0,
+      docId: null,
+      error: tooBig(file) ? `Larger than ${MAX_MB} MB` : null,
+    }));
+    setBatch(items);
+    // Positions (in `items`) of the files actually sent.
+    const sent = items.flatMap((item, i) => (item.error ? [] : [i]));
+    if (!sent.length) return;
+    const sentFiles = sent.map((i) => files[i]);
+    const sizes = sentFiles.map((f) => f.size);
+
+    const patchSent = (patchFor) =>
+      setBatch((prev) => prev && prev.map((item, i) => {
+        const j = sent.indexOf(i);
+        return j < 0 ? item : { ...item, ...patchFor(j) };
+      }));
+
+    uploadMany.mutate(
+      {
+        files: sentFiles,
+        onProgress: (loaded, total) => {
+          const split = splitUploadProgress(sizes, loaded, total);
+          patchSent((j) => ({ progress: split[j] }));
+        },
+      },
+      {
+        onSuccess: ({ documents, rejected = [] }) => {
+          const rejectedAt = new Map(rejected.map((r) => [r.index, r.error]));
+          let next = 0;
+          patchSent((j) =>
+            rejectedAt.has(j)
+              ? { progress: 1, error: rejectedAt.get(j) }
+              : { progress: 1, docId: documents[next++]?.id ?? null }
+          );
+        },
+        onError: (e) => {
+          const detail = e?.response?.data?.detail;
+          const rejectedAt = new Map((detail?.rejected || []).map((r) => [r.index, r.error]));
+          const fallback = errMsg(e, 'Upload failed');
+          patchSent((j) => ({ error: rejectedAt.get(j) || fallback }));
+        },
+      }
+    );
   };
 
-  const busy = upload.isPending;
+  const busy = upload.isPending || uploadMany.isPending;
   return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (!disabled) setDragging(true);
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragging(false);
-        if (!disabled) handleFile(e.dataTransfer.files?.[0]);
-      }}
-      className={cn(
-        'flex flex-col items-center justify-center rounded-xl border-2 border-dashed bg-white px-6 py-12 text-center transition-colors',
-        dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300',
-        disabled && 'opacity-60'
-      )}
-    >
-      {busy ? (
-        <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
-      ) : (
-        <UploadCloud className="h-10 w-10 text-gray-400" />
-      )}
-      <p className="mt-3 text-sm font-medium text-gray-900">
-        {busy ? 'Uploading…' : 'Drop a file here, or choose one'}
-      </p>
-      <p className="mt-1 text-xs text-gray-500">
-        CSV, XLSX, PDF, DOCX or TXT, up to {MAX_MB} MB. Scanned PDFs (images of text) aren&apos;t supported yet.
-      </p>
-      <button
-        type="button"
-        disabled={disabled || busy}
-        onClick={() => inputRef.current?.click()}
-        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
-      >
-        <FileText className="h-4 w-4" />
-        Choose file
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPT}
-        className="hidden"
-        onChange={(e) => {
-          handleFile(e.target.files?.[0]);
-          e.target.value = '';
+    <div className="space-y-3">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!disabled) setDragging(true);
         }}
-      />
-      {localError && <p className="mt-3 text-sm text-red-600">{localError}</p>}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (!disabled && !busy) handleFiles(e.dataTransfer.files);
+        }}
+        data-testid="upload-zone"
+        className={cn(
+          'flex flex-col items-center justify-center rounded-xl border-2 border-dashed bg-white px-6 py-12 text-center transition-colors',
+          dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300',
+          disabled && 'opacity-60'
+        )}
+      >
+        {busy ? (
+          <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+        ) : (
+          <UploadCloud className="h-10 w-10 text-gray-400" />
+        )}
+        <p className="mt-3 text-sm font-medium text-gray-900">
+          {busy ? 'Uploading…' : 'Drop files here, or choose them'}
+        </p>
+        <p className="mt-1 text-xs text-gray-500">
+          CSV, XLSX, PDF, DOCX or TXT — up to {MAX_FILES} files, {MAX_MB} MB each. Scanned PDFs (images of text) aren&apos;t supported yet.
+        </p>
+        <button
+          type="button"
+          disabled={disabled || busy}
+          onClick={() => inputRef.current?.click()}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
+        >
+          <FileText className="h-4 w-4" />
+          Choose files
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPT}
+          multiple
+          className="hidden"
+          data-testid="upload-input"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        {localError && <p className="mt-3 text-sm text-red-600">{localError}</p>}
+      </div>
+
+      {batch && (
+        <BatchProgress
+          items={batch}
+          docs={docs}
+          onOpen={onUploaded}
+          onClear={busy ? null : () => setBatch(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function BatchItemStatus({ item, doc }) {
+  if (item.error) return <span className="text-red-600">{item.error}</span>;
+  if (!item.docId) return <span>Uploading… {Math.round(item.progress * 100)}%</span>;
+  if (!doc || doc.status === 'parsing') return <span>Analysing…</span>;
+  if (doc.status === 'failed') return <span className="text-red-600">Couldn&apos;t analyse this file</span>;
+  return <span>{doc.candidate_count} companies found</span>;
+}
+
+function BatchProgress({ items, docs, onOpen, onClear }) {
+  const byId = new Map(docs.map((d) => [d.id, d]));
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+        <h3 className="text-sm font-semibold text-gray-900">This upload</h3>
+        {onClear && (
+          <button type="button" onClick={onClear} className="text-xs font-medium text-gray-500 hover:text-gray-700">
+            Clear
+          </button>
+        )}
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {items.map((item) => {
+          const doc = item.docId ? byId.get(item.docId) : null;
+          const ready = doc?.status === 'ready';
+          const pct = item.error ? 100 : Math.round(item.progress * 100);
+          return (
+            <li key={item.key} className="px-4 py-3" data-testid="batch-item">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  {item.error || doc?.status === 'failed' ? (
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-500" />
+                  ) : ready ? (
+                    <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-blue-500" />
+                  )}
+                  <p className="truncate text-sm font-medium text-gray-900">{item.name}</p>
+                </div>
+                {ready && (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(item.docId)}
+                    className="flex-shrink-0 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    aria-label={`Open ${item.name}`}
+                  >
+                    Open
+                  </button>
+                )}
+              </div>
+              <div
+                className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100"
+                role="progressbar"
+                aria-label={`Upload progress for ${item.name}`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={pct}
+              >
+                <div
+                  className={cn('h-full transition-all', item.error ? 'bg-red-400' : 'bg-blue-500')}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                <BatchItemStatus item={item} doc={doc} />
+              </p>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -226,7 +380,7 @@ export default function DocumentDiscovery() {
               onClick={reset}
               className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
-              Upload another file
+              Upload more files
             </button>
           </div>
 

@@ -23,11 +23,15 @@ export function useDiscoveryAiStatus() {
   });
 }
 
+// Polls every 3s while any upload is still being analysed (a batch leaves
+// several parsing at once).
 export function useDiscoveryDocuments() {
   return useQuery({
     queryKey: ['discovery-docs', 'list'],
     queryFn: discoveryDocsApi.list,
     staleTime: 5000,
+    refetchInterval: (query) =>
+      query.state.data?.some((d) => d.status === 'parsing') ? 3000 : false,
   });
 }
 
@@ -44,6 +48,20 @@ export function useDiscoveryDocument(id) {
 export function useUploadDocument() {
   return useMutation({
     mutationFn: (file) => discoveryDocsApi.upload(file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['discovery-docs', 'list'] }),
+    onError: (e) => {
+      if (isGeminiKeyRequired(e)) {
+        queryClient.invalidateQueries({ queryKey: ['discovery-docs', 'ai-status'] });
+        return;
+      }
+      toast.error(errMsg(e, 'Upload failed'));
+    },
+  });
+}
+
+export function useUploadDocuments() {
+  return useMutation({
+    mutationFn: ({ files, onProgress }) => discoveryDocsApi.uploadMany(files, onProgress),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['discovery-docs', 'list'] }),
     onError: (e) => {
       if (isGeminiKeyRequired(e)) {

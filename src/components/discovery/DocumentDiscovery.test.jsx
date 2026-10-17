@@ -16,6 +16,7 @@ vi.mock('../../api/client', async () => {
       list: vi.fn(),
       get: vi.fn(),
       upload: vi.fn(),
+      uploadMany: vi.fn(),
       importCandidates: vi.fn(),
       draft: vi.fn(),
       preview: vi.fn(),
@@ -100,6 +101,136 @@ describe('DocumentDiscovery', () => {
 
     fireEvent.click(await screen.findByText('leads.csv'));
     expect(await screen.findByText('Follow-up status')).toBeInTheDocument();
+  });
+});
+
+describe('DocumentDiscovery multi-file upload', () => {
+  const file = (name, size = 100) => new File(['x'.repeat(size)], name, { type: 'text/csv' });
+  const pick = (files) => fireEvent.change(screen.getByTestId('upload-input'), { target: { files } });
+
+  beforeEach(() => {
+    apiMock.aiStatus.mockResolvedValue({ gemini_key_configured: true });
+  });
+
+  it('lets the picker select several files', async () => {
+    renderUi(<DocumentDiscovery />);
+    expect(screen.getByTestId('upload-input')).toHaveAttribute('multiple');
+  });
+
+  it('sends several files in one batch with a progress bar per file', async () => {
+    let finish;
+    apiMock.uploadMany.mockImplementation((files, onProgress) => {
+      // First file fully sent, second half way (payload sizes 100 + 100).
+      onProgress(150, 200);
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    renderUi(<DocumentDiscovery />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
+
+    pick([file('east.csv'), file('west.csv')]);
+
+    await waitFor(() => expect(apiMock.uploadMany).toHaveBeenCalled());
+    expect(apiMock.uploadMany.mock.calls[0][0].map((f) => f.name)).toEqual(['east.csv', 'west.csv']);
+    expect(apiMock.upload).not.toHaveBeenCalled();
+    expect(await screen.findByRole('progressbar', { name: /east\.csv/ })).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.getByRole('progressbar', { name: /west\.csv/ })).toHaveAttribute('aria-valuenow', '50');
+
+    apiMock.list.mockResolvedValue([
+      { id: 'd1', filename: 'east.csv', status: 'ready', candidate_count: 4, created_at: '2026-10-17T00:00:00Z' },
+      { id: 'd2', filename: 'west.csv', status: 'parsing', candidate_count: 0, created_at: '2026-10-17T00:00:00Z' },
+    ]);
+    finish({ documents: [{ id: 'd1', filename: 'east.csv' }, { id: 'd2', filename: 'west.csv' }], rejected: [] });
+
+    const items = await screen.findAllByTestId('batch-item');
+    await waitFor(() => expect(within(items[0]).getByText('4 companies found')).toBeInTheDocument());
+    expect(within(items[0]).getByRole('button', { name: 'Open east.csv' })).toBeInTheDocument();
+    expect(within(items[1]).getByText('Analysing…')).toBeInTheDocument();
+    expect(within(items[1]).queryByRole('button', { name: /Open/ })).not.toBeInTheDocument();
+  });
+
+  it('marks rejected files by position while the others still upload', async () => {
+    apiMock.uploadMany.mockResolvedValue({
+      documents: [{ id: 'd1', filename: 'a.csv' }],
+      rejected: [{ index: 1, filename: 'a.csv', error: "This file isn't a valid PDF." }],
+    });
+    renderUi(<DocumentDiscovery />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
+
+    // Same name twice: only the position tells them apart.
+    pick([file('a.csv'), file('a.csv')]);
+
+    const items = await screen.findAllByTestId('batch-item');
+    await waitFor(() => expect(within(items[1]).getByText(/isn't a valid PDF/)).toBeInTheDocument());
+    expect(within(items[0]).queryByText(/isn't a valid PDF/)).not.toBeInTheDocument();
+  });
+
+  it('shows per-file reasons when the whole batch is refused', async () => {
+    apiMock.uploadMany.mockRejectedValue({
+      response: { status: 422, data: { detail: {
+        message: 'None of these files could be used.',
+        rejected: [
+          { index: 0, filename: 'x.pdf', error: 'Not a PDF' },
+          { index: 1, filename: 'y.exe', error: 'Unsupported file type' },
+        ],
+      } } },
+    });
+    renderUi(<DocumentDiscovery />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
+
+    pick([file('x.pdf'), file('y.exe')]);
+
+    const items = await screen.findAllByTestId('batch-item');
+    await waitFor(() => expect(within(items[0]).getByText('Not a PDF')).toBeInTheDocument());
+    expect(within(items[1]).getByText('Unsupported file type')).toBeInTheDocument();
+  });
+
+  it('skips oversized files locally and sends the rest', async () => {
+    apiMock.uploadMany.mockResolvedValue({ documents: [{ id: 'd1', filename: 'ok.csv' }], rejected: [] });
+    renderUi(<DocumentDiscovery />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
+
+    const big = file('big.csv');
+    Object.defineProperty(big, 'size', { value: 11 * 1024 * 1024 });
+    pick([big, file('ok.csv')]);
+
+    await waitFor(() => expect(apiMock.uploadMany).toHaveBeenCalled());
+    expect(apiMock.uploadMany.mock.calls[0][0].map((f) => f.name)).toEqual(['ok.csv']);
+    const items = await screen.findAllByTestId('batch-item');
+    expect(within(items[0]).getByText(/Larger than 10 MB/)).toBeInTheDocument();
+  });
+
+  it('refuses more than 10 files before sending anything', async () => {
+    renderUi(<DocumentDiscovery />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
+
+    pick(Array.from({ length: 11 }, (_, i) => file(`f${i}.csv`)));
+
+    expect(await screen.findByText(/at most 10 files/)).toBeInTheDocument();
+    expect(apiMock.uploadMany).not.toHaveBeenCalled();
+  });
+
+  it('accepts several files dropped on the zone', async () => {
+    apiMock.uploadMany.mockResolvedValue({ documents: [], rejected: [] });
+    renderUi(<DocumentDiscovery />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
+
+    fireEvent.drop(screen.getByTestId('upload-zone'), { dataTransfer: { files: [file('a.csv'), file('b.csv')] } });
+
+    await waitFor(() => expect(apiMock.uploadMany).toHaveBeenCalled());
+    expect(apiMock.uploadMany.mock.calls[0][0]).toHaveLength(2);
+  });
+
+  it('keeps a single file on the one-file flow and opens it', async () => {
+    apiMock.upload.mockResolvedValue({ id: 'doc-1', filename: 'leads.csv', status: 'parsing' });
+    apiMock.get.mockResolvedValue({ ...DOC, status: 'parsing' });
+    renderUi(<DocumentDiscovery />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Choose files/i })).toBeEnabled());
+
+    pick([file('leads.csv')]);
+
+    expect(await screen.findByText(/Finding companies and contacts/)).toBeInTheDocument();
+    expect(apiMock.upload).toHaveBeenCalled();
+    expect(apiMock.uploadMany).not.toHaveBeenCalled();
   });
 });
 

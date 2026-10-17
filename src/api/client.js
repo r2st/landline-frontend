@@ -244,6 +244,18 @@ export const discoveryDocsApi = {
       timeout: 60000,
     }).then(r => r.data);
   },
+  // Several files in one request; each becomes its own document. Bad files come
+  // back in `rejected` while the rest still upload.
+  // `onProgress(loaded, total)` reports bytes sent for the whole request.
+  uploadMany: (files, onProgress) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    return api.post('/discovery/documents/batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 180000,
+      onUploadProgress: onProgress ? (e) => onProgress(e.loaded, e.total) : undefined,
+    }).then(r => r.data);
+  },
   importCandidates: (id, candidateIds) =>
     api.post(`/discovery/documents/${id}/import`, { candidate_ids: candidateIds }, { timeout: 120000 }).then(r => r.data),
   draft: (id, data) => api.post(`/discovery/documents/${id}/draft`, data, { timeout: 120000 }).then(r => r.data),
