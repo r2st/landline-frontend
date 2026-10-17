@@ -13,7 +13,13 @@ export function useSearchCompanies() {
       if (res?.search_status && res.search_status !== 'ok') return;
       toast.success(`Found ${res.total} companies: ${res.imported} added, ${res.already_existed} already in Prospect`);
     },
-    onError: (e) => toast.error(e?.response?.data?.detail || e?.message || 'Search failed'),
+    // A 401 is our session, refused before anything reached Apollo; the raw
+    // "Invalid or missing API key" detail reads as Apollo rejecting its key.
+    onError: (e) => toast.error(
+      e?.response?.status === 401
+        ? 'Your session wasn’t accepted — refresh the page and search again.'
+        : e?.response?.data?.detail || e?.message || 'Search failed'
+    ),
   });
 }
 

@@ -132,6 +132,48 @@ describe('Apollo search', () => {
     expect(await screen.findByRole('link', { name: /Platform credentials/ })).toHaveAttribute('href', '/platform/credentials');
   });
 
+  it('names an Apollo key/plan refusal instead of suggesting a retry', async () => {
+    mockAuth.mockReturnValue({ user: { role: 'platform_admin' } });
+    discoveryApi.searchCompanies.mockResolvedValue({
+      total: 0, companies: [], search_status: 'unauthorized',
+      search_error: 'Apollo refused the request: … not included in your Free plan',
+    });
+    renderUi(<ApolloSearch />);
+    fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
+    fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
+
+    expect(await screen.findByText('Apollo refused the search')).toBeInTheDocument();
+    expect(screen.getByTestId('search-status-detail')).toHaveTextContent(/Free plan/);
+    expect(screen.getByRole('link', { name: /Platform credentials/ })).toHaveAttribute('href', '/platform/credentials');
+    expect(screen.queryByText(/loosen your filters/)).not.toBeInTheDocument();
+  });
+
+  it('says "not connected" when Apollo has no key, for a non-admin too', async () => {
+    mockAuth.mockReturnValue({ user: { role: 'org_admin' } });
+    discoveryApi.searchCompanies.mockResolvedValue({
+      total: 0, companies: [], search_status: 'skipped',
+      search_error: 'Apollo is not configured: no Apollo API key is set for this deployment.',
+    });
+    renderUi(<ApolloSearch />);
+    fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
+    fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
+
+    expect(await screen.findByText(/Apollo isn.t connected yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Ask a platform admin to add the Apollo API key/)).toBeInTheDocument();
+  });
+
+  it('a 401 from our own session does not read as Apollo rejecting its key', async () => {
+    discoveryApi.searchCompanies.mockRejectedValueOnce({
+      response: { status: 401, data: { detail: 'Invalid or missing API key / Bearer token' } },
+    });
+    renderUi(<ApolloSearch />);
+    fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
+    fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
+
+    expect(await screen.findByText(/nothing was sent to Apollo/)).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid or missing API key/)).not.toBeInTheDocument();
+  });
+
   it('shows a failed request inline and retries it', async () => {
     discoveryApi.searchCompanies
       .mockRejectedValueOnce({ response: { data: { detail: 'Apollo timed out' } } })

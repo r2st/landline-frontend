@@ -95,7 +95,17 @@ export function toSearchPayload(form) {
   };
 }
 
-function SearchStatusNotice({ status, canFix }) {
+// A 401 here is *our* session being refused before anything reached Apollo —
+// the backend's "Invalid or missing API key / Bearer token" otherwise reads as
+// Apollo rejecting its key, which sends people to the wrong fix.
+function searchFailureMessage(error) {
+  if (error?.response?.status === 401) {
+    return 'Your session wasn’t accepted, so nothing was sent to Apollo. Refresh the page (or sign in again) and search again.';
+  }
+  return errMsg(error, 'Something went wrong talking to Apollo.');
+}
+
+function SearchStatusNotice({ status, detail, canFix }) {
   if (!status || status === 'ok') return null;
   const copy = {
     rate_limited: {
@@ -112,6 +122,12 @@ function SearchStatusNotice({ status, canFix }) {
         ? 'Add the Apollo API key in Platform credentials to start searching.'
         : 'Ask a platform admin to add the Apollo API key for this deployment.',
     },
+    unauthorized: {
+      title: 'Apollo refused the search',
+      body: canFix
+        ? 'The Apollo API key was rejected, or the Apollo plan doesn’t include company search. Check the key in Platform credentials, or upgrade the Apollo plan.'
+        : 'The Apollo API key was rejected, or the Apollo plan doesn’t include company search. Ask a platform admin to check the Apollo key and plan.',
+    },
     error: {
       title: 'Apollo returned an error',
       body: 'Try again in a moment, or loosen your filters.',
@@ -124,12 +140,15 @@ function SearchStatusNotice({ status, canFix }) {
         <p className="font-medium text-amber-900">{copy.title}</p>
         <p className="mt-1 text-amber-800">
           {copy.body}{' '}
-          {status === 'skipped' && canFix && (
+          {(status === 'skipped' || status === 'unauthorized') && canFix && (
             <Link to="/platform/credentials" className="font-medium underline hover:text-amber-900">
               Open Platform credentials
             </Link>
           )}
         </p>
+        {detail && status !== 'skipped' && (
+          <p className="mt-1 break-words text-xs text-amber-700" data-testid="search-status-detail">{detail}</p>
+        )}
       </div>
     </div>
   );
@@ -615,7 +634,7 @@ export default function ApolloSearch() {
             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
             <div className="text-sm text-red-800">
               <p className="font-medium">The search didn&apos;t go through</p>
-              <p className="mt-1">{errMsg(searchCompanies.error, 'Something went wrong talking to Apollo.')}</p>
+              <p className="mt-1">{searchFailureMessage(searchCompanies.error)}</p>
             </div>
           </div>
           {lastPayload && (
@@ -633,7 +652,7 @@ export default function ApolloSearch() {
 
       {!isPending && results && (
         <div className="space-y-4">
-          <SearchStatusNotice status={results.search_status} canFix={canFixApollo} />
+          <SearchStatusNotice status={results.search_status} detail={results.search_error} canFix={canFixApollo} />
 
           {companies.length > 0 && (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
