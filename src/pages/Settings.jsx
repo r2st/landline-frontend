@@ -227,10 +227,14 @@ function NotificationToggle({ label, description, checked, onChange }) {
 /* ---------- main component ---------- */
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState('profile');
   const { user } = useAuth();
   const canManageKeys = !!user && isOrgAdmin(user.role) && !isPlatformAdmin(user.role);
   const visibleTabs = TABS.filter((tab) => !tab.orgAdminOnly || canManageKeys);
+  // Deep link from Discovery's "add your Gemini key" banner: /settings#api-keys
+  const [activeTab, setActiveTab] = useState(() => {
+    const hashTab = window.location.hash.slice(1);
+    return TABS.some((t) => t.id === hashTab) ? hashTab : 'profile';
+  });
 
   // API health
   const [apiConnected, setApiConnected] = useState(false);
@@ -1065,7 +1069,7 @@ export default function Settings() {
       </div>
 
       {/* Tab Content */}
-      {tabContent[activeTab]()}
+      {tabContent[visibleTabs.some((t) => t.id === activeTab) ? activeTab : 'profile']()}
     </div>
   );
 }

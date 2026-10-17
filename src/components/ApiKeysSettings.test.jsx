@@ -8,10 +8,11 @@ const ALL_SCOPES = [
 ];
 
 const mockCreate = vi.fn();
+const mockSetLlmKey = vi.fn();
 vi.mock('../api/client', () => ({
   settingsApi: {
     getLlmKey: () => Promise.resolve({ provider: 'gemini', key_hint: '', has_key: false }),
-    setLlmKey: vi.fn(),
+    setLlmKey: (...a) => mockSetLlmKey(...a),
     deleteLlmKey: vi.fn(),
   },
   apiKeysApi: {
@@ -25,6 +26,7 @@ vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
 
+import toast from 'react-hot-toast';
 import ApiKeysSettings from './ApiKeysSettings';
 
 describe('ApiKeysSettings', () => {
@@ -62,5 +64,57 @@ describe('ApiKeysSettings', () => {
 
     expect(screen.getByRole('button', { name: /create key/i })).toBeDisabled();
     expect(screen.getByText(/select at least one scope/i)).toBeInTheDocument();
+  });
+
+  describe('Gemini key', () => {
+    beforeEach(() => {
+      mockSetLlmKey.mockReset();
+      toast.error.mockReset();
+      toast.success.mockReset();
+    });
+
+    it('saves the trimmed key and shows only its hint afterwards', async () => {
+      mockSetLlmKey.mockResolvedValue({ provider: 'gemini', key_hint: '****abcd', has_key: true });
+      const user = userEvent.setup();
+      render(<ApiKeysSettings />);
+
+      const input = await screen.findByPlaceholderText('Enter your Gemini API key');
+      expect(screen.getAllByRole('button', { name: 'Save' })[0]).toBeDisabled();
+      await user.type(input, '  AIzaSyTest-abcd  ');
+      await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+
+      await waitFor(() => expect(mockSetLlmKey).toHaveBeenCalledWith('AIzaSyTest-abcd'));
+      expect(await screen.findByText('****abcd')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Replace with a new key...')).toHaveValue('');
+      expect(toast.success).toHaveBeenCalledWith('Gemini API key saved');
+    });
+
+    it('keeps the typed key and reports the server message when saving fails', async () => {
+      mockSetLlmKey.mockRejectedValue({ response: { status: 403, data: { detail: 'Insufficient permissions' } } });
+      const user = userEvent.setup();
+      render(<ApiKeysSettings />);
+
+      const input = await screen.findByPlaceholderText('Enter your Gemini API key');
+      await user.type(input, 'AIzaSyTest');
+      await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Insufficient permissions'));
+      expect(input).toHaveValue('AIzaSyTest');
+    });
+
+    // A 422 carries ``detail`` as a list of objects; passing that to toast
+    // would throw while rendering.
+    it('turns a validation-error list into a plain message', async () => {
+      mockSetLlmKey.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ loc: ['body', 'api_key'], msg: 'String should have at most 500 characters' }] } },
+      });
+      const user = userEvent.setup();
+      render(<ApiKeysSettings />);
+
+      await user.type(await screen.findByPlaceholderText('Enter your Gemini API key'), 'x');
+      await user.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('String should have at most 500 characters'));
+    });
   });
 });

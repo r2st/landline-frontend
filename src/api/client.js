@@ -230,6 +230,33 @@ export const discoveryApi = {
   enrichCompany: (id, data) => api.post(`/discovery/enrich/${id}`, data).then(r => r.data),
 };
 
+// Discovery from documents. All AI runs server-side on the org's Gemini key;
+// nothing here ever sees a key.
+export const discoveryDocsApi = {
+  aiStatus: () => api.get('/discovery/documents/ai-status').then(r => r.data),
+  list: () => api.get('/discovery/documents').then(r => r.data),
+  get: (id) => api.get(`/discovery/documents/${id}`).then(r => r.data),
+  upload: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/discovery/documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    }).then(r => r.data);
+  },
+  importCandidates: (id, candidateIds) =>
+    api.post(`/discovery/documents/${id}/import`, { candidate_ids: candidateIds }, { timeout: 120000 }).then(r => r.data),
+  draft: (id, data) => api.post(`/discovery/documents/${id}/draft`, data, { timeout: 120000 }).then(r => r.data),
+  preview: (id, data) => api.post(`/discovery/documents/${id}/preview`, data).then(r => r.data),
+  send: (id, data) => api.post(`/discovery/documents/${id}/send`, data, { timeout: 120000 }).then(r => r.data),
+  remove: (id) => api.delete(`/discovery/documents/${id}`).then(r => r.data),
+  // Follow-up status for everyone the document's sequence emailed.
+  outreach: (id) => api.get(`/discovery/documents/${id}/outreach`).then(r => r.data),
+  // Pause / resume the document's sequence (held, not cancelled: resuming keeps the cadence).
+  setSequenceStatus: (sequenceId, status) =>
+    api.patch(`/sequences/${sequenceId}/status`, { status }).then(r => r.data),
+};
+
 export const aiApi = {
   generateEmail: (data) => api.post('/ai/generate-email', data).then(r => r.data),
   improveEmail: (data) => api.post('/ai/improve-email', data).then(r => r.data),

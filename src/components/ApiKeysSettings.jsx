@@ -9,6 +9,15 @@ import toast from 'react-hot-toast';
 // empty list authenticates and then gets 403 on every public endpoint.
 const DEFAULT_SCOPES = ['contacts:read', 'companies:read', 'deals:read', 'sequences:read'];
 
+// FastAPI sends ``detail`` as a string for HTTPException but as a list of
+// {loc, msg} objects for a 422 — handing that list to toast crashes React.
+function errorDetail(err, fallback) {
+  const detail = err.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+  return fallback;
+}
+
 function LoadingRows({ rows = 2 }) {
   return (
     <div className="animate-pulse space-y-3">
@@ -44,7 +53,7 @@ function LlmKeySection() {
       setShowKey(false);
       toast.success('Gemini API key saved');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to save key');
+      toast.error(errorDetail(err, 'Failed to save key'));
     } finally {
       setSaving(false);
     }
@@ -55,9 +64,9 @@ function LlmKeySection() {
     try {
       await settingsApi.deleteLlmKey();
       setLlmKey({ provider: 'gemini', key_hint: '', has_key: false });
-      toast.success('Gemini API key removed — using platform default');
+      toast.success('Gemini API key removed');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to remove key');
+      toast.error(errorDetail(err, 'Failed to remove key'));
     }
   };
 
@@ -66,7 +75,7 @@ function LlmKeySection() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Provide your own Gemini API key so AI features (tactics, scoring, news analysis, call scripts) use your key instead of the platform default.
+        Your Gemini API key powers Discovery&apos;s document AI — finding companies and contacts in uploaded files and drafting outreach emails. It&apos;s stored encrypted on the server and never shown again; only the last four characters are displayed.
       </p>
 
       {llmKey.has_key && (
