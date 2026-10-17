@@ -14,6 +14,9 @@ const Discovery = lazy(() => import('./pages/Discovery'));
 const Prospecting = lazy(() => import('./pages/Prospecting'));
 const Sequences = lazy(() => import('./pages/Sequences'));
 const Outreach = lazy(() => import('./pages/Outreach'));
+const Campaigns = lazy(() => import('./pages/Campaigns'));
+const CampaignNew = lazy(() => import('./pages/CampaignNew'));
+const CampaignDashboard = lazy(() => import('./pages/CampaignDashboard'));
 const FollowUps = lazy(() => import('./pages/FollowUps'));
 const Groups = lazy(() => import('./pages/Groups'));
 const NewsFeed = lazy(() => import('./pages/NewsFeed'));
@@ -130,6 +133,9 @@ export default function App() {
           <Route path="/prospecting" element={<Prospecting />} />
           <Route path="/sequences" element={<Sequences />} />
           <Route path="/outreach" element={<Outreach />} />
+          <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/campaigns/new" element={<CampaignNew />} />
+          <Route path="/campaigns/:id" element={<CampaignDashboard />} />
           <Route path="/follow-ups" element={<FollowUps />} />
           <Route path="/groups" element={<Groups />} />
           <Route path="/news" element={<NewsFeed />} />

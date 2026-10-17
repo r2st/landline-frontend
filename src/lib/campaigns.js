@@ -1,0 +1,161 @@
+// Shapes and labels for Autopilot Outreach campaigns. The API is new, so every
+// reader here tolerates missing fields and a couple of naming variants rather
+// than letting one renamed key blank a page.
+
+export const CAMPAIGN_STATUS = {
+  draft: { label: 'Draft', className: 'bg-gray-100 text-gray-700', dot: 'bg-gray-400' },
+  analyzing: { label: 'Analyzing', className: 'bg-blue-50 text-blue-700', dot: 'bg-blue-500' },
+  ready: { label: 'Ready', className: 'bg-indigo-50 text-indigo-700', dot: 'bg-indigo-500' },
+  active: { label: 'Active', className: 'bg-green-50 text-green-700', dot: 'bg-green-500' },
+  paused: { label: 'Paused', className: 'bg-yellow-50 text-yellow-700', dot: 'bg-yellow-500' },
+  stopped: { label: 'Stopped', className: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+  completed: { label: 'Completed', className: 'bg-gray-100 text-gray-700', dot: 'bg-gray-500' },
+};
+
+export const PROSPECT_STATUS = {
+  queued: { label: 'Queued', className: 'bg-gray-100 text-gray-700' },
+  draft: { label: 'Draft', className: 'bg-indigo-50 text-indigo-700' },
+  sent: { label: 'Sent', className: 'bg-blue-50 text-blue-700' },
+  replied: { label: 'Replied', className: 'bg-green-50 text-green-700' },
+  bounced: { label: 'Bounced', className: 'bg-red-50 text-red-700' },
+  skipped: { label: 'Skipped', className: 'bg-gray-100 text-gray-500' },
+};
+
+export const DEFAULT_SETTINGS = {
+  daily_limit: 25,
+  send_window_start: '09:00',
+  send_window_end: '17:00',
+  send_on_weekends: false,
+  review_before_send: true,
+};
+
+export const EMPTY_ICP = {
+  industries: [],
+  company_size: '',
+  geographies: [],
+  titles: [],
+  value_props: [],
+};
+
+const asList = (v) => {
+  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof v === 'string') return v.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+  return [];
+};
+
+const num = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// "09:00:00" → "09:00" so <input type="time"> accepts it.
+const hhmm = (v, fallback) => (typeof v === 'string' && /^\d{2}:\d{2}/.test(v) ? v.slice(0, 5) : fallback);
+
+export function normalizeIcp(raw) {
+  if (!raw || typeof raw !== 'object') return { ...EMPTY_ICP };
+  return {
+    industries: asList(raw.industries ?? raw.target_industries ?? raw.industry),
+    company_size: String(raw.company_size ?? raw.company_size_range ?? raw.employee_range ?? ''),
+    geographies: asList(raw.geographies ?? raw.geography ?? raw.locations),
+    titles: asList(raw.titles ?? raw.decision_maker_titles ?? raw.job_titles),
+    value_props: asList(raw.value_props ?? raw.value_propositions),
+  };
+}
+
+export function isIcpEmpty(icp) {
+  const i = normalizeIcp(icp);
+  return !i.industries.length && !i.company_size && !i.geographies.length && !i.titles.length && !i.value_props.length;
+}
+
+export function normalizeSettings(raw) {
+  const s = raw || {};
+  return {
+    daily_limit: Math.min(100, Math.max(5, num(s.daily_limit ?? s.daily_send_limit) || DEFAULT_SETTINGS.daily_limit)),
+    send_window_start: hhmm(s.send_window_start, DEFAULT_SETTINGS.send_window_start),
+    send_window_end: hhmm(s.send_window_end, DEFAULT_SETTINGS.send_window_end),
+    send_on_weekends: Boolean(s.send_on_weekends ?? DEFAULT_SETTINGS.send_on_weekends),
+    review_before_send: Boolean(s.review_before_send ?? DEFAULT_SETTINGS.review_before_send),
+  };
+}
+
+export function normalizeCampaign(raw) {
+  if (!raw) return null;
+  const m = raw.metrics || raw.stats || {};
+  const sent = num(m.emails_sent ?? raw.emails_sent);
+  const bounced = num(m.bounced ?? m.emails_bounced ?? raw.bounced);
+  const bounceRate =
+    m.bounce_rate != null ? num(m.bounce_rate) : raw.bounce_rate != null ? num(raw.bounce_rate) : sent ? bounced / sent : 0;
+  const documents = Array.isArray(raw.documents)
+    ? raw.documents
+    : (raw.document_ids || []).map((id) => ({ id, filename: null }));
+  const daily = m.daily ?? m.daily_activity ?? raw.daily_activity ?? [];
+  return {
+    ...raw,
+    name: raw.name || 'Untitled campaign',
+    status: raw.status || 'draft',
+    documents,
+    document_ids: raw.document_ids || documents.map((d) => d.id),
+    icp: normalizeIcp(raw.icp),
+    settings: normalizeSettings({ ...raw, ...(raw.settings || {}) }),
+    metrics: {
+      total_prospects: num(m.total_prospects ?? m.prospects_found ?? raw.prospects_found ?? raw.total_prospects),
+      emails_sent: sent,
+      replies: num(m.replies ?? m.replied ?? raw.replies),
+      bounced,
+      // Stored as a fraction (0.04). A backend sending 4 for 4% is caught here.
+      bounce_rate: bounceRate > 1 ? bounceRate / 100 : bounceRate,
+      drafts_pending: num(m.drafts_pending ?? m.pending_review),
+    },
+    daily: (Array.isArray(daily) ? daily : []).map((d) => ({
+      date: d.date ?? d.day,
+      sent: num(d.sent ?? d.emails_sent ?? d.count),
+    })),
+  };
+}
+
+export function normalizeCampaignList(data) {
+  const list = Array.isArray(data) ? data : data?.items ?? data?.campaigns ?? [];
+  return list.map(normalizeCampaign);
+}
+
+export function normalizeProspect(p) {
+  const company = p.company || {};
+  const contact = p.contact || {};
+  const email = p.email || p.draft || {};
+  const contactName =
+    p.contact_name ||
+    contact.name ||
+    [contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
+    null;
+  return {
+    ...p,
+    status: p.status || p.email_status || 'queued',
+    company_name: p.company_name || company.name || '—',
+    company_domain: p.company_domain || company.domain || null,
+    contact_name: contactName,
+    contact_title: p.contact_title || contact.title || null,
+    contact_email: p.contact_email || contact.email || null,
+    sent_at: p.sent_at || null,
+    subject: p.email_subject ?? p.subject ?? email.subject ?? '',
+    body: p.email_body ?? p.body ?? email.body ?? '',
+  };
+}
+
+// `GET /prospects` may be a bare array or `{items, total, page, page_size}`.
+export function normalizeProspectPage(data, pageSize) {
+  if (Array.isArray(data)) {
+    return { items: data.map(normalizeProspect), total: data.length, pages: 1 };
+  }
+  const items = (data?.items ?? data?.prospects ?? []).map(normalizeProspect);
+  const total = num(data?.total ?? items.length);
+  const size = num(data?.page_size) || pageSize;
+  return { items, total, pages: Math.max(1, Math.ceil(total / size)) };
+}
+
+export function formatPercent(fraction) {
+  return `${(num(fraction) * 100).toFixed(1)}%`;
+}
+
+export const canPause = (status) => status === 'active';
+export const canResume = (status) => status === 'paused';
+export const canStop = (status) => status === 'active' || status === 'paused';

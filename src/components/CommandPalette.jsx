@@ -27,6 +27,7 @@ import {
   Activity,
   Radio,
   Radar,
+  Rocket,
   Stethoscope,
   Gauge,
   Ear,
@@ -53,6 +54,8 @@ import { getInitials, cn } from '../lib/utils';
 const COMMANDS = [
   { id: 'discovery', label: 'Discover companies', hint: 'Find new leads with Gemini or Apollo', icon: Sparkles, to: '/discovery', keywords: 'gemini apollo search find prospect new' },
   { id: 'discovery-document', label: 'Discover from a document', hint: 'Upload a list — AI finds the leads', icon: FileUp, to: '/discovery?tab=document', keywords: 'upload file csv pdf spreadsheet trade show list import gemini' },
+  { id: 'campaigns', label: 'Autopilot Campaigns', hint: 'Campaigns that find and email prospects for you', icon: Rocket, to: '/campaigns', keywords: 'autopilot outreach campaign automatic prospects icp send drafts approve pause' },
+  { id: 'campaign-new', label: 'New Autopilot campaign', hint: 'Start outreach from a document', icon: Rocket, to: '/campaigns/new', keywords: 'create start launch autopilot outreach campaign document icp' },
   { id: 'prospecting', label: 'Review prospecting queue', hint: 'Approve or reject sourced leads', icon: Radar, to: '/prospecting', keywords: 'prospect candidates icp fit approve reject queue places runs' },
   { id: 'add-company', label: 'Add a company', hint: 'Create a company manually', icon: Plus, to: '/companies', keywords: 'new create lead' },
   { id: 'scan', label: 'Scan a business card', hint: 'Add a contact from a photo', icon: CreditCard, to: '/scan', keywords: 'card contact ocr photo' },

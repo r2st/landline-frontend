@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   FileText,
   Loader2,
   Mail,
+  Rocket,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -541,13 +542,25 @@ export default function DocumentDiscovery() {
                 <span className="flex-shrink-0 text-gray-500">· {doc.candidate_count} companies found</span>
               )}
             </div>
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Upload more files
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {doc.status === 'ready' && (
+                <Link
+                  to={`/campaigns/new?docs=${doc.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
+                  title="Let Autopilot find more companies like these and email them for you"
+                >
+                  <Rocket className="h-3.5 w-3.5" />
+                  Start Outreach Campaign
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Upload more files
+              </button>
+            </div>
           </div>
 
           {doc.status === 'parsing' && (

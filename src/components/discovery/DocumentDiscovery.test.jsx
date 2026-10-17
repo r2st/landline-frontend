@@ -102,6 +102,21 @@ describe('DocumentDiscovery', () => {
     fireEvent.click(await screen.findByText('leads.csv'));
     expect(await screen.findByText('Follow-up status')).toBeInTheDocument();
   });
+
+  it('starts an Autopilot campaign from an analysed document', async () => {
+    apiMock.aiStatus.mockResolvedValue({ gemini_key_configured: true });
+    apiMock.get.mockResolvedValue(DOC);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/discovery?tab=document&doc=doc-1']}>
+          <DocumentDiscovery />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const link = await screen.findByRole('link', { name: /Start Outreach Campaign/ });
+    expect(link).toHaveAttribute('href', '/campaigns/new?docs=doc-1');
+  });
 });
 
 describe('DocumentDiscovery multi-file upload', () => {

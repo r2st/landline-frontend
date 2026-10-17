@@ -140,6 +140,7 @@ const navSections = [
     items: [
       { name: 'Inbox', href: '/inbox', icon: Inbox },
       { name: 'Campaigns', href: '/outreach', icon: Send },
+      { name: 'Autopilot Campaigns', href: '/campaigns', icon: Rocket },
       { name: 'Calls', href: '/calls', icon: Phone },
       { name: 'Sequences', href: '/sequences', icon: ListOrdered },
       { name: 'Follow-ups', href: '/follow-ups', icon: Bell },

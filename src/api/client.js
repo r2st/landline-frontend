@@ -279,6 +279,19 @@ export const discoveryDocsApi = {
     api.patch(`/sequences/${sequenceId}/status`, { status }).then(r => r.data),
 };
 
+// Autopilot Outreach campaigns. Creating one analyses its documents into an ICP;
+// PATCH edits the ICP/settings and moves status (active / paused / stopped).
+export const campaignsApi = {
+  list: () => api.get('/campaigns').then(r => r.data),
+  get: (id) => api.get(`/campaigns/${id}`).then(r => r.data),
+  create: (data) => api.post('/campaigns', data, { timeout: 120000 }).then(r => r.data),
+  update: (id, data) => api.patch(`/campaigns/${id}`, data).then(r => r.data),
+  remove: (id) => api.delete(`/campaigns/${id}`).then(r => r.data),
+  prospects: (id, params) => api.get(`/campaigns/${id}/prospects`, { params }).then(r => r.data),
+  approve: (id, pid) => api.post(`/campaigns/${id}/prospects/${pid}/approve`).then(r => r.data),
+  skip: (id, pid) => api.post(`/campaigns/${id}/prospects/${pid}/skip`).then(r => r.data),
+};
+
 export const aiApi = {
   generateEmail: (data) => api.post('/ai/generate-email', data).then(r => r.data),
   improveEmail: (data) => api.post('/ai/improve-email', data).then(r => r.data),
