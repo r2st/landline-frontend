@@ -645,7 +645,7 @@ export default function CardScanner() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'landline-scanned-contacts.csv';
+    a.download = 'prospect-scanned-contacts.csv';
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`Exported ${rows.length} contact${rows.length === 1 ? '' : 's'}`);

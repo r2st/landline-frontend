@@ -35,7 +35,7 @@ export default function Register() {
         password,
         adminName: adminName.trim() || undefined,
       });
-      toast.success('Organization created — welcome to Landline');
+      toast.success('Organization created — welcome to DoAide Prospect');
       navigate('/', { replace: true });
     } catch (err) {
       const status = err?.response?.status;
@@ -66,7 +66,7 @@ export default function Register() {
             Create your organization
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Start using Landline in a minute
+            Start using DoAide Prospect in a minute
           </p>
         </div>
 

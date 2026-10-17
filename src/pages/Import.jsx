@@ -211,7 +211,7 @@ function downloadCSV(filename, headerRow, dataRows) {
 }
 
 function downloadTemplate() {
-  downloadCSV('landline_import_template.csv', TEMPLATE_HEADERS, [TEMPLATE_EXAMPLE_ROW]);
+  downloadCSV('prospect_import_template.csv', TEMPLATE_HEADERS, [TEMPLATE_EXAMPLE_ROW]);
   toast.success('Template downloaded');
 }
 

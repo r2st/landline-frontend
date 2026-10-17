@@ -636,13 +636,13 @@ export default function Companies() {
   };
 
   // Toolbar "Export CSV" — all currently-visible companies, all fields.
-  const handleExportCSV = () => exportRows(companies, 'landline-companies.csv');
+  const handleExportCSV = () => exportRows(companies, 'prospect-companies.csv');
 
   // Bulk "Export" — only the selected companies, all fields.
   const handleBulkExport = () => {
     const byId = new Set(selectedIds.map(String));
     const list = (companies || []).filter((c) => byId.has(String(c.id)));
-    exportRows(list, 'landline-companies-selected.csv');
+    exportRows(list, 'prospect-companies-selected.csv');
   };
 
   const handleScoreAll = async () => {

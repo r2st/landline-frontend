@@ -343,7 +343,7 @@ export default function Reports() {
   const handleExport = () => {
     if (topClients.length === 0) return;
     downloadCsv(
-      'landline-top-clients.csv',
+      'prospect-top-clients.csv',
       ['Client', 'Revenue', 'Deals', 'Health'],
       topClients.map((c) => [c.name ?? c.company_name, c.revenue ?? c.total_revenue ?? '', c.deals ?? c.deal_count ?? '', c.health_score ?? '']),
     );
@@ -352,15 +352,15 @@ export default function Reports() {
   // Per-chart export handlers
   const exportRetention = () => {
     if (retentionData.length === 0) return;
-    downloadCsv('landline-retention.csv', ['Date', 'Rate (%)'], retentionData.map(r => [r.date, r.rate]));
+    downloadCsv('prospect-retention.csv', ['Date', 'Rate (%)'], retentionData.map(r => [r.date, r.rate]));
   };
   const exportFunnel = () => {
     if (funnelData.length === 0) return;
-    downloadCsv('landline-revenue-funnel.csv', ['Stage', 'Value', 'Count'], funnelData.map(f => [f.stage, f.value, f.count ?? '']));
+    downloadCsv('prospect-revenue-funnel.csv', ['Stage', 'Value', 'Count'], funnelData.map(f => [f.stage, f.value, f.count ?? '']));
   };
   const exportHeatmap = () => {
     if (heatmap.length === 0) return;
-    downloadCsv('landline-activity-heatmap.csv', ['Date', 'Count'], heatmap.map(h => [h.date, h.count ?? h.value ?? 0]));
+    downloadCsv('prospect-activity-heatmap.csv', ['Date', 'Count'], heatmap.map(h => [h.date, h.count ?? h.value ?? 0]));
   };
 
   return (

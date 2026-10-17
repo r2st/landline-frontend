@@ -159,7 +159,7 @@ function HelpHome() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Help Center</h1>
             <p className="text-sm text-gray-500">
-              Guides for every feature in Landline. Search or browse by topic.
+              Guides for every feature in DoAide Prospect. Search or browse by topic.
             </p>
           </div>
         </div>

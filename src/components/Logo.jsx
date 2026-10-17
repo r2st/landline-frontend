@@ -2,7 +2,7 @@ import { useId } from 'react';
 import { cn } from '../lib/utils';
 
 /**
- * Landline brand mark — an abstract "connection" motif: two endpoints
+ * DoAide Prospect brand mark — an abstract "connection" motif: two endpoints
  * linked by an arc with a transmission node, evoking a line that connects
  * two parties. Rendered inline so it stays crisp at any size and inherits
  * the surrounding layout.
@@ -45,7 +45,7 @@ export function LogoMark({ className, size = 32, rounded = 9 }) {
 }
 
 /**
- * Full logo lockup: mark + "Landline" wordmark.
+ * Full logo lockup: mark + "DoAide Prospect" wordmark.
  */
 export default function Logo({ className, markSize = 30, showWord = true, wordClassName }) {
   return (

@@ -34,7 +34,7 @@ import {
   Rocket,
 } from 'lucide-react';
 
-// A showcase of everything Landline can do, grouped by area. Each capability
+// A showcase of everything DoAide Prospect can do, grouped by area. Each capability
 // card links to the page that does it and the help article that explains it,
 // so this doubles as a directory. Content mirrors src/lib/helpContent.js — keep
 // the two in step when adding features.

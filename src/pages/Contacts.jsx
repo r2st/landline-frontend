@@ -1028,7 +1028,7 @@ export default function Contacts() {
     const list = filtered.filter((c) => idSet.has(String(c.id)));
     if (list.length === 0) return;
     downloadCsv(
-      'landline-contacts-selected.csv',
+      'prospect-contacts-selected.csv',
       CONTACT_EXPORT_COLS.map(([h]) => h),
       list.map((c) => CONTACT_EXPORT_COLS.map(([, f]) => f(c)))
     );

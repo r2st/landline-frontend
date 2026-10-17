@@ -1,4 +1,4 @@
-// In-app help content for Landline.
+// In-app help content for DoAide Prospect.
 //
 // This is the single source of truth for the Help Center, contextual HelpIcon
 // slide-overs, and the command-palette entry. Each article carries markdown
@@ -62,9 +62,9 @@ export const helpArticles = [
     category: 'getting-started',
     title: 'Welcome to DoAide Prospect',
     route: '/help',
-    keywords: 'welcome overview intro start basics what is landline b2b lead generation',
+    keywords: 'welcome overview intro start basics what is prospect doaide b2b lead generation',
     summary: 'What DoAide Prospect is and how the pieces fit together.',
-    body: `# Welcome to Landline
+    body: `# Welcome to DoAide Prospect
 
 DoAide Prospect is a B2B lead-generation and client-management platform. It combines a CRM, a multi-channel outreach engine, and **Autopilot** — an autonomous cold-email AI agent that sources prospects, writes and sends first touches, triages replies, and protects your sending reputation on its own.
 
@@ -272,10 +272,10 @@ Instead of blasting at a fixed hour, let DoAide Prospect schedule each contact's
     summary: 'Connect Gmail accounts with OAuth for sending and receiving.',
     body: `# Gmail integration
 
-Connect one or more Google accounts so Landline can send and receive mail as you.
+Connect one or more Google accounts so Prospect can send and receive mail as you.
 
 ## Connecting
-Authorize with **OAuth** (no password ever touches Landline). You can connect **multiple accounts** and let outreach rotate between them to spread volume and lower per-mailbox risk.
+Authorize with **OAuth** (no password ever touches Prospect). You can connect **multiple accounts** and let outreach rotate between them to spread volume and lower per-mailbox risk.
 
 ## What you get
 - **Send** sequence steps and one-off emails from any connected address.
@@ -849,7 +849,7 @@ Register an endpoint URL and choose which events to subscribe to. When an event 
     summary: 'How org isolation, roles, and team management work.',
     body: `# Organizations & roles
 
-Landline is **multi-tenant**: each organization's data is fully isolated from every other. Users, contacts, campaigns, and settings live inside one org.
+Prospect is **multi-tenant**: each organization's data is fully isolated from every other. Users, contacts, campaigns, and settings live inside one org.
 
 ## Roles
 - **Agent** — does the day-to-day outreach.
