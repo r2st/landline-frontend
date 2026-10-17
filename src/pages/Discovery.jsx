@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FileText, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 import ErrorBoundary from '../components/ErrorBoundary';
-import ApolloSearch from '../components/discovery/ApolloSearch';
+import CompanySearch from '../components/discovery/CompanySearch';
 import DocumentDiscovery from '../components/discovery/DocumentDiscovery';
 
 const TABS = [
@@ -10,7 +10,7 @@ const TABS = [
     key: 'search',
     label: 'Search',
     Icon: Search,
-    blurb: 'Search Apollo’s B2B database by industry, location and size. Matches land in Companies, ready to enrich with decision-makers.',
+    blurb: 'Describe the companies you want and Gemini searches the web for them (or search Apollo’s B2B database). Matches land in Companies, ready to enrich with decision-makers.',
   },
   {
     key: 'document',
@@ -86,7 +86,7 @@ export default function Discovery() {
 
       <div role="tabpanel">
         <ErrorBoundary resetKey={tab} fallback={({ reset }) => <TabFallback reset={reset} />}>
-          {tab === 'document' ? <DocumentDiscovery /> : <ApolloSearch />}
+          {tab === 'document' ? <DocumentDiscovery /> : <CompanySearch />}
         </ErrorBoundary>
       </div>
     </div>

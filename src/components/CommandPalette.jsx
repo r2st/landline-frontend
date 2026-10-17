@@ -51,7 +51,7 @@ import { getInitials, cn } from '../lib/utils';
 // Static commands: jump to a page or kick off a workflow. `keywords` widen the
 // fuzzy match so e.g. "email" finds Campaigns.
 const COMMANDS = [
-  { id: 'discovery', label: 'Discover companies', hint: 'Find new leads on Apollo', icon: Sparkles, to: '/discovery', keywords: 'apollo search find prospect new' },
+  { id: 'discovery', label: 'Discover companies', hint: 'Find new leads with Gemini or Apollo', icon: Sparkles, to: '/discovery', keywords: 'gemini apollo search find prospect new' },
   { id: 'discovery-document', label: 'Discover from a document', hint: 'Upload a list — AI finds the leads', icon: FileUp, to: '/discovery?tab=document', keywords: 'upload file csv pdf spreadsheet trade show list import gemini' },
   { id: 'prospecting', label: 'Review prospecting queue', hint: 'Approve or reject sourced leads', icon: Radar, to: '/prospecting', keywords: 'prospect candidates icp fit approve reject queue places runs' },
   { id: 'add-company', label: 'Add a company', hint: 'Create a company manually', icon: Plus, to: '/companies', keywords: 'new create lead' },

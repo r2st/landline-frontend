@@ -12,7 +12,7 @@ vi.mock('../../api/client', async () => {
   const { QueryClient } = await import('@tanstack/react-query');
   return {
     queryClient: new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
-    discoveryApi: { searchCompanies: vi.fn(), enrichCompany: vi.fn() },
+    discoveryApi: { searchCompanies: vi.fn(), searchCompaniesGemini: vi.fn(), enrichCompany: vi.fn() },
     discoveryDocsApi: {
       aiStatus: vi.fn(),
       list: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock('../../api/client', async () => {
 });
 
 const { discoveryApi, discoveryDocsApi: docsApi, queryClient } = await import('../../api/client');
-const { default: ApolloSearch, toSearchPayload } = await import('./ApolloSearch');
+const { default: CompanySearch, toGeminiPayload, toSearchPayload } = await import('./CompanySearch');
 const { default: DocumentDiscovery } = await import('./DocumentDiscovery');
 const { default: DocumentReview } = await import('./DocumentReview');
 const { default: DocumentOutreach } = await import('./DocumentOutreach');
@@ -67,6 +67,11 @@ beforeEach(() => {
 });
 
 describe('Apollo search', () => {
+  // Gemini is the default source; these exercise the Apollo path.
+  beforeEach(() => {
+    window.sessionStorage.setItem('prospect.discovery.search', JSON.stringify({ source: 'apollo' }));
+  });
+
   it('sends the field names the API reads', () => {
     expect(
       toSearchPayload({
@@ -89,7 +94,7 @@ describe('Apollo search', () => {
 
   it('searches, shows company details and what landed in the pipeline', async () => {
     discoveryApi.searchCompanies.mockResolvedValue(SEARCH_RESULT);
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
 
     fireEvent.change(screen.getByLabelText('Industry'), { target: { value: 'Molding' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
@@ -106,7 +111,7 @@ describe('Apollo search', () => {
   });
 
   it('asks for at least one criterion instead of silently doing nothing', () => {
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
     expect(screen.getByRole('alert')).toHaveTextContent(/Enter an industry, a location or a keyword/);
     expect(discoveryApi.searchCompanies).not.toHaveBeenCalled();
@@ -114,7 +119,7 @@ describe('Apollo search', () => {
 
   it('explains a rate-limited search rather than showing "no results"', async () => {
     discoveryApi.searchCompanies.mockResolvedValue({ ...SEARCH_RESULT, total: 0, companies: [], search_status: 'rate_limited' });
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
 
@@ -125,7 +130,7 @@ describe('Apollo search', () => {
   it('links a platform admin to credentials when Apollo has no key', async () => {
     mockAuth.mockReturnValue({ user: { role: 'platform_admin' } });
     discoveryApi.searchCompanies.mockResolvedValue({ total: 0, companies: [], search_status: 'skipped' });
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
 
@@ -138,7 +143,7 @@ describe('Apollo search', () => {
       total: 0, companies: [], search_status: 'unauthorized',
       search_error: 'Apollo refused the request: … not included in your Free plan',
     });
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
 
@@ -154,7 +159,7 @@ describe('Apollo search', () => {
       total: 0, companies: [], search_status: 'skipped',
       search_error: 'Apollo is not configured: no Apollo API key is set for this deployment.',
     });
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
 
@@ -166,7 +171,7 @@ describe('Apollo search', () => {
     discoveryApi.searchCompanies.mockRejectedValueOnce({
       response: { status: 401, data: { detail: 'Invalid or missing API key / Bearer token' } },
     });
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
 
@@ -178,7 +183,7 @@ describe('Apollo search', () => {
     discoveryApi.searchCompanies
       .mockRejectedValueOnce({ response: { data: { detail: 'Apollo timed out' } } })
       .mockResolvedValueOnce(SEARCH_RESULT);
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
 
@@ -191,7 +196,7 @@ describe('Apollo search', () => {
   it('finds contacts for one company and shows how many', async () => {
     discoveryApi.searchCompanies.mockResolvedValue(SEARCH_RESULT);
     discoveryApi.enrichCompany.mockResolvedValue({ contacts_count: 3 });
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
 
@@ -202,15 +207,211 @@ describe('Apollo search', () => {
 
   it('keeps the last results after leaving and coming back', async () => {
     discoveryApi.searchCompanies.mockResolvedValue(SEARCH_RESULT);
-    const first = renderUi(<ApolloSearch />);
+    const first = renderUi(<CompanySearch />);
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
     fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
     await screen.findByText('2 companies found');
     first.unmount();
 
-    renderUi(<ApolloSearch />);
+    renderUi(<CompanySearch />);
     expect(screen.getByText('2 companies found')).toBeInTheDocument();
     expect(screen.getByLabelText('Location')).toHaveValue('Ohio');
+  });
+});
+
+describe('Gemini search', () => {
+  const describeAs = (text) =>
+    fireEvent.change(screen.getByLabelText(/Describe the companies/), { target: { value: text } });
+  const submit = () => fireEvent.click(screen.getByRole('button', { name: /Search with Gemini/ }));
+
+  it('folds the optional filters into the plain-language description', () => {
+    const payload = toGeminiPayload({
+      query: ' SaaS companies focused on healthcare ',
+      industry_keyword: 'Software',
+      location: 'Bangalore',
+      min_employees: '50',
+      max_employees: '200',
+      keywords: 'EHR, telehealth',
+      num_results: 15,
+    });
+    expect(payload).toMatchObject({ industry: 'Software', location: 'Bangalore', min_employees: 50, max_employees: 200, per_page: 15 });
+    // The endpoint prompts from structured fields, so the sentence leads the keywords.
+    expect(payload.keywords).toEqual(['SaaS companies focused on healthcare', 'EHR', 'telehealth']);
+    expect(payload.query).toBe(
+      'SaaS companies focused on healthcare\nFilters — industry: Software; located in Bangalore; 50-200 employees; keywords: EHR, telehealth.'
+    );
+  });
+
+  it('builds a description from filters alone when none was typed', () => {
+    const payload = toGeminiPayload({ query: '', industry_keyword: '', location: 'Ohio', min_employees: '', max_employees: '', keywords: '', num_results: 10 });
+    expect(payload.query).toBe('Companies — located in Ohio.');
+    expect(payload.keywords).toEqual([]);
+  });
+
+  it('shows what Gemini adds: a description, the people it found and its web sources', async () => {
+    discoveryApi.searchCompaniesGemini.mockResolvedValue({
+      ...SEARCH_RESULT,
+      source: 'gemini',
+      sources: [{ title: 'medtech-saas.in', url: 'https://example.org/grounding/1' }],
+      companies: [{
+        ...SEARCH_RESULT.companies[0],
+        city: null,
+        state: null,
+        location: 'Bangalore, India',
+        description: 'Cloud EHR for clinics.',
+        contacts: [{ name: 'Asha Rao', title: 'CEO', email: null, linkedin: null }],
+      }],
+    });
+    renderUi(<CompanySearch />);
+    describeAs('Healthcare SaaS in Bangalore');
+    submit();
+
+    const row = (await screen.findAllByTestId('result-row'))[0];
+    expect(within(row).getByText('Cloud EHR for clinics.')).toBeInTheDocument();
+    expect(within(row).getByTestId('contacts-found')).toHaveTextContent('1 contact found');
+    expect(within(row).getByText('Bangalore, India')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /medtech-saas.in/ })).toHaveAttribute('href', 'https://example.org/grounding/1');
+  });
+
+  it('shows the key banner when the search comes back "skipped: no Gemini key"', async () => {
+    mockAuth.mockReturnValue({ user: { role: 'org_admin' } });
+    discoveryApi.searchCompaniesGemini.mockResolvedValue({
+      source: 'gemini', total: 0, companies: [], sources: [],
+      search_status: 'skipped', search_error_code: 'gemini_key_required',
+      search_error: 'Add your Gemini API key in Settings → API Keys to search with Gemini.',
+    });
+    renderUi(<CompanySearch />);
+    describeAs('Dental clinics in Pune');
+    submit();
+
+    expect(await screen.findByText('Add your Gemini API key to use Gemini search')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Add Gemini key/ })).toHaveAttribute('href', '/settings#api-keys');
+    expect(screen.queryByText('No companies matched')).not.toBeInTheDocument();
+  });
+
+  it('is the default, and shows results in the same table as Apollo', async () => {
+    discoveryApi.searchCompaniesGemini.mockResolvedValue(SEARCH_RESULT);
+    renderUi(<CompanySearch />);
+
+    expect(screen.getByRole('radio', { name: /Gemini web search/ })).toHaveAttribute('aria-checked', 'true');
+    describeAs('SaaS companies in Bangalore with 50-200 employees focused on healthcare');
+    submit();
+
+    expect(await screen.findByText('2 companies found')).toBeInTheDocument();
+    expect(discoveryApi.searchCompaniesGemini).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'SaaS companies in Bangalore with 50-200 employees focused on healthcare', per_page: 10 })
+    );
+    expect(discoveryApi.searchCompanies).not.toHaveBeenCalled();
+    const [first] = screen.getAllByTestId('result-row');
+    expect(within(first).getByText('Acme Molding')).toBeInTheDocument();
+    expect(within(first).getByText('acme.com')).toBeInTheDocument();
+    expect(within(first).getByRole('button', { name: 'Find contacts at Acme Molding' })).toBeInTheDocument();
+  });
+
+  it('shows a loading state while Gemini searches', async () => {
+    let resolve;
+    discoveryApi.searchCompaniesGemini.mockReturnValue(new Promise((r) => { resolve = r; }));
+    renderUi(<CompanySearch />);
+    describeAs('Dental clinics in Pune');
+    submit();
+
+    expect(await screen.findByTestId('results-skeleton')).toHaveTextContent(/Gemini is searching the web/);
+    expect(screen.getByRole('button', { name: /Searching/ })).toBeDisabled();
+    resolve(SEARCH_RESULT);
+    expect(await screen.findByText('2 companies found')).toBeInTheDocument();
+  });
+
+  it('asks for a description or a filter before searching', () => {
+    renderUi(<CompanySearch />);
+    submit();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Describe the companies you.re looking for/);
+    expect(discoveryApi.searchCompaniesGemini).not.toHaveBeenCalled();
+  });
+
+  it('switches to Apollo and back', async () => {
+    discoveryApi.searchCompanies.mockResolvedValue(SEARCH_RESULT);
+    renderUi(<CompanySearch />);
+    fireEvent.click(screen.getByRole('radio', { name: /Apollo database/ }));
+
+    expect(screen.queryByLabelText(/Describe the companies/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Ohio' } });
+    fireEvent.click(screen.getByRole('button', { name: /Search Apollo/ }));
+    expect(await screen.findByText('2 companies found')).toBeInTheDocument();
+    expect(discoveryApi.searchCompaniesGemini).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Gemini web search/ }));
+    expect(screen.getByLabelText(/Describe the companies/)).toBeInTheDocument();
+  });
+
+  it('shows the key banner up front and blocks the search when no Gemini key is set', async () => {
+    mockAuth.mockReturnValue({ user: { role: 'org_admin' } });
+    docsApi.aiStatus.mockResolvedValue({ gemini_key_configured: false });
+    renderUi(<CompanySearch />);
+
+    expect(await screen.findByText('Add your Gemini API key to use Gemini search')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Add Gemini key/ })).toHaveAttribute('href', '/settings#api-keys');
+    expect(screen.getByRole('button', { name: /Search with Gemini/ })).toBeDisabled();
+
+    // Apollo doesn't need the Gemini key.
+    fireEvent.click(screen.getByRole('radio', { name: /Apollo database/ }));
+    expect(screen.queryByText(/Add your Gemini API key/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Search Apollo/ })).toBeEnabled();
+  });
+
+  it('turns a "gemini key required" refusal into the banner, not an error', async () => {
+    discoveryApi.searchCompaniesGemini.mockRejectedValue({
+      response: { status: 409, data: { detail: { code: 'gemini_key_required', message: 'Add your Gemini API key…' } } },
+    });
+    renderUi(<CompanySearch />);
+    describeAs('Dental clinics in Pune');
+    submit();
+
+    expect(await screen.findByText('Add your Gemini API key to use Gemini search')).toBeInTheDocument();
+    expect(screen.queryByText(/The search didn.t go through/)).not.toBeInTheDocument();
+  });
+
+  it('names Gemini when it rate-limits, rather than showing "no results"', async () => {
+    discoveryApi.searchCompaniesGemini.mockResolvedValue({ total: 0, companies: [], search_status: 'rate_limited' });
+    renderUi(<CompanySearch />);
+    describeAs('Dental clinics in Pune');
+    submit();
+
+    const notice = (await screen.findByText('Gemini is rate-limiting searches right now')).closest('[role="alert"]');
+    expect(notice).not.toHaveTextContent(/Apollo/);
+    expect(screen.queryByText('No companies matched')).not.toBeInTheDocument();
+  });
+
+  it('suggests a broader description when nothing matched', async () => {
+    discoveryApi.searchCompaniesGemini.mockResolvedValue({ total: 0, imported: 0, already_existed: 0, companies: [], search_status: 'ok' });
+    renderUi(<CompanySearch />);
+    describeAs('Quantum dog groomers on the Moon');
+    submit();
+
+    expect(await screen.findByText('No companies matched')).toBeInTheDocument();
+    expect(screen.getByText(/describing the companies more broadly/)).toBeInTheDocument();
+  });
+
+  it('shows a failed request inline, naming Gemini, and retries it', async () => {
+    discoveryApi.searchCompaniesGemini
+      .mockRejectedValueOnce({ message: 'Network Error' })
+      .mockResolvedValueOnce(SEARCH_RESULT);
+    renderUi(<CompanySearch />);
+    describeAs('Dental clinics in Pune');
+    submit();
+
+    expect(await screen.findByText('Network Error')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Try again/ }));
+    expect(await screen.findByText('2 companies found')).toBeInTheDocument();
+    expect(discoveryApi.searchCompaniesGemini).toHaveBeenCalledTimes(2);
+  });
+
+  it('says nothing was sent to Gemini when our session is refused', async () => {
+    discoveryApi.searchCompaniesGemini.mockRejectedValue({ response: { status: 401, data: { detail: 'Invalid or missing API key' } } });
+    renderUi(<CompanySearch />);
+    describeAs('Dental clinics in Pune');
+    submit();
+
+    expect(await screen.findByText(/nothing was sent to Gemini/)).toBeInTheDocument();
   });
 });
 

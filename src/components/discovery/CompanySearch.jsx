@@ -23,12 +23,13 @@ import {
 } from 'lucide-react';
 import { discoveryApi, queryClient } from '../../api/client';
 import { useSearchCompanies } from '../../hooks/useDiscovery';
-import { errMsg } from '../../hooks/useDiscoveryDocuments';
+import { errMsg, isGeminiKeyRequired, useDiscoveryAiStatus } from '../../hooks/useDiscoveryDocuments';
 import { useOptionalAuth } from '../../context/AuthContext';
 import { isPlatformAdmin } from '../../lib/roles';
 import { cn, formatNumber } from '../../lib/utils';
 import { usePersistedState } from '../../lib/persistedState';
 import Skeleton from '../Skeleton';
+import GeminiKeyBanner from './GeminiKeyBanner';
 
 const MANUFACTURING_INDUSTRIES = [
   'Injection Molding',
@@ -54,6 +55,7 @@ const MANUFACTURING_INDUSTRIES = [
 ];
 
 const EMPTY_FORM = {
+  query: '',
   industry_keyword: '',
   location: '',
   min_employees: '',
@@ -66,6 +68,25 @@ const EMPTY_FORM = {
 const SAVED_KEY = 'landline_saved_searches';
 const HISTORY_KEY = 'landline_search_history';
 const SESSION_KEY = 'prospect.discovery.search';
+
+// Gemini (grounded in Google Search, on the org's own key) is the default:
+// Apollo's free plan refuses company search outright.
+const SOURCES = {
+  gemini: {
+    label: 'Gemini web search',
+    name: 'Gemini',
+    button: 'Search with Gemini',
+    pending: 'Gemini is searching the web — this can take up to a minute…',
+    note: 'Runs on your organization’s Gemini key. Matches are added to Companies straight away; duplicates merge.',
+  },
+  apollo: {
+    label: 'Apollo database',
+    name: 'Apollo',
+    button: 'Search Apollo',
+    pending: 'Searching Apollo — this usually takes a few seconds…',
+    note: 'Each result uses Apollo credits. Matches are added to Companies straight away; duplicates merge.',
+  },
+};
 
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
@@ -95,19 +116,108 @@ export function toSearchPayload(form) {
   };
 }
 
-// A 401 here is *our* session being refused before anything reached Apollo —
-// the backend's "Invalid or missing API key / Bearer token" otherwise reads as
-// Apollo rejecting its key, which sends people to the wrong fix.
-function searchFailureMessage(error) {
-  if (error?.response?.status === 401) {
-    return 'Your session wasn’t accepted, so nothing was sent to Apollo. Refresh the page (or sign in again) and search again.';
-  }
-  return errMsg(error, 'Something went wrong talking to Apollo.');
+// Gemini reads a sentence best, so the structured filters are folded into the
+// description (`query`) as well as sent as fields the backend applies itself.
+// The endpoint builds its prompt from the structured fields only, so the
+// description also rides along as the first keyword: without that, a search
+// typed only as a sentence reaches Gemini as "any industry and location".
+export function toGeminiPayload(form) {
+  const base = toSearchPayload(form);
+  const description = form.query.trim();
+  const size =
+    base.min_employees && base.max_employees ? `${base.min_employees}-${base.max_employees} employees`
+      : base.min_employees ? `at least ${base.min_employees} employees`
+        : base.max_employees ? `up to ${base.max_employees} employees`
+          : '';
+  const extras = [
+    base.industry && `industry: ${base.industry}`,
+    base.location && `located in ${base.location}`,
+    size,
+    base.keywords.length > 0 && `keywords: ${base.keywords.join(', ')}`,
+  ].filter(Boolean);
+  const query = [description, extras.length ? `${description ? 'Filters' : 'Companies'} — ${extras.join('; ')}.` : '']
+    .filter(Boolean)
+    .join('\n');
+  return { ...base, keywords: description ? [description, ...base.keywords] : base.keywords, query };
 }
 
-function SearchStatusNotice({ status, detail, canFix }) {
+function Sources({ sources }) {
+  if (!sources?.length) return null;
+  return (
+    <details className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
+      <summary className="cursor-pointer font-medium text-gray-700">
+        Web sources Gemini used ({sources.length})
+      </summary>
+      <ul className="mt-2 space-y-1">
+        {sources.map((src) => (
+          <li key={src.url} className="truncate">
+            <a
+              href={src.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+            >
+              {src.title || src.url}
+              <ExternalLink className="h-3 w-3 flex-shrink-0" />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+// Gemini returns decision-makers with each company; they're imported with it.
+function ContactsFound({ company }) {
+  const n = company.contacts?.length || 0;
+  if (!n) return null;
+  const names = company.contacts.map((c) => [c.name, c.title].filter(Boolean).join(', ')).filter(Boolean);
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs text-gray-500"
+      title={names.join('\n') || undefined}
+      data-testid="contacts-found"
+    >
+      <Users className="h-3 w-3" />
+      {n} contact{n === 1 ? '' : 's'} found
+    </span>
+  );
+}
+
+// A 401 here is *our* session being refused before anything reached the
+// provider — the backend's "Invalid or missing API key / Bearer token"
+// otherwise reads as Apollo/Gemini rejecting its key: the wrong fix.
+function searchFailureMessage(error, name) {
+  if (error?.response?.status === 401) {
+    return `Your session wasn’t accepted, so nothing was sent to ${name}. Refresh the page (or sign in again) and search again.`;
+  }
+  return errMsg(error, `Something went wrong talking to ${name}.`);
+}
+
+const GEMINI_STATUS_COPY = {
+  rate_limited: {
+    title: 'Gemini is rate-limiting searches right now',
+    body: 'Wait a minute, then search again.',
+  },
+  budget_exhausted: {
+    title: 'Your Gemini quota is used up for now',
+    body: 'Searches resume when the quota resets. Companies already found stay in your pipeline.',
+  },
+  unauthorized: {
+    title: 'Gemini refused the search',
+    body: 'Your organization’s Gemini API key was rejected. An org admin can replace it in Settings → API Keys.',
+  },
+  error: {
+    title: 'Gemini returned an error',
+    body: 'Try again in a moment, or describe the companies a little differently.',
+  },
+};
+
+function SearchStatusNotice({ status, detail, canFix, source }) {
   if (!status || status === 'ok') return null;
-  const copy = {
+  // A missing Gemini key gets the full banner (with the Settings link) instead.
+  if (source === 'gemini' && status === 'skipped') return null;
+  const copy = (source === 'gemini' && GEMINI_STATUS_COPY[status]) || {
     rate_limited: {
       title: 'Apollo is rate-limiting searches right now',
       body: 'Wait a minute, then search again. Nothing was charged for this attempt.',
@@ -140,7 +250,7 @@ function SearchStatusNotice({ status, detail, canFix }) {
         <p className="font-medium text-amber-900">{copy.title}</p>
         <p className="mt-1 text-amber-800">
           {copy.body}{' '}
-          {(status === 'skipped' || status === 'unauthorized') && canFix && (
+          {source !== 'gemini' && (status === 'skipped' || status === 'unauthorized') && canFix && (
             <Link to="/platform/credentials" className="font-medium underline hover:text-amber-900">
               Open Platform credentials
             </Link>
@@ -154,7 +264,7 @@ function SearchStatusNotice({ status, detail, canFix }) {
   );
 }
 
-function ResultsSkeleton() {
+function ResultsSkeleton({ message }) {
   return (
     <div data-testid="results-skeleton" className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
@@ -169,7 +279,7 @@ function ResultsSkeleton() {
           <Skeleton className="ml-auto h-7 w-28 rounded-lg" />
         </div>
       ))}
-      <p className="px-4 py-3 text-xs text-gray-500">Searching Apollo — this usually takes a few seconds…</p>
+      <p className="px-4 py-3 text-xs text-gray-500">{message}</p>
     </div>
   );
 }
@@ -249,18 +359,40 @@ function RowAction({ company, enrich, onEnrich, block }) {
   );
 }
 
-export default function ApolloSearch() {
+export default function CompanySearch() {
   const user = useOptionalAuth()?.user;
   const canFixApollo = isPlatformAdmin(user?.role);
   const searchCompanies = useSearchCompanies();
 
   // Form + last results live in sessionStorage, so leaving the page (or the
   // tab) and coming back doesn't throw the search away.
-  const [session, setSession] = usePersistedState(SESSION_KEY, { form: EMPTY_FORM, results: null }, 'session');
+  const [session, setSession] = usePersistedState(
+    SESSION_KEY,
+    { source: 'gemini', form: EMPTY_FORM, results: null },
+    'session'
+  );
+  const source = session.source === 'apollo' ? 'apollo' : 'gemini';
+  const copy = SOURCES[source];
   const form = { ...EMPTY_FORM, ...session.form };
   const results = session.results;
   const setForm = (next) => setSession((s) => ({ ...s, form: next }));
   const setResults = (next) => setSession((s) => ({ ...s, results: next }));
+  const setSource = (next) => {
+    if (next === source) return;
+    searchCompanies.reset();
+    setFormError(null);
+    setSession((s) => ({ ...s, source: next }));
+  };
+
+  // Checked up front, so a missing key is explained before anyone types.
+  const aiStatus = useDiscoveryAiStatus();
+  // The search endpoint reports a missing key as a 'skipped' result; other
+  // Gemini routes answer 409 — either way it's the same banner.
+  const geminiKeyMissing =
+    source === 'gemini' &&
+    ((aiStatus.data && !aiStatus.data.gemini_key_configured) ||
+      isGeminiKeyRequired(searchCompanies.error) ||
+      (results?.source === 'gemini' && results.search_error_code === 'gemini_key_required'));
 
   const [viewMode, setViewMode] = usePersistedState('prospect.discovery.view', 'table');
   const [savedSearches, setSavedSearches] = usePersistedState(SAVED_KEY, []);
@@ -304,15 +436,20 @@ export default function ApolloSearch() {
     setShowSaveInput(false);
   };
 
-  const runSearch = (payload) => {
-    setLastPayload(payload);
+  const runSearch = (request) => {
+    setLastPayload(request);
     setEnrich({});
-    searchCompanies.mutate(payload, { onSuccess: (data) => setResults(data) });
+    searchCompanies.mutate(request, { onSuccess: (data) => setResults({ ...data, source: request.source }) });
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    if (!form.industry_keyword.trim() && !form.location.trim() && !form.keywords.trim()) {
+    const hasFilter = form.industry_keyword.trim() || form.location.trim() || form.keywords.trim();
+    if (source === 'gemini' && !form.query.trim() && !hasFilter) {
+      setFormError('Describe the companies you’re looking for, or fill in at least one filter.');
+      return;
+    }
+    if (source === 'apollo' && !hasFilter) {
       setFormError('Enter an industry, a location or a keyword to search.');
       return;
     }
@@ -324,7 +461,7 @@ export default function ApolloSearch() {
     }
     setFormError(null);
     setSearchHistory((prev) => [{ criteria: { ...form }, date: new Date().toISOString() }, ...prev].slice(0, 5));
-    runSearch(toSearchPayload(form));
+    runSearch({ source, payload: source === 'apollo' ? toSearchPayload(form) : toGeminiPayload(form) });
   };
 
   const enrichOne = async (company) => {
@@ -433,7 +570,12 @@ export default function ApolloSearch() {
                     className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
                   >
                     <Clock className="h-3 w-3 text-gray-400" />
-                    {[h.criteria.industry_keyword, h.criteria.location].filter(Boolean).join(' - ') || h.criteria.keywords || 'Search'}
+                    <span className="max-w-[16rem] truncate">
+                      {h.criteria.query ||
+                        [h.criteria.industry_keyword, h.criteria.location].filter(Boolean).join(' - ') ||
+                        h.criteria.keywords ||
+                        'Search'}
+                    </span>
                     <span className="text-gray-400">{getRelativeDate(h.date)}</span>
                   </button>
                 ))}
@@ -443,8 +585,53 @@ export default function ApolloSearch() {
         </div>
       )}
 
+      {geminiKeyMissing && (
+        <GeminiKeyBanner feature="Gemini search" uses="Searching the web for companies runs" />
+      )}
+
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <form onSubmit={handleSearch} className="space-y-4" noValidate>
+          <div role="radiogroup" aria-label="Search with" className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            {Object.entries(SOURCES).map(([key, s]) => (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={source === key}
+                onClick={() => setSource(key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  source === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                {key === 'gemini' ? <Sparkles className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {source === 'gemini' && (
+            <div>
+              <label htmlFor="disc-query" className="mb-1 block text-sm font-medium text-gray-700">
+                Describe the companies you&apos;re looking for
+              </label>
+              <textarea
+                id="disc-query"
+                rows={3}
+                value={form.query}
+                onChange={(e) => setForm({ ...form, query: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSearch(e);
+                }}
+                className={cn(inputCls, 'resize-y')}
+                placeholder="e.g., SaaS companies in Bangalore with 50-200 employees focused on healthcare"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Plain language works best. The filters below are optional and get added to your description.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="sm:col-span-2 lg:col-span-1">
               <label htmlFor="disc-industry" className="mb-1 block text-sm font-medium text-gray-700">Industry</label>
@@ -562,9 +749,7 @@ export default function ApolloSearch() {
           )}
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-gray-500">
-              Each result uses Apollo credits. Matches are added to Companies straight away; duplicates merge.
-            </p>
+            <p className="text-xs text-gray-500">{copy.note}</p>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {showSaveInput ? (
                 <div className="flex items-center gap-2">
@@ -615,26 +800,32 @@ export default function ApolloSearch() {
               )}
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || geminiKeyMissing}
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-600 disabled:opacity-50"
               >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
-                {isPending ? 'Searching…' : 'Search Apollo'}
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : source === 'gemini' ? (
+                  <Sparkles className="h-4 w-4" />
+                ) : (
+                  <Globe className="h-4 w-4" />
+                )}
+                {isPending ? 'Searching…' : copy.button}
               </button>
             </div>
           </div>
         </form>
       </div>
 
-      {isPending && <ResultsSkeleton />}
+      {isPending && <ResultsSkeleton message={copy.pending} />}
 
-      {!isPending && searchCompanies.isError && (
+      {!isPending && searchCompanies.isError && !geminiKeyMissing && (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
             <div className="text-sm text-red-800">
               <p className="font-medium">The search didn&apos;t go through</p>
-              <p className="mt-1">{searchFailureMessage(searchCompanies.error)}</p>
+              <p className="mt-1">{searchFailureMessage(searchCompanies.error, SOURCES[lastPayload?.source || source].name)}</p>
             </div>
           </div>
           {lastPayload && (
@@ -652,7 +843,12 @@ export default function ApolloSearch() {
 
       {!isPending && results && (
         <div className="space-y-4">
-          <SearchStatusNotice status={results.search_status} detail={results.search_error} canFix={canFixApollo} />
+          <SearchStatusNotice
+            status={results.search_status}
+            detail={results.search_error}
+            canFix={canFixApollo}
+            source={results.source || 'apollo'}
+          />
 
           {companies.length > 0 && (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -711,13 +907,17 @@ export default function ApolloSearch() {
             </div>
           )}
 
+          <Sources sources={results.sources} />
+
           {companies.length === 0 ? (
             (!results.search_status || results.search_status === 'ok') && (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center">
                 <Search className="h-10 w-10 text-gray-300" />
                 <p className="mt-3 text-sm font-medium text-gray-900">No companies matched</p>
                 <p className="mt-1 text-sm text-gray-500">
-                  Try a broader industry term, a wider location (a state instead of a city), or drop the employee range.
+                  {results.source === 'gemini'
+                    ? 'Try describing the companies more broadly, a wider location (a state instead of a city), or drop the employee range.'
+                    : 'Try a broader industry term, a wider location (a state instead of a city), or drop the employee range.'}
                 </p>
               </div>
             )
@@ -748,13 +948,17 @@ export default function ApolloSearch() {
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
+                        {company.description && (
+                          <p className="mt-0.5 max-w-xs text-xs text-gray-500 line-clamp-2">{company.description}</p>
+                        )}
+                        <ContactsFound company={company} />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{company.industry || '--'}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
                         {company.employee_count ? formatNumber(company.employee_count) : '--'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
-                        {[company.city, company.state].filter(Boolean).join(', ') || '--'}
+                        {[company.city, company.state].filter(Boolean).join(', ') || company.location || '--'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <StatusBadge company={company} />
@@ -790,7 +994,11 @@ export default function ApolloSearch() {
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   )}
+                  {company.description && (
+                    <p className="mb-2 text-xs text-gray-500 line-clamp-3">{company.description}</p>
+                  )}
                   <div className="space-y-1.5 text-xs text-gray-600">
+                    <ContactsFound company={company} />
                     {company.industry && (
                       <div className="flex items-center gap-1.5">
                         <Building2 className="h-3.5 w-3.5 text-gray-400" />
@@ -799,7 +1007,7 @@ export default function ApolloSearch() {
                     )}
                     <div className="flex items-center gap-1.5">
                       <MapPin className="h-3.5 w-3.5 text-gray-400" />
-                      {[company.city, company.state].filter(Boolean).join(', ') || '--'}
+                      {[company.city, company.state].filter(Boolean).join(', ') || company.location || '--'}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Users className="h-3.5 w-3.5 text-gray-400" />
@@ -821,8 +1029,11 @@ export default function ApolloSearch() {
           <Globe className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm font-medium text-gray-900">Find companies that fit your ideal customer</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-            Search Apollo&apos;s B2B database by industry, location and size. Matches go straight into Companies;
-            then use <span className="font-medium text-gray-700">Find contacts</span> to pull the decision-makers.
+            {source === 'gemini'
+              ? 'Describe who you sell to and Gemini searches the web for matching companies.'
+              : 'Search Apollo’s B2B database by industry, location and size.'}{' '}
+            Matches go straight into Companies; then use{' '}
+            <span className="font-medium text-gray-700">Find contacts</span> to pull the decision-makers.
           </p>
         </div>
       )}

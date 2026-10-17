@@ -5,16 +5,22 @@ import { isOrgAdmin, isPlatformAdmin } from '../../lib/roles';
 
 // Settings only shows the API Keys tab to org admins (not platform admins, who
 // have no org of their own), so only they get a link that actually lands there.
-export default function GeminiKeyBanner() {
+//
+// `feature` names what's blocked ("document discovery", "Gemini search"), and
+// `uses` says what the key is spent on there.
+export default function GeminiKeyBanner({
+  feature = 'document discovery',
+  uses = 'Finding companies in documents and drafting emails runs',
+}) {
   const role = useOptionalAuth()?.user?.role;
   const canAddKey = !role || (isOrgAdmin(role) && !isPlatformAdmin(role));
   return (
     <div role="status" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-start">
       <KeyRound className="h-5 w-5 flex-shrink-0 text-amber-600 sm:mt-0.5" />
       <div className="flex-1 text-sm">
-        <p className="font-medium text-amber-900">Add your Gemini API key to use document discovery</p>
+        <p className="font-medium text-amber-900">Add your Gemini API key to use {feature}</p>
         <p className="mt-1 text-amber-800">
-          Finding companies in documents and drafting emails runs on your organization&apos;s own Gemini key.{' '}
+          {uses} on your organization&apos;s own Gemini key.{' '}
           {canAddKey ? (
             <>
               Add it in{' '}

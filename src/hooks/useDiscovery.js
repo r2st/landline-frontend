@@ -1,10 +1,15 @@
 import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { discoveryApi, queryClient } from '../api/client';
+import { errMsg, isGeminiKeyRequired } from './useDiscoveryDocuments';
 
+// `source` is 'gemini' (web search grounded by Google) or 'apollo'.
 export function useSearchCompanies() {
   return useMutation({
-    mutationFn: async (data) => await discoveryApi.searchCompanies(data),
+    mutationFn: async ({ source, payload }) =>
+      source === 'apollo'
+        ? await discoveryApi.searchCompanies(payload)
+        : await discoveryApi.searchCompaniesGemini(payload),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -13,13 +18,17 @@ export function useSearchCompanies() {
       if (res?.search_status && res.search_status !== 'ok') return;
       toast.success(`Found ${res.total} companies: ${res.imported} added, ${res.already_existed} already in Prospect`);
     },
-    // A 401 is our session, refused before anything reached Apollo; the raw
-    // "Invalid or missing API key" detail reads as Apollo rejecting its key.
-    onError: (e) => toast.error(
-      e?.response?.status === 401
-        ? 'Your session wasn’t accepted — refresh the page and search again.'
-        : e?.response?.data?.detail || e?.message || 'Search failed'
-    ),
+    // A 401 is our session, refused before anything reached the provider; the
+    // raw "Invalid or missing API key" detail reads as the provider rejecting
+    // its key. A missing Gemini key is explained by the banner on the page.
+    onError: (e) => {
+      if (isGeminiKeyRequired(e)) return;
+      toast.error(
+        e?.response?.status === 401
+          ? 'Your session wasn’t accepted — refresh the page and search again.'
+          : errMsg(e, 'Search failed')
+      );
+    },
   });
 }
 

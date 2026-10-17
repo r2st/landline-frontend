@@ -227,6 +227,10 @@ export const emailApi = {
 
 export const discoveryApi = {
   searchCompanies: (data) => api.post('/discovery/search-companies', data).then(r => r.data),
+  // Gemini with Google Search grounding, on the org's own Gemini key. Grounded
+  // search plus import takes longer than Apollo's indexed lookup.
+  searchCompaniesGemini: (data) =>
+    api.post('/discovery/search-companies-gemini', data, { timeout: 120000 }).then(r => r.data),
   enrichCompany: (id, data) => api.post(`/discovery/enrich/${id}`, data).then(r => r.data),
 };
 
